@@ -1,0 +1,989 @@
+/* Design tokens. Magenta / navy / lavender / mint palette. */
+:root {
+  --navy:         #0D1167;
+  --navy-deep:    #070723;
+  --lavender:     #E7EBFF;
+  --magenta:      #DB00AF;
+  --magenta-hi:   #E300B6;
+  --blue:         #3A7AFE;
+  --link:         #242EE0;
+  --mint:         #1EE98A;
+  --ink:          #303042;
+  --muted:        #7C7C9C;
+  --grey:         #F0F1F4;
+  --white:        #FFFFFF;
+  --error:        #C4003F;
+  --error-bg:     #FFF0F3;
+
+  --font: Figtree, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+
+  --warn:         #E8A200;
+  --warn-ink:     #A87400;
+
+  --col:          780px;   /* the conversation column, unchanged */
+  --rail:         340px;
+  --gap:          28px;
+  --shell:        1148px;  /* col + rail + gap */
+
+  --radius:       20px;
+  --shadow-card:  0 1px 2px rgba(13, 17, 103, .06), 0 8px 24px rgba(13, 17, 103, .07);
+  --shadow-bar:   0 -1px 0 rgba(13, 17, 103, .08);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--lavender);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* The chat screen carries a step rail beside the conversation. Widening only
+   the transcript would leave the composer centred at 780px and the transcript
+   pushed left of it, so the whole shell becomes one grid and every row -- the
+   control strip, the conversation, the composer -- sits in column 1. */
+.shell {
+  width: 100%;
+  max-width: var(--shell);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, var(--col)) var(--rail);
+  column-gap: var(--gap);
+  justify-content: center;
+}
+
+.col-main { grid-column: 1; min-width: 0; }
+.rail     { grid-column: 2; }
+
+/* No rail on this screen, so the cards get the whole shell width rather than
+   being squeezed into the conversation column. */
+#screen-home .shell { grid-template-columns: minmax(0, 1fr); }
+
+/* ---------- header ---------- */
+
+.topbar {
+  background: var(--navy);
+  color: var(--white);
+  flex: 0 0 auto;
+}
+
+.topbar-inner {
+  width: 100%; max-width: var(--shell); margin-inline: auto;
+  padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.wordmark {
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: .14em;
+  line-height: 1;
+}
+
+.brand-divider {
+  width: 1px; height: 20px;
+  background: rgba(255, 255, 255, .28);
+}
+
+.brand-product {
+  font-weight: 500;
+  font-size: 15px;
+  color: rgba(255, 255, 255, .82);
+  white-space: nowrap;
+}
+
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+
+.status {
+  margin: 0;
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .75);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 3px rgba(30, 233, 138, .22);
+  flex: 0 0 auto;
+}
+
+.status.is-busy .dot { animation: pulse 1.2s ease-in-out infinite; }
+.status.is-error .dot {
+  background: #FF7A9C;
+  box-shadow: 0 0 0 3px rgba(255, 122, 156, .22);
+}
+
+@keyframes pulse { 50% { opacity: .35; } }
+
+.ghost-btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--white);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, .34);
+  border-radius: 999px;
+  padding: 7px 15px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.ghost-btn:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .6); }
+
+/* ---------- transcript ---------- */
+
+.workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.workspace > .shell { height: 100%; }
+
+.chatcol {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The conversation scrolls, not the page -- which lets the rail beside it keep
+   its own scroll position instead of needing a calc(100dvh - chrome) height. */
+.scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.transcript {
+  padding: 28px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.intro { padding: 24px 4px 8px; }
+
+.intro h1 {
+  margin: 0 0 8px;
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--navy);
+}
+
+.intro p { margin: 0 0 22px; color: var(--muted); max-width: 46ch; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.chip {
+  font: inherit; font-size: 14px; font-weight: 500;
+  color: var(--navy);
+  background: var(--white);
+  border: 1px solid rgba(13, 17, 103, .12);
+  border-radius: 999px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.chip:hover {
+  border-color: var(--magenta);
+  color: var(--magenta);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
+}
+
+.msg {
+  max-width: 84%;
+  padding: 12px 17px;
+  border-radius: var(--radius);
+  animation: rise .22s ease-out;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: var(--magenta);
+  color: var(--white);
+  border-bottom-right-radius: 6px;
+}
+
+.msg.assistant {
+  align-self: flex-start;
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid rgba(13, 17, 103, .07);
+  border-bottom-left-radius: 6px;
+  box-shadow: var(--shadow-card);
+}
+
+.msg > :first-child { margin-top: 0; }
+.msg > :last-child { margin-bottom: 0; }
+
+/* Which model answered this particular reply. The whole point of the routing
+   demo is two adjacent bubbles served by different models, so the evidence has
+   to sit on the bubbles and not only in the control strip. */
+.msg-model {
+  margin: 10px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid rgba(13, 17, 103, .08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: .01em;
+  color: var(--muted);
+}
+.msg p { margin: 0 0 .7em; }
+.msg ul, .msg ol { margin: 0 0 .7em; padding-left: 1.25em; }
+.msg li { margin-bottom: .25em; }
+.msg strong { font-weight: 700; }
+.msg h3 { margin: .2em 0 .5em; font-size: 1.02em; font-weight: 700; color: var(--navy); }
+.msg.user h3 { color: var(--white); }
+
+.msg code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .88em;
+  background: var(--grey);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.msg.user code { background: rgba(255, 255, 255, .22); }
+
+/* Tables: the assistant answers plan questions with them, so they have to
+   look deliberate. Wide ones scroll inside the bubble rather than stretching
+   it past the column. */
+.table-wrap { overflow-x: auto; margin: 0 0 .7em; }
+
+.msg table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: .92em;
+}
+.msg th, .msg td {
+  text-align: left;
+  padding: 7px 12px 7px 0;
+  border-bottom: 1px solid rgba(13, 17, 103, .10);
+  white-space: nowrap;
+}
+.msg th {
+  font-weight: 700;
+  color: var(--navy);
+  border-bottom-color: rgba(13, 17, 103, .22);
+}
+.msg tbody tr:last-child td { border-bottom: 0; }
+.msg.user th, .msg.user td { border-bottom-color: rgba(255, 255, 255, .28); }
+.msg.user th { color: var(--white); }
+
+.msg pre {
+  background: var(--navy-deep);
+  color: #E7EBFF;
+  border-radius: 12px;
+  padding: 13px 15px;
+  overflow-x: auto;
+  margin: 0 0 .7em;
+}
+.msg pre code { background: none; padding: 0; font-size: .85em; }
+
+.msg .notice {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* three-dot indicator, shown while the model is thinking or streaming */
+.typing { display: flex; gap: 5px; padding: 4px 1px; }
+.typing span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted);
+  animation: bounce 1.15s ease-in-out infinite;
+}
+.typing span:nth-child(2) { animation-delay: .16s; }
+.typing span:nth-child(3) { animation-delay: .32s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+  30%           { transform: translateY(-5px); opacity: 1; }
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px; height: 1em;
+  background: var(--magenta);
+  vertical-align: -.14em;
+  margin-left: 1px;
+  animation: blink .9s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- gateway errors ----------
+   Deliberately not a chat bubble: a gateway failure must never be mistaken
+   for something the assistant said. */
+
+.alert {
+  margin: 10px 20px 20px;
+  background: var(--error-bg);
+  border: 1px solid rgba(196, 0, 63, .28);
+  border-left: 4px solid var(--error);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.alert-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 4px;
+}
+.alert-head strong { color: var(--error); font-size: 14px; }
+
+.alert-close {
+  font: inherit; font-size: 20px; line-height: 1;
+  background: none; border: 0; cursor: pointer;
+  color: var(--error); opacity: .65; padding: 0 2px;
+}
+.alert-close:hover { opacity: 1; }
+
+.alert p { margin: 0; font-size: 14px; color: var(--ink); }
+
+/* A policy refusing on purpose. The guardrail block IS the demonstration, so
+   painting it red would announce a failure at the moment the demo succeeds. */
+.alert.is-refusal {
+  background: var(--lavender);
+  border-color: rgba(13, 17, 103, .18);
+  border-left-color: var(--navy);
+}
+.alert.is-refusal .alert-head strong,
+.alert.is-refusal .alert-close { color: var(--navy); }
+
+.alert pre {
+  margin: 10px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 190px;
+  overflow-y: auto;
+  background: var(--white);
+  border: 1px solid rgba(196, 0, 63, .18);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--ink);
+}
+
+/* ---------- composer ---------- */
+
+.composer-wrap {
+  flex: 0 0 auto;
+  background: var(--lavender);
+  box-shadow: var(--shadow-bar);
+  padding: 14px 20px 10px;
+}
+
+.composer {
+  display: flex; align-items: flex-end; gap: 10px;
+  background: var(--white);
+  border: 1px solid rgba(13, 17, 103, .12);
+  border-radius: 26px;
+  padding: 6px 6px 6px 18px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.composer:focus-within {
+  border-color: var(--magenta);
+  box-shadow: 0 0 0 3px rgba(219, 0, 175, .13);
+}
+
+.composer textarea {
+  flex: 1 1 auto;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  resize: none;
+  padding: 10px 0;
+  max-height: 168px;
+  outline: none;
+}
+.composer textarea::placeholder { color: var(--muted); }
+
+.send-btn {
+  flex: 0 0 auto;
+  width: 42px; height: 42px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: var(--magenta);
+  color: var(--white);
+  cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+.send-btn svg { width: 21px; height: 21px; }
+.send-btn:hover:not(:disabled) { background: var(--magenta-hi); transform: scale(1.05); }
+.send-btn:disabled { background: #C9CBDE; cursor: not-allowed; }
+
+.disclaimer {
+  margin: 9px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- control strip: routing readout + cost budget ----------
+   Its own row rather than crammed into the navy bar, which cannot hold five
+   items at the 780px column width. */
+
+.controlbar {
+  flex: 0 0 auto;
+  background: var(--white);
+  border-bottom: 1px solid rgba(13, 17, 103, .09);
+}
+
+.controlbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+}
+
+.control-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Read-only: the gateway chose this, the page only reports it. Deliberately
+   not a control -- no pointer cursor, no hover affordance, nothing to click. */
+.route {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--navy);
+  background: var(--lavender);
+  border: 1px solid rgba(13, 17, 103, .12);
+  border-radius: 999px;
+  padding: 5px 12px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background .3s ease, color .3s ease;
+}
+
+.route[data-idle] {
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border-style: dashed;
+}
+
+.budget {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+  min-width: 0;
+}
+/* A class selector outranks the UA [hidden] rule, so say it explicitly. */
+.budget[hidden] { display: none; }
+
+.budget-text {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.budget-bar {
+  display: block;
+  width: 92px;
+  height: 5px;
+  border-radius: 999px;
+  background: #E3E6F5;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.budget-bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--mint);
+  transition: width .35s ease;
+}
+
+.budget.is-low   .budget-bar i { background: var(--warn); }
+.budget.is-empty .budget-bar i { background: var(--error); }
+.budget.is-low   .budget-text { color: var(--warn-ink); font-weight: 600; }
+.budget.is-empty .budget-text { color: var(--error); font-weight: 600; }
+
+/* The cost-based-routing card's meter is computed from token counts and the
+   gateway's own price file, because that lane publishes no balance at all
+   (see static/spend.js). Dashed says estimated -- the same idiom the inferred
+   cache badge uses, and unlike a tooltip it survives being projected. Outline
+   rather than border, so the row does not shift by 2px when it appears. */
+.budget.is-estimated .budget-bar {
+  background: transparent;
+  outline: 1px dashed #B9BFE2;
+  outline-offset: 1px;
+}
+
+/* Budget spent and traffic stepped down: amber, not red. The gateway answered
+   -- on a cheaper model -- so this is the capability working, and red is
+   reserved for "the gateway said no". */
+.budget.is-stepped .budget-text { color: var(--warn-ink); font-weight: 600; }
+.budget.is-stepped .budget-bar { outline-color: var(--warn); }
+
+
+/* ---------- screens ----------
+   One attribute on <body> switches the whole app. Cheaper than per-element
+   hidden bookkeeping, and the two screens cannot drift out of sync. */
+
+.screen { flex: 1 1 auto; min-height: 0; }
+
+#screen-home { overflow-y: auto; }
+#screen-chat { display: flex; flex-direction: column; }
+
+body[data-screen="home"] #screen-chat,
+body[data-screen="home"] #clear,
+body[data-screen="home"] #home,
+body[data-screen="chat"] #screen-home { display: none; }
+
+/* Plain chat has no steps, so it has no rail and no toggle. */
+body[data-rail="none"] .rail,
+body[data-rail="none"] .rail-toggle { display: none !important; }
+body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, var(--col)); }
+
+
+/* ---------- home screen ---------- */
+
+.home-head { padding: 34px 20px 6px; }
+
+.home-head h1 {
+  margin: 0 0 10px;
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--navy);
+}
+
+.home-head p { margin: 0 0 4px; color: var(--muted); max-width: 62ch; }
+
+.cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  padding: 22px 20px 40px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--white);
+  border: 1px solid rgba(13, 17, 103, .10);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+/* Same hover language as .chip, so the home screen reads as the same app. */
+.card:hover {
+  border-color: var(--magenta);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(13,17,103,.07), 0 14px 32px rgba(13,17,103,.10);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -.01em;
+}
+
+.card p { margin: 0; font-size: 14px; color: var(--muted); }
+
+.card-cap {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.card-needs {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.card-needs li { margin-bottom: 3px; }
+
+/* Badges. Red stays reserved for "the gateway said no" -- a capability that is
+   not released yet is not an error, so it must not borrow the error colour. */
+.badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  border-radius: 999px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+}
+.badge.is-ready {
+  color: #0A6B41;
+  background: rgba(30, 233, 138, .16);
+  border-color: rgba(30, 233, 138, .5);
+}
+.badge.is-ready::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--mint);
+}
+/* The same "not real yet" idiom .route[data-idle] already uses. */
+.badge.is-blocked {
+  color: var(--muted);
+  border: 1px dashed rgba(13, 17, 103, .28);
+}
+.badge.is-unwired {
+  color: var(--warn-ink);
+  background: rgba(232, 162, 0, .14);
+  border-color: rgba(232, 162, 0, .45);
+}
+
+
+/* ---------- provider tag ---------- */
+
+.provider-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--grey);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.provider-tag[hidden] { display: none; }
+
+/* Below the shell's full width the strip also carries the Steps toggle, and
+   the cost meter's numbers were losing to this tag. The topbar names the
+   provider in full one row above, so this is the item that can afford to give
+   way. Measured: 120px keeps the meter's figures inside the ellipsis at
+   1024px, which is the width a presenter mirroring to a projector gets. */
+@media (max-width: 1100px) {
+  .provider-tag { max-width: 120px; }
+}
+
+/* Lives in the white control strip, not the navy topbar, so it cannot inherit
+   .ghost-btn's white-on-transparent -- that renders as white on white. */
+.rail-toggle {
+  display: none;
+  margin-left: auto;
+  color: var(--navy);
+  /* Full shorthand, not just border-color: .ghost-btn sets `border` and the
+     two are easy to get the wrong way round when this is read later. */
+  border: 1px solid rgba(13, 17, 103, .22);
+  font-size: 12px;
+  padding: 5px 13px;
+}
+.rail-toggle:hover {
+  background: var(--lavender);
+  border-color: var(--magenta);
+  color: var(--magenta);
+}
+
+
+/* ---------- notice strip ----------
+   For "this capability is not attached here". Deliberately NOT .alert: nothing
+   has gone wrong, and red would say the demo broke. */
+
+.notice {
+  margin: 18px 20px 0;
+  padding: 12px 16px;
+  background: var(--lavender);
+  border-left: 3px solid var(--navy);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.notice[hidden] { display: none; }
+.notice strong { display: block; color: var(--navy); margin-bottom: 4px; }
+.notice p { margin: 0 0 6px; color: var(--ink); }
+.notice code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .88em; background: var(--white);
+  border-radius: 5px; padding: 1px 5px;
+}
+.notice ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+
+
+/* ---------- per-turn metrics ---------- */
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.metrics[hidden] { display: none; }
+
+/* Sits directly under .msg-model and shares its hairline. */
+.msg-model + .metrics { margin-top: 6px; }
+
+.metric {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--grey);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.metric.is-emphasis {
+  color: var(--navy);
+  background: var(--lavender);
+  font-weight: 600;
+}
+.metric.is-good  { color: #0A6B41; background: rgba(30, 233, 138, .16); }
+.metric.is-warn  { color: var(--warn-ink); background: rgba(232, 162, 0, .14); }
+/* An inference, not a measurement -- and it has to say so on its own face,
+   because a tooltip is invisible on a projector. */
+.metric.is-guess {
+  background: transparent;
+  border: 1px dashed rgba(13, 17, 103, .3);
+  font-style: italic;
+}
+
+
+/* ---------- step rail ---------- */
+
+.rail {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  background: var(--white);
+  border-left: 1px solid rgba(13, 17, 103, .09);
+  padding: 0 0 32px;
+}
+
+.rail-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 16px 18px 12px;
+  background: var(--white);
+  border-bottom: 1px solid rgba(13, 17, 103, .08);
+}
+.rail-head h2 {
+  margin: 0; font-size: 13px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+}
+.rail-close {
+  display: none;
+  background: none; border: 0; cursor: pointer;
+  font-size: 22px; line-height: 1; color: var(--muted); padding: 0 4px;
+}
+
+.rail-prereq { padding: 14px 18px 0; }
+.rail-prereq:empty { display: none; }
+.rail-prereq h3 {
+  margin: 0 0 6px; font-size: 12px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+}
+.rail-prereq li { font-size: 13px; margin-bottom: 8px; color: var(--ink); }
+.rail-prereq ul { margin: 0; padding-left: 18px; }
+
+.steps { list-style: none; margin: 0; padding: 14px 18px 0; }
+
+.step {
+  border-top: 1px solid rgba(13, 17, 103, .08);
+  padding: 14px 0;
+}
+.step:first-child { border-top: 0; padding-top: 4px; }
+
+.step-head { display: flex; align-items: center; gap: 9px; }
+
+.step-n {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--grey);
+  color: var(--muted);
+  font-size: 11.5px; font-weight: 700;
+  transition: background .2s ease, color .2s ease;
+}
+.step-title {
+  margin: 0; font-size: 14px; font-weight: 700; color: var(--navy);
+  letter-spacing: -.01em;
+}
+.step-verdict { margin-left: auto; font-size: 11px; font-weight: 600; }
+
+.step[data-state="running"] .step-n { background: var(--navy); color: var(--white); }
+.step[data-state="passed"]  .step-n { background: var(--mint); color: var(--navy-deep); }
+.step[data-state="failed"]  .step-n { background: var(--error); color: var(--white); }
+.step[data-state="done"]    .step-n { background: var(--lavender); color: var(--navy); }
+
+.step[data-state="passed"] .step-verdict { color: #0A6B41; }
+.step[data-state="failed"] .step-verdict { color: var(--error); }
+.step[data-state="done"]   .step-verdict { color: var(--muted); }
+
+.step-op {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: var(--lavender);
+  border-radius: 10px;
+  font-size: 12.5px;
+}
+.step-op p { margin: 0 0 8px; color: var(--navy); }
+.step-op pre {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  background: var(--white);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.step-op code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.copy-btn {
+  font: inherit; font-size: 12px; font-weight: 600;
+  border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(13, 17, 103, .18);
+  background: var(--white); color: var(--navy);
+  padding: 4px 12px;
+  transition: border-color .15s ease, color .15s ease;
+}
+.copy-btn:hover { border-color: var(--magenta); color: var(--magenta); }
+
+/* The rail hands the prompt over rather than sending it, so the presenter
+   pastes it into the composer themselves. Copying is harmless mid-turn, so
+   unlike the old Send button this is never disabled while a turn is running. */
+.step-copy { margin-top: 2px; }
+
+.step-send { margin-top: 10px; }
+.step-q {
+  margin: 0 0 7px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--grey);
+  border-radius: 10px;
+  padding: 8px 11px;
+}
+.step-result { margin: 7px 0 0; font-size: 12px; color: var(--muted); }
+.step-send[data-state="passed"] .step-result { color: #0A6B41; }
+.step-send[data-state="failed"] .step-result { color: var(--error); font-weight: 600; }
+
+.step-expect { margin: 9px 0 0; font-size: 12.5px; color: var(--muted); }
+.step-expect b { color: var(--navy); }
+
+.step-check { margin-top: 8px; font-size: 12.5px; }
+.step-check summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.step-check p { margin: 6px 0 0; color: var(--ink); }
+
+.gw-headers { margin: 18px 18px 0; font-size: 12px; }
+.gw-headers[hidden] { display: none; }
+.gw-headers summary { cursor: pointer; color: var(--muted); }
+.gw-headers-body {
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  word-break: break-all;
+}
+.gw-headers-body b { color: var(--navy); font-weight: 600; }
+
+
+/* ---------- focus, scrollbar, motion, small screens ---------- */
+
+:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
+.topbar :focus-visible { outline-color: var(--mint); }
+
+.scroll::-webkit-scrollbar, .rail::-webkit-scrollbar,
+#screen-home::-webkit-scrollbar { width: 10px; }
+.scroll::-webkit-scrollbar-thumb, .rail::-webkit-scrollbar-thumb,
+#screen-home::-webkit-scrollbar-thumb {
+  background: rgba(13, 17, 103, .16);
+  border-radius: 999px;
+  border: 3px solid var(--lavender);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .typing span { opacity: .6; }
+}
+
+/* Below the shell width the rail leaves the grid and becomes a slide-over.
+   It is not hidden: the rail IS the demo script, and a presenter mirroring a
+   laptop to a projector can easily be under 1024 CSS pixels. */
+@media (max-width: 1023px) {
+  .shell,
+  body[data-rail="none"] .shell { grid-template-columns: minmax(0, 1fr); }
+
+  .rail {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(360px, 88vw);
+    z-index: 30;
+    border-left: 0;
+    box-shadow: -8px 0 32px rgba(13, 17, 103, .18);
+    transform: translateX(100%);
+    transition: transform .22s ease;
+  }
+  body[data-rail="open"] .rail { transform: none; }
+  body[data-rail="open"]::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: rgba(7, 7, 35, .35);
+    z-index: 29;
+  }
+  body[data-screen="chat"]:not([data-rail="none"]) .rail-toggle { display: inline-flex; }
+  .rail-close { display: block; }
+}
+
+@media (max-width: 640px) {
+  .topbar-inner { padding: 12px 14px; }
+  .brand-divider, .brand-product { display: none; }
+  .status span:not(.dot) { display: none; }
+  .controlbar-inner { padding: 8px 14px; gap: 8px; }
+  .control-label { display: none; }
+  .route { max-width: none; font-size: 11.5px; padding: 4px 10px; }
+  .budget-bar { width: 64px; }
+  .transcript { padding: 20px 14px 8px; }
+  .home-head { padding: 24px 14px 4px; }
+  .cards { padding: 18px 14px 32px; gap: 12px; }
+  .notice { margin: 14px 14px 0; }
+  .composer-wrap { padding: 10px 14px 8px; }
+  .msg { max-width: 92%; }
+  .alert { margin: 10px 14px 16px; }
+}

@@ -1,0 +1,57 @@
+# =============================================================================
+# NOTHING SECRET GOES IN THIS REPO
+# =============================================================================
+# The two distributions hold live credentials and key material alongside their
+# configuration. Config is tracked; everything that authenticates or decrypts
+# is not. If you add a file and are unsure, assume it is excluded.
+
+# --- runtime environment files: admin password hashes, registration tokens,
+# --- database passwords, the Moesif application ID -------------------------
+api-platform.env
+keys.env
+configs/keys.env
+secrets/*
+!secrets/*.example
+!api-platform.env.example
+
+# --- ai-chatbot/config.env IS tracked and holds no secrets -- every
+# --- *_API_KEY lives in the gitignored secrets/gateway-keys.env instead.
+
+# --- at-rest encryption keys. Losing these makes stored secrets unreadable,
+# --- which is exactly why they belong in a secret manager, not here --------
+# --- (leading **/ is required: every real instance lives nested under
+# --- ai-workspace/ or ai-gateway/, never at the repo root, and a bare
+# --- "resources/keys/" only anchors to the root -- confirmed this let
+# --- ai-workspace/resources/keys/api-portal-session-secret get committed) --
+**/resources/keys/
+**/resources/aesgcm-keys/
+
+# --- TLS material. cert.pem is public, key.pem is not; exclude the pair so a
+# --- private key can never be committed by pattern ------------------------
+**/resources/certificates/
+**/resources/listener-certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.bin
+
+# --- runtime state ---------------------------------------------------------
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# --- python bytecode from ai-chatbot ---------------------------------------
+__pycache__/
+*.pyc
+
+# --- local scratch ---------------------------------------------------------
+.DS_Store
+*.swp
+*~
+
+# --- ap CLI, downloaded by scripts/reset-and-setup.sh -----------------------
+.bin/

@@ -1,0 +1,205 @@
+# =============================================================================
+# UNIFIED API PLATFORM CONFIGURATION — WSO2 AI Platform demo
+# =============================================================================
+# Copy to: /opt/wso2/wso2apip-ai-workspace-1.0.0/configs/config.toml
+#
+# One file, three components. Each service reads ONLY its own root table and
+# ignores the others: [ai_workspace], [platform_api], [api_portal].
+#
+# This is the FILE-AUTH state used through bring-up (runbook phases 1-5).
+# For the Asgardeo switchover, apply deploy/asgardeo/config.toml.additions
+# on top of this — runbook phase 7.
+#
+# Changes from the shipped file are marked  # CHANGED  or  # ADDED.
+
+
+# #############################################################################
+# #  AI WORKSPACE
+# #############################################################################
+
+[ai_workspace]
+
+default_org_region = "us"
+domain = '{{ env "APIP_AIW_DOMAIN" "localhost:9643" }}'
+
+[ai_workspace.server.https]
+
+port      = '{{ env "APIP_AIW_SERVER_HTTPS_PORT" "9643" }}'
+cert_file = "/etc/ai-workspace/tls/cert.pem"
+key_file  = "/etc/ai-workspace/tls/key.pem"
+
+
+[ai_workspace.logging]
+
+level = '{{ env "APIP_AIW_LOGGING_LEVEL" "info" }}'
+
+
+[ai_workspace.control_plane]
+
+# Set from api-platform.env to https://<DEMO_HOSTNAME>:9243 — the
+# public hostname, not the Compose name "platform-api", because the Let's
+# Encrypt certificate cannot cover a private name. The extra_hosts entry in
+# docker-compose.override.yaml keeps the connection on the box.
+url = '{{ env "APIP_AIW_CONTROL_PLANE_URL" "https://platform-api:9243" }}'
+tls_skip_verify = '{{ env "APIP_AIW_CONTROL_PLANE_TLS_SKIP_VERIFY" "false" }}'
+# CHANGED: ca_file removed. It pointed at the old self-signed cert.pem; Let's
+# Encrypt already chains to a root in the container's system trust store.
+
+
+[ai_workspace.gateway]
+
+# Display-only. AI Workspace never connects to this — it substitutes the value
+# into the gateway setup commands shown in the Get Started panel. A wrong value
+# leaves the Workspace working and silently breaks every gateway.
+# Set from api-platform.env to <DEMO_HOSTNAME>:9243
+controlplane_host = '{{ env "APIP_AIW_GATEWAY_CONTROLPLANE_HOST" "host.docker.internal:9243" }}'
+platform_gateway_versions = "[{\"version\":\"1.2\",\"latestVersion\":\"v1.2.0\",\"channel\":\"LTS\"}]"
+
+
+[ai_workspace.auth]
+
+# "basic" through bring-up; phase 7 switches this to "oidc".
+mode = '{{ env "APIP_AIW_AUTH_MODE" "basic" }}'
+
+
+# #############################################################################
+# #  PLATFORM API
+# #############################################################################
+
+[platform_api]
+
+[platform_api.logging]
+level = '{{ env "APIP_CP_LOGGING_LEVEL" "info" }}'
+
+[platform_api.security]
+encryption_key = '{{ file "/etc/platform-api/keys/encryption.key" }}'
+
+[platform_api.database]
+driver = "sqlite3"
+path   = "./data/api_platform.db"
+
+[platform_api.auth]
+# "file" through bring-up; phase 7 switches this to "idp". Note that switching
+# retires the file-based login endpoint entirely — which is why the catalog is
+# seeded (step L2) before phase 7.
+mode = "file"
+
+[platform_api.auth.authorization]
+enabled = true
+mode    = "scope"
+role_to_scope_mapping = "/etc/platform-api/role-to-scope-mapping.yaml"
+
+[platform_api.auth.jwt]
+issuer            = "platform-api"
+public_key_file   = "/etc/platform-api/keys/jwt_public.pem"
+private_key_file  = "/etc/platform-api/keys/jwt_private.pem"
+
+# The Platform API's own file-auth organization — a SEPARATE identity from the
+# Portal's [api_portal.organization] below. Left as shipped; already seeded in
+# the platform-api-data volume.
+[platform_api.auth.file.organization]
+id           = "default"
+display_name = "Default"
+region       = "us"
+
+[[platform_api.auth.file.users]]
+username      = '{{ env "APIP_CP_ADMIN_USERNAME" }}'
+password_hash = '{{ env "APIP_CP_ADMIN_PASSWORD_HASH" }}'
+roles         = ["ap_admin"]
+
+# ADDED: the shipped file omits this table entirely. The Platform API requires
+# cert_file and key_file on its HTTPS listener — there is no self-signed
+# fallback, so a missing certificate stops the listener at startup.
+[platform_api.server.https]
+enabled   = true
+port      = 9243
+cert_file = "/app/data/certs/cert.pem"
+key_file  = "/app/data/certs/key.pem"
+
+# Left empty deliberately. The BFF proxies all browser traffic same-origin, so
+# no cross-origin access is needed. A wildcard is rejected at startup.
+[platform_api.server.cors]
+allowed_origins = ""
+
+
+# #############################################################################
+# #  API PORTAL          (ADDED — the shipped config.toml has no [api_portal])
+# #############################################################################
+# Enabled by adding "api-portal" to COMPOSE_PROFILES in .env. Shares the one
+# Platform API above; reads only its own [api_portal.*] tables.
+
+[api_portal.server]
+# Set from api-platform.env to https://<DEMO_HOSTNAME>:9543
+base_url = '{{ env "APIP_AP_SERVER_BASE_URL" "https://localhost:9543" }}'
+port = 9543
+
+# NOTE: config-template.toml ships this block as enabled = false with paths
+# under ./resources/security/ that do not exist in this stack. The Compose file
+# mounts certificates at /etc/api-portal/tls. Copying the template verbatim
+# stops the Portal from starting. No {{ env }} token exists for these keys.
+[api_portal.server.https]
+enabled   = true
+cert_file = "/etc/api-portal/tls/cert.pem"
+key_file  = "/etc/api-portal/tls/key.pem"
+
+[api_portal.logging]
+level        = '{{ env "APIP_AP_LOGGING_LEVEL" "info" }}'
+format       = "text"
+console_only = true
+
+[api_portal.database]
+driver = '{{ env "APIP_AP_DATABASE_DRIVER" "sqlite" }}'
+path   = '{{ env "APIP_AP_DATABASE_PATH" "./data/api-portal.db" }}'
+
+[api_portal.security]
+encryption_key = '{{ file "/etc/api-portal/keys/encryption.key" }}'
+session_secret = '{{ file "/etc/api-portal/keys/session-secret" }}'
+
+[api_portal.auth]
+# "local" through bring-up; phase 7 switches this to "idp".
+mode = "local"
+
+[api_portal.auth.local]
+# Public hostname, same reasoning as [ai_workspace.control_plane] url above.
+# Set from api-platform.env, along with tls_skip_verify = false.
+platform_api_url = '{{ env "APIP_AP_AUTH_LOCAL_PLATFORM_API_URL" "https://platform-api:9243" }}'
+public_key_path  = '{{ env "APIP_AP_AUTH_LOCAL_PUBLIC_KEY_PATH" "/etc/api-portal/keys/jwt_public.pem" }}'
+tls_skip_verify  = '{{ env "APIP_AP_AUTH_LOCAL_TLS_SKIP_VERIFY" "true" }}'
+
+[api_portal.auth.authorization]
+enabled = true
+mode    = "role"
+# In-image path. This stack's docker-compose.yaml mounts
+# role-to-scope-mapping.yaml into ai-workspace and platform-api but NOT into
+# api-portal, so the /etc/api-portal/... path the Asgardeo guide uses would not
+# resolve here. The Portal image ships its own copy at this path.
+role_to_scope_mapping = "./resources/role-to-scope-mapping.yaml"
+page_role_validation  = true
+
+# ap_* here matches what the Platform API mints for local auth. Phase 7
+# replaces these with the Asgardeo roles dp_admin / dp_subscriber.
+[api_portal.auth.authorization.portal_roles]
+admin      = "ap_admin"
+subscriber = "ap_subscriber"
+
+# ---------------------------------------------------------------------------
+# IMMUTABLE AFTER FIRST START.
+#
+# The handle is written into the organization's IDP reference ID when the row is
+# seeded on first boot, and the Management API refuses to change it afterward.
+# Changing it means discarding the api-portal-data volume so the org re-seeds.
+#
+# It is the slug in every Portal URL:
+#
+#   https://<DEMO_HOSTNAME>:9543/api-portal/default/views/default
+#
+# PHASE 7 REQUIREMENT: when Asgardeo SSO is switched on, the Asgardeo
+# sub-organization handle must equal this value character for character.
+# Asgardeo emits it in the org_name claim and the Portal compares it verbatim
+# against the stored IDP reference ID, so "Default" would not match "default".
+# Because this side cannot change after seeding, this value dictates and the
+# Asgardeo sub-org must be created to match it.
+# ---------------------------------------------------------------------------
+[api_portal.organization]
+handle       = "default"
+display_name = "Default"

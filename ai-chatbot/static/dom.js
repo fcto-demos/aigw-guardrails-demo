@@ -1,0 +1,316 @@
+/* Element handles and the DOM helpers every other module builds on.
+ *
+ * Nothing here knows about showcases, steps or metrics -- it is the layer that
+ * paints bubbles, the error strip, the "answered by" readout and the budget
+ * bar, and it is deliberately the only module that reaches for elements by id.
+ */
+'use strict';
+
+import { renderMarkdown, escapeHtml } from './markdown.js';
+
+/* -- chrome ------------------------------------------------------------- */
+export const wordmark    = document.getElementById('wordmark');
+export const brandProduct = document.getElementById('brand-product');
+export const statusEl    = document.getElementById('status');
+export const statusText  = document.getElementById('status-text');
+export const clearBtn    = document.getElementById('clear');
+export const homeBtn     = document.getElementById('home');
+export const llmSelect   = document.getElementById('llm-provider');
+
+/* -- control strip ------------------------------------------------------- */
+export const routeEl     = document.getElementById('route');
+export const providerTag = document.getElementById('provider');
+export const budgetBox   = document.getElementById('budget');
+export const budgetText  = document.getElementById('budget-text');
+export const budgetFill  = document.getElementById('budget-fill');
+/* index.html explains the header-driven bar; showSpendMeter() swaps in its own
+ * tooltip, so the original is kept to restore. */
+const BUDGET_TITLE = budgetBox ? budgetBox.getAttribute('title') || '' : '';
+const ROUTE_TITLE = routeEl ? routeEl.getAttribute('title') || '' : '';
+export const railToggle  = document.getElementById('rail-toggle');
+
+/* -- screens ------------------------------------------------------------- */
+export const screenHome  = document.getElementById('screen-home');
+export const screenChat  = document.getElementById('screen-chat');
+export const cardsBox    = document.getElementById('cards');
+export const noticeBox   = document.getElementById('notice');
+export const noticeTitle = document.getElementById('notice-title');
+export const noticeBody  = document.getElementById('notice-body');
+
+/* -- conversation -------------------------------------------------------- */
+export const transcript  = document.getElementById('transcript');
+export const intro       = document.getElementById('intro');
+export const introHead   = document.getElementById('intro-head');
+export const introBody   = document.getElementById('intro-body');
+export const introChips  = document.getElementById('intro-chips');
+export const form        = document.getElementById('form');
+export const input       = document.getElementById('input');
+export const sendBtn     = document.getElementById('send');
+
+/* -- error strip --------------------------------------------------------- */
+export const alertBox     = document.getElementById('alert');
+export const alertTitle   = document.getElementById('alert-title');
+export const alertBody    = document.getElementById('alert-body');
+export const alertDetail  = document.getElementById('alert-detail');
+export const alertMetrics = document.getElementById('alert-metrics');
+
+/* -- step rail ----------------------------------------------------------- */
+export const rail        = document.getElementById('rail');
+export const railTitle   = document.getElementById('rail-title');
+export const railPrereq  = document.getElementById('rail-prereq');
+export const stepsList   = document.getElementById('steps');
+export const headersBox  = document.getElementById('gw-headers');
+
+/* ---------- status line ---------- */
+
+/* What setBusy() restores when a turn finishes. Each showcase names its own
+ * provider here, so the line reads "via /anthropic-guardrail" rather than a
+ * generic string -- on stage that is the reminder that the cards are different
+ * providers, not different prompts. */
+let idleStatus = 'via AI Gateway';
+
+export function setIdleStatus(text) {
+  idleStatus = text || 'via AI Gateway';
+  if (!sendBtn.disabled) statusText.textContent = idleStatus;
+}
+
+/* ---------- scrolling ---------- */
+
+/* The scrolling element. Was `.canvas`; the chat screen now scrolls the
+ * conversation column so the step rail can scroll independently beside it. */
+export function scroller() { return document.getElementById('scroll'); }
+
+function nearBottom() {
+  const c = scroller();
+  if (!c) return true;
+  return c.scrollHeight - c.scrollTop - c.clientHeight < 120;
+}
+
+export function scrollDown(force) {
+  const c = scroller();
+  if (c && (force || nearBottom())) c.scrollTop = c.scrollHeight;
+}
+
+/* ---------- bubbles ---------- */
+
+export function addBubble(role, html) {
+  if (intro && intro.parentNode) intro.remove();
+  const el = document.createElement('div');
+  el.className = 'msg ' + role;
+  el.innerHTML = html;
+  transcript.appendChild(el);
+  scrollDown(true);
+  return el;
+}
+
+export function typingHtml() {
+  return '<div class="typing"><span></span><span></span><span></span></div>';
+}
+
+export function modelFooter(model) {
+  return model ? '<p class="msg-model">' + escapeHtml(model) + '</p>' : '';
+}
+
+/* An assistant bubble: the answer, the streaming cursor while it is still
+ * arriving, and the serving model as a footer. Rebuilt on every delta, so the
+ * footer has to be part of the same string rather than a separate append --
+ * which is also why per-turn metrics are concatenated once at the end instead
+ * of being computed in here. */
+export function bubbleHtml(answer, model, streaming) {
+  return renderMarkdown(answer)
+    + (streaming ? '<span class="cursor"></span>' : '')
+    + modelFooter(model);
+}
+
+/* ---------- busy state ---------- */
+
+export function setBusy(busy) {
+  sendBtn.disabled = busy;
+  input.disabled = busy;
+  statusEl.classList.toggle('is-busy', busy);
+  /* One attribute disables every step button in the rail at once, including
+   * any added later, without looping over them. */
+  document.body.dataset.busy = busy ? '1' : '';
+  if (busy) {
+    statusText.textContent = 'asking the gateway...';
+  } else {
+    statusText.textContent = idleStatus;
+    if (!railIsOpen()) input.focus();
+  }
+}
+
+function railIsOpen() {
+  return document.body.dataset.rail === 'open';
+}
+
+/* ---------- the error strip ---------- */
+
+export function showError(title, body, detail) {
+  alertTitle.textContent = title;
+  alertBody.textContent = body;
+  if (detail) {
+    alertDetail.textContent = detail;
+    alertDetail.hidden = false;
+  } else {
+    alertDetail.hidden = true;
+  }
+  alertBox.hidden = false;
+  alertBox.classList.remove('is-refusal');
+  statusEl.classList.add('is-error');
+  statusText.textContent = 'gateway error';
+  scrollDown(true);
+}
+
+/* A policy refusing on purpose is not a fault, and must not be painted like
+ * one. The guardrail block IS the demonstration -- red would say the demo
+ * broke at the exact moment it worked. */
+export function showRefusal(title, body, detail) {
+  showError(title, body, detail);
+  alertBox.classList.add('is-refusal');
+  statusEl.classList.remove('is-error');
+  statusText.textContent = 'blocked by policy';
+}
+
+export function clearError() {
+  alertBox.hidden = true;
+  alertBox.classList.remove('is-refusal');
+  alertMetrics.innerHTML = '';
+  alertMetrics.hidden = true;
+  statusEl.classList.remove('is-error');
+}
+
+/* ---------- the "answered by" readout ---------- */
+
+/* Which model served the reply. Read from the `model` on Anthropic's
+ * message_start event -- the gateway's routing decision, observed rather than
+ * assumed. The page sends no model of its own, so this is the only place the
+ * answer can come from.
+ *
+ * The dated snapshot suffix is dropped from the readout only. Anthropic answers
+ * `claude-haiku-4-5-20251001` for a request that named `claude-haiku-4-5`, and
+ * measured at the 780px column that extra 66px pushes the cost meter's figures
+ * past the ellipsis beside it. The family is also the form a viewer compares
+ * against the step's Expect line -- and the id stays verbatim on the bubble
+ * footer and in this readout's tooltip, so nothing is lost. */
+export function showRoute(model) {
+  if (!model) return;
+  routeEl.textContent = dropDate(model);
+  routeEl.title = ROUTE_TITLE + ' This reply: ' + model;
+  routeEl.removeAttribute('data-idle');
+}
+
+export function resetRoute() {
+  routeEl.textContent = 'no reply yet';
+  routeEl.title = ROUTE_TITLE;
+  routeEl.setAttribute('data-idle', 'true');
+}
+
+/* ---------- the cost budget ---------- */
+
+/* From the llm-cost-based-ratelimit headers. Both values are strings or null:
+ * null means the gateway did not report a balance, which is what happens once
+ * it starts refusing with 429 -- so null must read as "unknown", never zero. */
+export function showBudget(limit, remaining) {
+  const lim = parseFloat(limit);
+  const rem = parseFloat(remaining);
+  if (!isFinite(lim) || lim <= 0) return;   // policy not reporting; leave as-is
+
+  budgetBox.hidden = false;
+  budgetBox.title = BUDGET_TITLE;
+  if (!isFinite(rem)) {
+    budgetText.textContent = 'budget $' + lim.toFixed(4) + ' · spent';
+    budgetFill.style.width = '0%';
+    budgetBox.className = 'budget is-empty';
+    return;
+  }
+  const share = Math.max(0, Math.min(1, rem / lim));
+  budgetText.textContent = '$' + rem.toFixed(4) + ' of $' + lim.toFixed(2) + ' left';
+  budgetFill.style.width = (share * 100).toFixed(1) + '%';
+  budgetBox.className = 'budget'
+    + (share === 0 ? ' is-empty' : share < 0.25 ? ' is-low' : '');
+}
+
+/* The same bar, driven by the cost-based-routing card's estimate instead of a
+ * header. Dashed, and every figure prefixed "est.": see spend.js for why this
+ * one number cannot be observed, and why the step-down is measured even though
+ * the balance is not. Red stays reserved for "the gateway said no" -- a
+ * step-down is a 200 with an answer in it, so the spent state is amber.
+ *
+ * The strip is one row wide and this text is nowrap+ellipsis, so it is kept
+ * short enough to fit at the narrow end and the full sentence goes in the
+ * title. Measured in the browser: the visible text must stay under ~240px, and
+ * the model ids lose their `claude-` prefix to buy the room. */
+export function showSpendMeter(state) {
+  if (!state) return;
+  budgetBox.hidden = false;
+  const limit = state.limit;
+  const share = limit > 0 ? Math.max(0, Math.min(1, state.remaining / limit)) : 0;
+  const unpriced = state.unpriced
+    ? ' ' + state.unpriced + ' reply(s) had no price entry, so the real spend is'
+      + ' higher than this.'
+    : '';
+
+  /* Below ~1100px the control strip is holding the provider path and the Steps
+   * toggle too, and measurement puts the roomy wording past the ellipsis. The
+   * numbers are what must survive, so the model name is what goes. */
+  const tight = window.matchMedia('(max-width: 1100px)').matches;
+
+  if (state.exhausted) {
+    budgetBox.className = 'budget is-estimated is-stepped';
+    budgetText.textContent = tight
+      ? 'spent \u00b7 on ' + shortModel(state.fallbackModel || 'fallback')
+      : 'budget spent \u00b7 serving '
+        + shortModel(state.fallbackModel || 'the fallback');
+    budgetFill.style.width = '0%';
+    budgetBox.title = 'The ' + state.model + ' budget is spent, so the gateway is'
+      + ' serving ' + (state.fallbackModel || 'the fallback model') + ' instead'
+      + ' -- an answer on a cheaper model rather than a refusal. This part is'
+      + ' measured, not estimated: the router only serves the fallback once the'
+      + ' budget is gone.';
+    return;
+  }
+
+  budgetBox.className = 'budget is-estimated' + (share < 0.25 ? ' is-low' : '');
+  budgetText.textContent = share === 0
+    ? 'est. $' + limit.toFixed(2) + ' of $' + limit.toFixed(2)
+      + ' spent' + (tight ? '' : ' \u00b7 steps down next')
+    : 'est. $' + state.remaining.toFixed(4) + ' of $' + limit.toFixed(2)
+      + ' left' + (tight ? '' : ' on ' + shortModel(state.model));
+  budgetFill.style.width = (share * 100).toFixed(1) + '%';
+  budgetBox.title = 'Estimated from this session\u2019s token counts and the'
+    + ' gateway\u2019s own price file -- the ' + state.model + ' budget ($'
+    + limit.toFixed(2) + (state.duration ? ' / ' + state.duration : '')
+    + ') publishes no balance. It is shared across callers on a fixed window, so'
+    + ' this is a floor on the real spend, not the balance.' + unpriced;
+}
+
+/* Model ids are long and the control strip is one row wide. The family is what
+ * a viewer needs -- opus against haiku -- so the vendor prefix and the dated
+ * snapshot suffix both go. The full id is still on every bubble footer. */
+function shortModel(id) {
+  return dropDate(id).replace(/^claude-/, '');
+}
+
+function dropDate(id) {
+  return String(id || '').replace(/-\d{8}$/, '');
+}
+
+export function markBudgetExhausted() {
+  budgetBox.hidden = false;
+  budgetBox.title = BUDGET_TITLE;
+  budgetBox.className = 'budget is-empty';
+  budgetText.textContent = 'budget exhausted';
+  budgetFill.style.width = '0%';
+}
+
+/* Each showcase is a different LLM provider, and llm-cost-based-ratelimit
+ * counts per provider. Carrying a balance across a showcase switch would show
+ * one provider's budget on another provider's screen -- so this runs on a
+ * switch, but deliberately NOT on Clear chat, where the provider is unchanged. */
+export function resetBudget() {
+  budgetBox.hidden = true;
+  budgetBox.className = 'budget';
+  budgetBox.title = BUDGET_TITLE;
+  budgetText.textContent = '';
+  budgetFill.style.width = '100%';
+}

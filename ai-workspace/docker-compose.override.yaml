@@ -1,0 +1,58 @@
+# Control-plane overrides — copy to:
+#   /opt/wso2/wso2apip-ai-workspace-1.0.0/docker-compose.override.yaml
+#
+# Compose auto-loads this alongside docker-compose.yaml, so the shipped file
+# stays untouched and still diffs cleanly against future releases. This also
+# means it auto-loads during local dev (every local script runs `docker
+# compose` from inside this directory, with no -f flags) — ${DEMO_HOSTNAME}
+# below comes from demo.env, which scripts/run-local.sh and friends export
+# before calling compose, so this resolves locally too, not just on the VM.
+
+services:
+
+  # The BFF reaches the Platform API at the PUBLIC hostname, because the
+  # Let's Encrypt certificate cannot cover the private Compose name
+  # "platform-api". Public DNS resolves that hostname to the Elastic IP, and
+  # AWS will not hairpin traffic from an instance back to its own EIP — so
+  # host-gateway resolves it to the Docker bridge instead. The connection
+  # never leaves the box, and the SNI name still matches the certificate, so
+  # tls_skip_verify stays false.
+  ai-workspace:
+    extra_hosts:
+      - "${DEMO_HOSTNAME:-changeme.example.com}:host-gateway"
+
+    # Phase 7 only — uncomment when switching to Asgardeo SSO.
+    #
+    # The client secret is mounted on THIS SERVICE ALONE. It must not go in
+    # api-platform.env: Compose loads that file into every service, which
+    # would hand a BFF-only credential to the Platform API and the Portal.
+    # Resolution fails closed, so a missing file aborts startup rather than
+    # starting with an empty credential.
+    #
+    # volumes:
+    #   - ./secrets/oidc_client_secret:/secrets/ai-workspace/oidc_client_secret:ro
+
+  api-portal:
+    extra_hosts:
+      - "${DEMO_HOSTNAME:-changeme.example.com}:host-gateway"
+
+    # The shipped docker-compose.yaml healthchecks this service with
+    #   ["CMD", "curl", "-fk", "https://localhost:9543/health"]
+    # but curl is NOT in the api-portal image (it ships wget, node and nc), so
+    # every probe fails with "executable file not found in $PATH" and the
+    # container sits permanently (unhealthy) even though it is serving fine.
+    # Same probe, using a binary that exists.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O /dev/null https://localhost:9543/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # Phase 7 only — the Portal's own OIDC client secret, same reasoning.
+    #
+    # volumes:
+    #   - ./secrets/api-portal_oidc_client_secret:/secrets/api-portal/oidc_client_secret:ro
+
+  # platform-api needs no extra_hosts entry — nothing inside it dials the
+  # public hostname. It only serves on 9243.

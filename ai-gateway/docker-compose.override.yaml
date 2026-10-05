@@ -1,0 +1,81 @@
+# Gateway overrides — copy to:
+#   /opt/wso2/wso2apip-ai-gateway-1.2.0/docker-compose.override.yaml
+#
+# Keeps the shipped docker-compose.yaml untouched so it still diffs cleanly
+# against future releases — including when you swap images in phase 8.
+#
+# ${DEMO_NAME}/${DEMO_HOSTNAME} below are resolved by Compose's own .env
+# auto-load, not env_file: — copy ../demo.env to .env next to this file on
+# the VM (filled in for this client) before `docker compose up -d`.
+
+services:
+
+  gateway-controller:
+    # Custom-policy build (mcp-auth-passthrough v0.2.0, 2026-09-08) — swapped
+    # together with gateway-runtime below. Stock ghcr.io gateway-controller:1.2.0
+    # stays in local Docker as the rollback: comment this line out and `up -d`.
+    image: ghcr.io/wso2/api-platform/${DEMO_NAME:-ai-demo}-gateway-controller:${AI_GATEWAY_VERSION:-1.2.0}
+
+    # The controller dials the Platform API at the public hostname so the
+    # Let's Encrypt certificate validates (insecure_skip_verify = false).
+    # host-gateway resolves it to the Docker bridge, avoiding the EIP hairpin
+    # that AWS does not support. host.docker.internal is already mapped by the
+    # shipped file; both entries are needed, so both are listed here.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "${DEMO_HOSTNAME:-changeme.example.com}:host-gateway"
+
+    # The shipped limits are quickstart values — 60 MB and 0.025 CPU. The
+    # controller handles artifact deployment and config distribution, not
+    # request traffic, so its load does not scale with LLM call volume.
+    mem_limit: 2g
+    mem_reservation: 1g
+    cpus: 1.0
+
+  gateway-runtime:
+    # Custom-policy build — pair of the controller image above; see that note.
+    image: ghcr.io/wso2/api-platform/${DEMO_NAME:-ai-demo}-gateway-runtime:${AI_GATEWAY_VERSION:-1.2.0}
+
+    # Envoy plus the policy engine in one container. This carries every
+    # request, and each guardrail — PII masking, JSON schema validation, URL
+    # guardrails — inspects full request and response bodies, which are far
+    # larger for LLM traffic than for typical REST payloads.
+    #
+    # Shipped values were 180 MB and 0.175 CPU.
+    mem_limit: 2g
+    mem_reservation: 2g
+    cpus: 2.0
+
+    # Phase 8 only — a custom-policy build produces TWO images and both must
+    # be swapped together, because the policy set is compiled into each: the
+    # controller validates and deploys the policy, the runtime executes it.
+    # A mismatched pair gives a controller that accepts a policy the runtime
+    # cannot run. Remember `up -d`, not `restart` — restart reuses the old
+    # image silently.
+    #
+    # image: my-gateway-gateway-runtime:1.2.0
+    # (and on gateway-controller above: my-gateway-gateway-controller:1.2.0)
+
+  # Semantic cache vector store. redis-stack-server bundles RediSearch, which
+  # the semantic-cache policy requires (plain redis image does not have it).
+  # Not published on any host port — reachable only inside gateway-network.
+  redis:
+    image: redis/redis-stack-server:7.4.0-v3
+    environment:
+      - REDIS_ARGS=--requirepass default
+    mem_limit: 512m
+    networks:
+      - gateway-network
+
+  # Force Jaeger UI light mode for every visitor. Jaeger 1.76.0 ships an
+  # incomplete dark theme: .Tracepage--headerSection and
+  # .TracePageHeader--titleRow are hardcoded #fff while body[data-theme=dark]
+  # sets --text-primary to near-white, so the trace page header is unreadable.
+  # And because themes.enabled defaults to false the nav has no toggle, so a
+  # dark preference picked up from the visitor's OS and persisted to
+  # localStorage cannot be undone from the UI. The inline script below pins
+  # the stored theme to light before AppThemeProvider reads it.
+  jaeger:
+    volumes:
+      - ./observability/jaeger/ui-config.json:/etc/jaeger/ui-config.json:ro
+    command: ["--query.ui-config=/etc/jaeger/ui-config.json"]

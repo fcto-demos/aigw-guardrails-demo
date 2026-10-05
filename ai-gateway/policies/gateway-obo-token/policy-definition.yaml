@@ -1,0 +1,201 @@
+name: gateway-obo-token
+version: v0.1.0
+displayName: Gateway OBO Token
+description: |
+  Exchanges the validated inbound user token for a per-user upstream token via
+  the Microsoft Entra On-Behalf-Of grant (grant_type
+  urn:ietf:params:oauth:grant-type:jwt-bearer with
+  requested_token_use=on_behalf_of) and injects it into a request header before
+  forwarding. The inbound token is read from the downstream request snapshot
+  (independent of what the inbound auth policy stripped or forwarded), exchanged
+  tokens are cached per inbound token with TTL bounded by both tokens' expiries,
+  and exchange rejections that a fresh sign-in can fix (invalid_grant,
+  interaction_required) are surfaced as 401 with an RFC 9728 resource_metadata
+  pointer so MCP clients re-authenticate; gateway-side faults are 502. Designed
+  to run after an inbound authentication policy such as MCP Auth Passthrough.
+  Fork of oauth2-generator v0.9.0.
+
+parameters:
+  type: object
+  additionalProperties: false
+  required: ["tokenEndpoint", "clientId", "clientSecret", "upstreamScopes"]
+  properties:
+    tokenEndpoint:
+      type: string
+      x-wso2-policy-advanced-param: false
+      minLength: 1
+      description: |
+        URL of the OAuth2 token endpoint the exchange is performed
+        against (e.g. https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token).
+    clientId:
+      type: string
+      x-wso2-policy-advanced-param: false
+      minLength: 1
+      description: |
+        Client ID of the gateway's confidential app registration (the
+        app the inbound token's audience belongs to).
+    clientSecret:
+      type: string
+      x-wso2-policy-advanced-param: false
+      minLength: 1
+      description: |
+        Client secret paired with clientId. Reference a stored secret,
+        not a raw value.
+    upstreamScopes:
+      type: string
+      x-wso2-policy-advanced-param: false
+      minLength: 1
+      description: |
+        Space-separated scopes requested for the upstream token, e.g.
+        "<upstream-app-id>/Scope.Name offline_access".
+    assertionHeader:
+      type: string
+      x-wso2-policy-advanced-param: true
+      minLength: 1
+      description: |
+        Header in the downstream request snapshot the inbound token
+        (the OBO assertion) is read from. The Bearer scheme prefix is
+        stripped case-insensitively.
+      default: "Authorization"
+    requireAuthContext:
+      type: boolean
+      x-wso2-policy-advanced-param: true
+      description: |
+        Fail closed with 401 when no earlier auth policy validated the
+        inbound token, so this policy can never exchange an unvalidated
+        assertion when attached alone. Disable only for testing.
+      default: true
+    requestedTokenUse:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        Sent as requested_token_use on the exchange. Only on_behalf_of
+        is supported.
+      enum:
+        - on_behalf_of
+      default: on_behalf_of
+    cacheMaxEntries:
+      type: integer
+      x-wso2-policy-advanced-param: true
+      minimum: 1
+      description: |
+        Upper bound on cached (inbound token -> upstream token)
+        entries; the earliest-expiring entry is evicted first.
+      default: 10000
+    challengeResourceMetadata:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        Protected resource metadata URL for the resource_metadata
+        parameter of 401 challenges. Empty uses the pointer the MCP
+        Auth Passthrough policy stashes in shared metadata; if that is
+        absent too, the challenge carries no pointer.
+      default: ""
+    userIdClaim:
+      type: string
+      x-wso2-policy-advanced-param: true
+      minLength: 1
+      description: |
+        Claim of the exchanged (upstream) token copied into the auth
+        context's subject for analytics.
+      default: "oid"
+    clientAuthMethod:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        How client credentials are sent to the token endpoint.
+      enum:
+        - client_secret_basic
+        - client_secret_post
+      default: client_secret_post
+    tokenRequestParams:
+      type: object
+      x-wso2-policy-advanced-param: true
+      additionalProperties:
+        type: string
+      description: |
+        Extra form fields merged into the exchange request. Cannot
+        override grant_type, assertion, requested_token_use, or scope.
+    tokenRequestHeaders:
+      type: object
+      x-wso2-policy-advanced-param: true
+      additionalProperties:
+        type: string
+      description: |
+        Extra headers sent with the token request. Authorization and
+        Content-Type are ignored if set here.
+    headerName:
+      type: string
+      x-wso2-policy-advanced-param: true
+      minLength: 1
+      description: |
+        Header the exchanged credential is injected into. Defaults to
+        Authorization.
+      default: "Authorization"
+    valuePrefix:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        Prefix prepended to the credential value. Use an empty string
+        for no prefix.
+      default: "Bearer"
+    tokenRequestTimeout:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        Timeout for a token-endpoint call (Go duration, e.g. "10s").
+      default: "10s"
+    tokenRequestMaxRetries:
+      type: integer
+      x-wso2-policy-advanced-param: true
+      minimum: 0
+      description: |
+        Max retries after a transient token-endpoint failure (network
+        error or 429/5xx). Set 0 to disable.
+      default: 2
+    defaultTokenTTL:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        Fallback token lifetime used when expires_in is omitted (Go
+        duration, e.g. "1h").
+      default: "1h"
+    expiryBuffer:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        How long before expiry a cached token is re-exchanged early
+        (Go duration, e.g. "2m").
+      default: "2m"
+    tokenPurgeStatusCodes:
+      type: array
+      x-wso2-policy-advanced-param: true
+      items:
+        type: integer
+        minimum: 100
+        maximum: 599
+      description: |
+        Upstream status codes that purge the requesting token's cache
+        entry (that entry only). Defaults to [401].
+      default: [401]
+    proxyURL:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        Proxy URL for the token-endpoint call. Defaults to the
+        standard HTTP_PROXY/HTTPS_PROXY env vars.
+      default: ""
+    tlsCaCert:
+      type: string
+      x-wso2-policy-advanced-param: true
+      description: |
+        PEM CA certificate to trust for the token endpoint's TLS
+        connection. Reference a stored secret, not a raw value.
+      default: ""
+    tlsInsecureSkipVerify:
+      type: boolean
+      x-wso2-policy-advanced-param: true
+      description: |
+        Disables TLS certificate verification for the token endpoint.
+        Non-production only.
+      default: false

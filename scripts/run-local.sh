@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Launch ai-workspace, ai-gateway and ai-chatbot locally.
+#
+# ai-gateway uses the same ports, image and config locally and on the VM --
+# see ai-gateway/.env. docker-compose.override.yaml (VM-only custom images)
+# is deliberately not passed here.
+#
+# Requires api-platform.env in ai-gateway/ and ai-workspace/ (copy from
+# api-platform.env.example) and config.env in ai-chatbot/ (copy from
+# config.env.example).
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+set -a; source "$ROOT/demo.env"; set +a
+source "$ROOT/scripts/tools.sh"
+resolve_python   # sets $PYTHON -- python3, or a confirmed-Python-3 `python` (see tools.sh)
+resolve_analytics "$ROOT"   # sets $ANALYTICS_* from ANALYTICS_MODE (see tools.sh)
+resolve_embedding_key "$ROOT"   # sets $EMBEDDING_PROVIDER_API_KEY from EMBEDDINGS_PROVIDER_API_KEY (see tools.sh)
+
+LOGS="$ROOT/.logs"
+
+# Plain `source`, deliberately not `set -a`: ai-gateway/.env also carries its
+# own COMPOSE_PROJECT_NAME, and exporting that would leak into the
+# ai-workspace docker compose call below, which needs ITS OWN value. Only
+# read here for the final echo's own $GATEWAY_HTTPS_PORT.
+source "$ROOT/ai-gateway/.env"
+
+require_env "$ROOT/ai-workspace/api-platform.env"
+require_env "$ROOT/ai-gateway/api-platform.env"
+require_env "$ROOT/ai-chatbot/config.env"
+
+# Container noise goes to a log file, not the terminal; set -e still stops
+# the script on failure.
+echo "### ai-workspace"
+(cd "$ROOT/ai-workspace" && docker compose up -d --wait) >"$LOGS/ai-workspace.log" 2>&1
+
+echo "### ai-gateway"
+# Analytics vars are scoped to just this one call (command-prefix, not
+# exported) -- see resolve_analytics() in tools.sh for why.
+(cd "$ROOT/ai-gateway" && \
+  APIP_GW_ANALYTICS_ENABLED="$ANALYTICS_ENABLED" \
+  APIP_GW_ANALYTICS_PUBLISHERS_MOESIF_APPLICATION_ID="$ANALYTICS_MOESIF_ID" \
+  COMPOSE_PROFILES="$ANALYTICS_COMPOSE_PROFILES" \
+  APIP_GW_EMBEDDING_PROVIDER_API_KEY="$EMBEDDING_PROVIDER_API_KEY" \
+  docker compose up -d) >"$LOGS/ai-gateway.log" 2>&1
+
+echo "### ai-chatbot"
+# Force a clean stop first — otherwise a repeat run leaves the old process
+# holding the port, and the new one fails to bind.
+"$ROOT/scripts/stop-ai-chatbot.sh"
+(cd "$ROOT/ai-chatbot" && nohup "$PYTHON" server.py >"$LOGS/ai-chatbot.log" 2>&1 &)
+
+echo
+echo "done. Everything is up:"
+echo "  ai-workspace (control plane) : https://localhost:${AI_WORKSPACE_PORT}"
+echo "  api-portal (not used)        : https://localhost:${API_PORTAL_PORT}"
+echo "  platform-api                 : https://localhost:${PLATFORM_API_PORT}"
+echo "  ai-gateway (data plane)      : https://localhost:${GATEWAY_HTTPS_PORT}"
+echo "  ai-chatbot                   : http://localhost:${AI_CHATBOT_PORT}"
+echo
+echo "logs: $LOGS/{ai-workspace,ai-gateway,ai-chatbot}.log"
+echo "stop everything: ./scripts/stop-local.sh"

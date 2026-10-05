@@ -1,0 +1,195 @@
+# AI Gateway configuration — WSO2 AI Platform demo
+# Copy to: /opt/wso2/wso2apip-ai-gateway-1.2.0/configs/config.toml
+#
+# Changes from the shipped file are marked  # CHANGED.
+
+# Analytics publishing to Moesif. The application ID comes from
+# secrets/api-keys.env locally, or api-platform.env on the VM -- never
+# write it as a literal here.
+#
+# enabled follows APIP_GW_ANALYTICS_ENABLED (one config.toml, no separate
+# local variant): local dev's run-local.sh sets it from demo.env's
+# ANALYTICS_MODE; on the VM, set it by hand alongside a real application_id.
+# Default is "false" because enabled=true with a blank id fails config
+# validation and the container won't start.
+# CHANGED: Semantic cache policy defaults — embedding provider + vector DB.
+# API key comes from api-platform.env (APIP_GW_EMBEDDING_PROVIDER_API_KEY).
+embedding_provider = "MISTRAL"
+embedding_provider_endpoint = "https://api.mistral.ai/v1/embeddings"
+embedding_provider_model = "mistral-embed"
+embedding_provider_dimension = 1024
+embedding_provider_api_key = '{{ env "APIP_GW_EMBEDDING_PROVIDER_API_KEY" "" }}'
+
+vector_db_provider = "REDIS"
+vector_db_provider_host = "redis"
+vector_db_provider_port = 6379
+vector_db_provider_database = "0"
+vector_db_provider_username = "default"
+vector_db_provider_password = "default"
+vector_db_provider_ttl = 3600
+
+[analytics]
+enabled = '{{ env "APIP_GW_ANALYTICS_ENABLED" "false" }}'
+enabled_publishers = ["moesif"]
+
+[analytics.publishers.moesif]
+application_id = '{{ env "APIP_GW_ANALYTICS_PUBLISHERS_MOESIF_APPLICATION_ID" "" }}'
+
+[router]
+# Accepts any Host header. Left as shipped: the gateway shares its hostname
+# with the control plane and is distinguished by port (8443), so there is
+# nothing to disambiguate here.
+gateway_host = "*"
+
+[router.access_logs]
+enabled = true
+
+# The downstream listener certificate is NOT configured here. It defaults to
+# ./listener-certs/default-listener.{crt,key}, which deploy-certs-remote.sh overwrites
+# with the Let's Encrypt pair. Leaving the table out keeps those defaults.
+
+[controller.server]
+gateway_id = '{{ env "APIP_GW_CONTROLLER_SERVER_GATEWAY_ID" "platform-gateway-id" }}'
+
+[controller.storage]
+# SQLite, persisted in the controller-data volume. Survives restarts,
+# --force-recreate, image swaps and `down`; only `down -v` destroys it.
+type = '{{ env "APIP_GW_CONTROLLER_STORAGE_TYPE" "sqlite" }}'
+
+[controller.storage.sqlite]
+path = '{{ env "APIP_GW_CONTROLLER_STORAGE_SQLITE_PATH" "./data/gateway.db" }}'
+
+[policy_engine.logging]
+level = "info"
+
+[controller.logging]
+level = '{{ env "APIP_GW_CONTROLLER_LOGGING_LEVEL" "info" }}'
+
+[controller.controlplane]
+# host and token come from api-platform.env — the token is single-use and must
+# not be written into a file that lands in source control.
+host = '{{ env "APIP_GW_CONTROLLER_CONTROLPLANE_HOST" "" }}'
+token = '{{ env "APIP_GW_CONTROLLER_CONTROLPLANE_TOKEN" "" }}'
+
+# CHANGED: ships as "true". This channel carries the registration token and
+# every configuration update, and the Platform API presents a publicly-trusted
+# certificate at the public hostname (DEMO_HOSTNAME), so verification works. The extra_hosts
+# entry in docker-compose.override.yaml keeps the connection on the box without
+# breaking hostname verification.
+insecure_skip_verify = '{{ env "APIP_GW_CONTROLLER_CONTROLPLANE_INSECURE_SKIP_VERIFY" "false" }}'
+
+gateway_name = '{{ env "APIP_GW_CONTROLLER_CONTROLPLANE_GATEWAY_NAME" "default" }}'
+apim_oauth2_client_id = '{{ env "APIP_GW_CONTROLLER_CONTROLPLANE_APIM_OAUTH2_CLIENT_ID" "" }}'
+apim_oauth2_client_secret = '{{ env "APIP_GW_CONTROLLER_CONTROLPLANE_APIM_OAUTH2_CLIENT_SECRET" "" }}'
+
+[controller.policies]
+definitions_path = '{{ env "APIP_GW_CONTROLLER_POLICIES_DEFINITIONS_PATH" "./default-policies" }}'
+
+[controller.auth.basic]
+enabled = true
+
+[[controller.auth.basic.users]]
+username        = '{{ env "APIP_GW_CONTROLLER_AUTH_BASIC_ADMIN_USERNAME" "" }}'
+password        = '{{ env "APIP_GW_CONTROLLER_AUTH_BASIC_ADMIN_PASSWORD_HASH" "" }}'
+password_hashed = true
+roles           = ["admin"]
+
+[policy_configurations.jwtauth_v1]
+jwkscachettl = "5m"
+jwksfetchtimeout = "5s"
+jwksfetchretrycount = 3
+jwksfetchretryinterval = "2s"
+leeway = "30s"
+authheaderscheme = "Bearer"
+headername = "Authorization" # CHANGED 2026-09-09 Phase 4 D-3: was AuthorizationGW; breaks github-mcp gateway-token path (accepted)
+onfailurestatuscode = 401
+errormessageformat = "json"
+errormessage = "Authentication failed"
+validateissuer = true
+
+[[policy_configurations.jwtauth_v1.keymanagers]]
+name   = "asgardeo"
+issuer = "https://api.asgardeo.io/t/aipoc/oauth2/token"
+
+[policy_configurations.jwtauth_v1.keymanagers.jwks.remote]
+uri = "https://api.asgardeo.io/t/aipoc/oauth2/jwks"
+skipTlsVerify = false
+
+[[policy_configurations.jwtauth_v1.keymanagers]]
+name   = "entra"
+issuer = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/v2.0"
+scopeClaim = "scp" # ADDED 2026-09-09 Phase 4: Entra scp claim is a space-separated string
+
+[policy_configurations.jwtauth_v1.keymanagers.jwks.remote]
+uri = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/discovery/v2.0/keys"
+skipTlsVerify = false
+
+[policy_configurations.mcpauth_v1]
+# Host published in the protected-resource metadata URL that mcp-auth serves at
+# <context>/.well-known/oauth-protected-resource. Defaults to "localhost",
+# which no external MCP client can use. HOST ONLY — mcp-auth appends the
+# listener port itself, so including :8443 here yields a doubled ":8443:8443".
+gatewayhost = '{{ env "DEMO_HOSTNAME" "changeme.example.com" }}'
+
+[[policy_configurations.mcpauth_v1.keymanagers]]
+name   = "asgardeo"
+issuer = "https://api.asgardeo.io/t/aipoc/oauth2/token"
+
+[policy_configurations.mcpauth_v1.keymanagers.jwks.remote]
+uri = "https://api.asgardeo.io/t/aipoc/oauth2/jwks"
+skipTlsVerify = false
+
+[[policy_configurations.mcpauth_v1.keymanagers]]
+name   = "entra"
+issuer = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/v2.0"
+
+[policy_configurations.mcpauth_v1.keymanagers.jwks.remote]
+uri = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/discovery/v2.0/keys"
+skipTlsVerify = false
+
+[router.upstream.timeouts]
+route_timeout_ms = 300000
+route_idle_timeout_ms = 300000
+connect_timeout_ms = 10000
+
+[router.http_listener]
+per_connection_buffer_limit_bytes = 52428800  # 50 MiB
+
+# =============================================================================
+# TRACING — OTLP export to the OpenTelemetry Collector
+# =============================================================================
+# Requires the `tracing` compose profile to be running (otel-collector + jaeger).
+# If this is enabled while the collector is down, every export logs a warning.
+#
+# Jaeger stores traces IN MEMORY — restarting it loses all trace history.
+#
+# sampling_rate 1.0 captures every request, which is right at PoC traffic
+# levels. Lower it (0.1 = 10%) if volume becomes an issue.
+
+[tracing]
+enabled               = true
+endpoint              = "otel-collector:4317"
+service_version       = "0.2.0"
+batch_timeout         = "1s"
+max_export_batch_size = 512
+sampling_rate         = 1.0
+
+# CHANGED 2026-09-09: semantic-model-routing v0.9.0 embedding settings.
+#
+# NOT a duplicate of the top-level embedding_* keys near the head of this file.
+# Those are read by semantic-cache. This policy resolves a CEL path into this
+# section instead, so the top-level keys do nothing for it. Two namespaces,
+# near-identical key names.
+#
+# The section is named _v1 even though the policy is v0.9.0 -- that is what the
+# shipped policy definition asks for. There is no dimension key: the routing
+# schema has no dimension parameter at all.
+#
+# Reuses the Mistral credential already set for semantic-cache
+# (APIP_GW_EMBEDDING_PROVIDER_API_KEY in api-platform.env).
+
+[policy_configurations.semantic_model_routing_v1]
+embedding_provider          = "MISTRAL"
+embedding_provider_endpoint = "https://api.mistral.ai/v1/embeddings"
+embedding_provider_model    = "mistral-embed"
+embedding_provider_api_key  = "{{ env \"APIP_GW_EMBEDDING_PROVIDER_API_KEY\" \"\" }}"
