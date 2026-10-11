@@ -41,6 +41,16 @@ Usage:
     ./scripts/python/provision_showcases.py model-failover        # just this lane (Anthropic)
     ./scripts/python/provision_showcases.py mistral-model-failover  # ... or Mistral's
 
+Against an already-running deployment (not this repo's own compose stacks),
+set AIW_URL / GATEWAY_ID / GATEWAY_ENDPOINT / ADMIN_USERNAME / ADMIN_PASSWORD,
+optionally DEMO_PROJECT_ID (default "default"; created if missing),
+(see platform_api.py) and add:
+    --check             read-only: list what would be created/overwritten and
+                        any context already owned by another resource; exits
+                        non-zero on either. Needs no provider keys.
+    --existing-gateway  use GATEWAY_ID as-is -- no registration, no token,
+                        no rename, no container restart.
+
 model-failover's live fault-injection toggles (inject/break/heal/restore) are
 a separate concern from provisioning -- see scripts/python/failover_control.py and
 scripts/failover_demo.sh.
@@ -58,8 +68,10 @@ File layout (each section only calls the ones above it):
     5. Proxy lifecycle (create, deploy, api-key) — provider lifecycle itself
        (upsert_shared_provider) is platform_api.py's
     6. ai-chatbot integration (secrets/gateway-keys.env, process restart)
-    7. main()
+    7. Pre-flight check (--check)
+    8. main()
 """
+import os
 import re
 import subprocess
 import sys
@@ -67,8 +79,8 @@ import time
 
 from platform_api import (
     ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
-    request, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
-    BUDGET_DURATION,
+    probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
+    budget_duration,
 )
 
 # =============================================================================
@@ -77,7 +89,9 @@ from platform_api import (
 #    pair).
 # =============================================================================
 GATEWAY_DISPLAY_NAME = "ai-gateway"
-PROJECT_ID = "default"
+# DEMO_PROJECT_ID puts every demo resource in its own project on a shared
+# control plane; created if missing. Unset, the local-dev "default".
+PROJECT_ID = os.environ.get("DEMO_PROJECT_ID") or "default"
 
 # Gateway-issued per-lane API keys (api-key-auth), as opposed to the upstream
 # provider credentials (platform_api.py's SECRETS_FILE) — a different secret,
@@ -120,7 +134,7 @@ def lane_templates(provider: dict) -> dict:
     budget = budget_for(provider)
     return {
         "plain-chat": {
-            "context_suffix": None, "displayName": "Plain Chat", "wired": True,
+            "context_suffix": "plain", "displayName": "Plain Chat", "wired": True,
             # Deliberately carries only llm-cost (added automatically for
             # every lane, at the provider level) and nothing that can block
             # -- the one lane with no policy that can refuse a request (see
@@ -139,7 +153,7 @@ def lane_templates(provider: dict) -> dict:
             # Mistral. Same reason cost-based-routing below chains its own
             # llm-cost rather than relying on the provider's.
             "globalPolicies": [{"name": "llm-cost-based-ratelimit", "version": "v1",
-                                 "params": {"budgetLimits": [{"amount": budget, "duration": BUDGET_DURATION}],
+                                 "params": {"budgetLimits": [{"amount": budget, "duration": budget_duration("spend-limit")}],
                                             "consumerBased": False}},
                                 {"name": "llm-cost", "version": "v1", "params": {}}],
         },
@@ -150,15 +164,41 @@ def lane_templates(provider: dict) -> dict:
             # block when it matches. ".{0,30}" between the words because a request like
             # "ignore all previous instructions" has two words between "ignore" and
             # "instructions"; a single-alternation group only catches one.
+            #
+            # Three families, not just "ignore ... instructions" (which let the
+            # card's own second probe, "Disregard your prior instructions...",
+            # straight through): override verbs + an instructions-like noun;
+            # "you are now <unrestricted persona>"; and asks for the system
+            # prompt. Checked against 7 probes (all blocked) and a dozen normal
+            # questions written to sit close -- "I forgot my PIN, what are the
+            # instructions", "please disregard my previous message", "bypass
+            # the voicemail greeting" (none blocked). A customer literally
+            # asking to "ignore the roaming rules" would be refused.
             "globalPolicies": [{"name": "regex-guardrail", "version": "v1", "params": {
                 "request": {"enabled": True, "invert": True,
                             "jsonPath": provider["contentPath"],
-                            "regex": r"(?i)ignore\s+.{0,30}\binstructions?\b"}}}],
+                            "regex": (r"(?i)\b(?:ignore|disregard|forget|override|bypass)\b.{0,40}"
+                                      r"\b(?:instructions?|rules|guidelines|directions|prompts?)\b"
+                                      r"|\byou\s+are\s+now\b.{0,40}"
+                                      r"\b(?:unrestricted|unfiltered|uncensored|jailbroken|dan|developer\s+mode)\b"
+                                      r"|\b(?:reveal|print|show|repeat|output|tell\s+me)\b.{0,30}\bsystem\s+prompt\b")}}}],
         },
         "semantic-caching": {
             "context_suffix": "cache", "displayName": "Semantic Caching", "wired": True,
+            # jsonPath is not optional in practice: without it semantic-cache
+            # embeds the WHOLE body (system prompt + plan catalogue + question),
+            # the shared catalogue dominates, and "Everyday plan price" was
+            # served the cached answer for "Max plan price" (the schema shows
+            # a $.messages[-1].content default, but the code falls back to the
+            # body). similarityThreshold is transformed in the source --
+            # effective = 0.6 + 0.4 x configured -- so 0.915 is a 0.966 cosine
+            # cut-off: it catches "What's a PAC code?" (0.979) and "What does
+            # PAC code mean?" (0.969) and rejects every measured wrong-answer
+            # pair, the closest being 10 GB vs 100 GB at 0.964. See
+            # showcases.json's semantic-caching notes before changing it.
             "globalPolicies": [{"name": "semantic-cache", "version": "v1",
-                                 "params": {"similarityThreshold": 0.95}}],
+                                 "params": {"similarityThreshold": 0.915,
+                                            "jsonPath": provider["contentPath"]}}],
         },
         "pii-masking": {
             "context_suffix": "pii-masking", "displayName": "PII Masking", "wired": True,
@@ -168,9 +208,37 @@ def lane_templates(provider: dict) -> dict:
             # it reaches the client, which defeats the showcase (verified with a
             # local echo-server upstream: request WAS masked reaching upstream,
             # but the client-facing response had the real email put back).
+            #
+            # jsonPath "$": the WHOLE request body, not just the newest message.
+            # ai-chatbot replays the conversation every turn, so with
+            # $.messages[-1].content an email typed one turn earlier reached the
+            # model in clear (verified: it repeated it back). Run over a real
+            # body with no personal data in it, none of the patterns below
+            # touch the system prompt, the catalogue or the JSON itself.
+            #
+            # customPIIEntities: the built-in "phone" pattern is US-only
+            # (+1 / 3-3-4 digits) -- +44 7700 900123, 07700 900123 and
+            # +33 6 12 34 56 78 all passed through unmasked. PHONE_INTL covers
+            # any "+<country code>" number, PHONE_UK national 0-prefixed ones
+            # (mobiles and 020/0161/01632-style landlines).
+            #
+            # Built-in "ssn" is OFF, replaced by SSN_US: the policy applies its
+            # patterns in Go map order -- random per request -- and the built-in
+            # SSN regex (dashes optional) also matches "700 900123", so whenever
+            # it ran first "+44 7700 900123" came back as "+44 7*****". SSN_US
+            # requires the dashed 123-45-6789 form; every ordering of these five
+            # patterns was checked to mask each sample number completely.
             "globalPolicies": [{"name": "pii-masking-regex", "version": "v1", "params": {
-                "email": True, "phone": True, "ssn": True, "redactPII": True,
-                "jsonPath": provider["contentPath"]}}],
+                "email": True, "phone": True, "ssn": False, "redactPII": True,
+                "jsonPath": "$",
+                "customPIIEntities": [
+                    {"piiEntity": "SSN_US",
+                     "piiRegex": r"\b(?:00[1-9]|0[1-9][0-9]|[1-5][0-9]{2}|6(?:[0-57-9][0-9]|6[0-57-9])|[7-8][0-9]{2})-(?:0[1-9]|[1-9][0-9])-(?:000[1-9]|00[1-9][0-9]|0[1-9][0-9]{2}|[1-9][0-9]{3})\b"},
+                    {"piiEntity": "PHONE_INTL",
+                     "piiRegex": r"(?:\+[1-9][0-9]{0,2}[\s.-]?\(?0?\)?[\s.-]?[0-9]{1,4}(?:[\s.-]?[0-9]{2,4}){2,4})\b"},
+                    {"piiEntity": "PHONE_UK",
+                     "piiRegex": r"\b0[1-9][0-9]{1,4}[\s-]?[0-9]{3,4}[\s-]?[0-9]{3,4}\b"},
+                ]}}],
         },
         "semantic-routing": {
             "context_suffix": "semantic-routing", "displayName": "Semantic Routing", "wired": True,
@@ -232,8 +300,8 @@ def lane_templates(provider: dict) -> dict:
                 {"name": "cost-based-model-routing", "version": "v0", "paths": [{
                     "path": path, "methods": ["POST"], "params": {
                         "modelBudgets": [
-                            {"model": {"modelName": large}, "budgetLimits": [{"amount": budget, "duration": BUDGET_DURATION}]},
-                            {"model": {"modelName": small}, "budgetLimits": [{"amount": 1000, "duration": BUDGET_DURATION}]},
+                            {"model": {"modelName": large}, "budgetLimits": [{"amount": budget, "duration": budget_duration("cost-based-routing")}]},
+                            {"model": {"modelName": small}, "budgetLimits": [{"amount": 1000, "duration": budget_duration("cost-based-routing")}]},
                         ],
                         "onExhausted": "fallback",
                         "fallback": {"modelName": small},
@@ -401,6 +469,20 @@ def wait_for_gateway_active(gateway_id: str, timeout_s: int = 300):
               f"check: docker compose -f ai-gateway/docker-compose.yaml logs gateway-controller")
 
 
+def require_existing_gateway(gateway_id: str):
+    """--existing-gateway's replacement for the whole registration block
+    above: the gateway is someone else's, already registered and wired to
+    its controller, so this only confirms it's there -- no token minted, no
+    container touched, no rename."""
+    status, resp = api("GET", f"/gateways/{gateway_id}")
+    if status != 200:
+        _, listing = api("GET", "/gateways")
+        known = [f"{g.get('id')} ({g.get('displayName')})" for g in _items(listing)]
+        sys.exit(f"  gateway {gateway_id!r} not found ({status}) -- set GATEWAY_ID to one of: {known}")
+    state = "active" if resp.get("isActive") else "NOT reporting active (heartbeat flag -- may be stale)"
+    print(f"  using existing gateway {gateway_id!r} ({resp.get('displayName')}), {state}")
+
+
 def ensure_gateway_name(gateway_id: str, display_name: str):
     status, resp = api("GET", f"/gateways/{gateway_id}")
     if status != 200:
@@ -428,7 +510,7 @@ def ensure_project(project_id: str, display_name: str):
 
 
 def ensure_app(app_id: str, display_name: str, description: str):
-    ensure_project(PROJECT_ID, "Default")
+    ensure_project(PROJECT_ID, "Default" if PROJECT_ID == "default" else PROJECT_ID)
     status, _ = api("GET", f"/applications/{app_id}")
     payload = {"id": app_id, "displayName": display_name, "description": description,
                "projectId": PROJECT_ID, "type": "genai"}
@@ -533,21 +615,35 @@ def issue_key(lane_id: str) -> tuple[str, str]:
     return key_id, key_value
 
 
-def wait_for_key_live(context: str, messages_suffix: str, key: str, timeout_s: int = 180) -> bool:
+def wait_for_key_live(context: str, messages_suffix: str, key: str, timeout_s: int = 180) -> str:
     """A freshly issued key travels to the runtime over its own APIKeyState
     xDS channel, separate from the PolicyChainConfig one route_is_live()
     checks — the two can and do desync (observed: policy chain resynced
     fine after a controller reconnect while API key state lagged behind,
     leaving a just-issued key rejected for a while). Confirms this specific
-    key is actually accepted before we hand it to ai-chatbot."""
+    key is actually accepted before we hand it to ai-chatbot.
+
+    Returns platform_api.gateway_verdict()'s last answer: "live" on success,
+    otherwise why it never got there. Only the gateway's own replies count
+    against the key -- a 404 used to pass as "accepted", which hid a route
+    that never deployed."""
+    verdict = "transient"
     for _ in range(timeout_s // 2):
-        status, _ = request("POST", f"https://{GATEWAY_ENDPOINT}{context}{messages_suffix}",
-                             {"model": "probe", "max_tokens": 1, "messages": []},
-                             {"X-API-Key": key})
-        if status != 401:
-            return True
+        verdict = probe(context, messages_suffix, key)
+        if verdict == "live":
+            return verdict
         time.sleep(2)
-    return False
+    return verdict
+
+
+KEY_NOT_LIVE = {
+    "no-route": "the gateway has no route for {context} -- the proxy never actually deployed; "
+                "check gateway-controller logs for a policy validation error",
+    "key-rejected": "key issued but never accepted by the gateway within 180s -- check "
+                    "gateway-controller logs for delayed apikey.created processing "
+                    "(a CPU-starved host can delay this by minutes)",
+    "transient": "the gateway at {endpoint} never answered -- is it running?",
+}
 
 
 # =============================================================================
@@ -595,7 +691,9 @@ def restart_ai_chatbot():
     enough -- nothing to re-verify."""
     subprocess.run([str(ROOT / "scripts" / "stop-ai-chatbot.sh")], check=True)
     log = open(AI_CHATBOT_LOG_FILE, "w")
-    proc = subprocess.Popen(["python3", "server.py"], cwd=str(ROOT / "ai-chatbot"),
+    # -u: unbuffered, or the startup banner (the wiring table worth reading
+    # in this log) sits in stdout's buffer and never reaches the file.
+    proc = subprocess.Popen(["python3", "-u", "server.py"], cwd=str(ROOT / "ai-chatbot"),
                              stdout=log, stderr=log, start_new_session=True)
     time.sleep(2)
     if proc.poll() is not None:
@@ -603,10 +701,104 @@ def restart_ai_chatbot():
 
 
 # =============================================================================
-# 7. main
+# 7. Pre-flight check (--check) -- read-only: what a real run would create,
+#    what it would overwrite, and which contexts already belong to someone
+#    else. Matters on a shared control plane, where every upsert above is a
+#    silent PUT over whatever already holds that id.
+# =============================================================================
+def _items(resp) -> list:
+    if isinstance(resp, list):
+        return resp
+    if isinstance(resp, dict):
+        return resp.get("list") or resp.get("items") or []
+    return []
+
+
+def _existing(resource: str, project_ids: list) -> dict:
+    """id -> resource for every existing /{resource}, across every project
+    when the endpoint is project-scoped (it 400s without ?projectId=) -- all
+    projects deploy to the same gateway, so a context in any of them
+    collides. Each item is tagged with its "_project"; context is filled in
+    from a per-item GET when the listing is only a summary."""
+    status, resp = api("GET", f"/{resource}")
+    if status == 200:
+        pages = [(None, resp)]
+    # Worded differently per endpoint: "projectId query parameter is
+    # required" (/llm-proxies), "Project ID is required" (/applications).
+    elif status == 400 and re.search(r"project\s*id", str(resp), re.IGNORECASE):
+        pages = []
+        for pid in project_ids:
+            status, resp = api("GET", f"/{resource}?projectId={pid}")
+            if status != 200:
+                sys.exit(f"  could not list /{resource} in project {pid!r}: {status} {resp}")
+            pages.append((pid, resp))
+    else:
+        sys.exit(f"  could not list /{resource}: {status} {resp}")
+    found = {}
+    for pid, page in pages:
+        for item in _items(page):
+            if "context" not in item and resource != "applications":
+                _, item = api("GET", f"/{resource}/{item['id']}")
+            item["_project"] = item.get("projectId") or pid
+            found[item["id"]] = item
+    return found
+
+
+def check(providers: list, requested: list) -> bool:
+    print("### pre-flight check (read-only)")
+    require_existing_gateway(GATEWAY_ID)
+
+    planned = [("llm-providers", p["providerId"], p["providerContext"]) for p in providers]
+    planned += [("llm-proxies", lid, ALL_LANES[lid]["context"]) for lid in requested]
+    planned += [("applications", p["appId"], None) for p in providers]
+
+    status, resp = api("GET", "/projects")
+    if status != 200:
+        sys.exit(f"  could not list /projects: {status} {resp}")
+    projects = {p["id"]: p.get("displayName") for p in _items(resp)}
+    print(f"  projects: {', '.join(f'{k} ({v})' for k, v in projects.items())}")
+    print(f"  demo resources go into project {PROJECT_ID!r} "
+          f"({'exists, reused' if PROJECT_ID in projects else 'will be created'})")
+
+    existing = {r: _existing(r, list(projects)) for r in ("llm-providers", "llm-proxies", "applications")}
+    context_owner = {}
+    for r in ("llm-providers", "llm-proxies"):
+        for rid, item in existing[r].items():
+            if item.get("context"):
+                context_owner[item["context"]] = (r, rid)
+
+    problems = 0
+    for resource, rid, context in planned:
+        current = existing[resource].get(rid)
+        if current:
+            print(f"  OVERWRITE  {resource:<14} {rid:<32} (exists: {current.get('displayName')!r}"
+                  f"{', project ' + repr(current['_project']) if current.get('_project') else ''})")
+            problems += 1
+        else:
+            print(f"  create     {resource:<14} {rid:<32} {context or ''}")
+        owner = context_owner.get(context) if context else None
+        if owner and owner != (resource, rid):
+            owner_project = existing[owner[0]][owner[1]].get("_project")
+            print(f"  COLLISION  context {context} already owned by {owner[0]} {owner[1]!r}"
+                  f"{' in project ' + repr(owner_project) if owner_project else ''}")
+            problems += 1
+
+    print(f"\n{len(planned)} resources planned, {problems} overwrite/collision(s)")
+    return problems == 0
+
+
+# =============================================================================
+# 8. main
 # =============================================================================
 def main():
-    requested = sys.argv[1:] or DEFAULT_LANE_IDS
+    args = sys.argv[1:]
+    flags = {a for a in args if a.startswith("--")}
+    unknown_flags = flags - {"--existing-gateway", "--check"}
+    if unknown_flags:
+        sys.exit(f"unknown flag(s): {sorted(unknown_flags)}. Known: --existing-gateway, --check")
+    existing_gateway = "--existing-gateway" in flags or "--check" in flags
+
+    requested = [a for a in args if not a.startswith("--")] or DEFAULT_LANE_IDS
     unknown = [r for r in requested if r not in ALL_LANES]
     if unknown:
         sys.exit(f"unknown lane(s): {unknown}. Known: {list(ALL_LANES.keys())}")
@@ -616,55 +808,81 @@ def main():
     # provider's key to be set in secrets/api-keys.env.
     needed_provider_ids = {ALL_LANES[lid]["providerId"] for lid in requested}
     providers = [p for p in PROVIDERS if p["id"] in needed_provider_ids]
+
+    if "--check" in flags:
+        login()
+        sys.exit(0 if check(providers, requested) else 1)
+
     secrets = {p["id"]: read_secret(p) for p in providers}
 
     login()
 
     print("### gateway registration")
-    if ensure_gateway_registered(GATEWAY_ID, GATEWAY_DISPLAY_NAME):
-        print("  new token issued — recreating gateway-controller")
-        restart_gateway_controller()
-        wait_for_gateway_active(GATEWAY_ID)
+    if existing_gateway:
+        require_existing_gateway(GATEWAY_ID)
     else:
-        print("  already registered and active")
-    ensure_gateway_name(GATEWAY_ID, GATEWAY_DISPLAY_NAME)
+        if ensure_gateway_registered(GATEWAY_ID, GATEWAY_DISPLAY_NAME):
+            print("  new token issued — recreating gateway-controller")
+            restart_gateway_controller()
+            wait_for_gateway_active(GATEWAY_ID)
+        else:
+            print("  already registered and active")
+        ensure_gateway_name(GATEWAY_ID, GATEWAY_DISPLAY_NAME)
 
-    for provider in providers:
-        pid = provider["id"]
-        print(f"### {provider['displayName']} application + provider")
-        ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"])
+    # issue_key() revokes a lane's previous key the moment it mints the new
+    # one, so from then on the key ai-chatbot loaded at startup is dead. The
+    # restart therefore has to happen however this run ends -- a run that
+    # aborts on lane N used to skip it and leave lanes 1..N-1 answering 401
+    # with keys that had just been revoked.
+    keys_changed = False
+    try:
+        for provider in providers:
+            pid = provider["id"]
+            print(f"### {provider['displayName']} application + provider")
+            ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"])
 
-        upsert_shared_provider(provider, secrets[pid])
-        deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"],
-               resource="llm-providers")
-        ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
+            upsert_shared_provider(provider, secrets[pid])
+            deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"],
+                   resource="llm-providers")
+            ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
 
-        for lane_id in requested:
-            lane = ALL_LANES[lane_id]
-            if lane["providerId"] != pid:
-                continue
-            print(f"### {lane_id} ({lane['context']})")
-            upsert_proxy(provider, lane)
-            deploy(lane_id, lane["context"], provider["messagesSuffix"])
-            ensure_association(provider["appId"], lane_id, "LlmProxy")
-            key_id, key = issue_key(lane_id)
-            ensure_app_api_key(provider["appId"], lane_id, "LlmProxy", key_id)
-            if not wait_for_key_live(lane["context"], provider["messagesSuffix"], key):
-                sys.exit(f"  key issued but never accepted by the gateway within 180s — "
-                          f"check gateway-controller logs for delayed apikey.created processing "
-                          f"(a CPU-starved host can delay this by minutes)")
-            print("  key confirmed live on the gateway")
+            for lane_id in requested:
+                lane = ALL_LANES[lane_id]
+                if lane["providerId"] != pid:
+                    continue
+                print(f"### {lane_id} ({lane['context']})")
+                upsert_proxy(provider, lane)
+                deploy(lane_id, lane["context"], provider["messagesSuffix"])
+                ensure_association(provider["appId"], lane_id, "LlmProxy")
+                key_id, key = issue_key(lane_id)
+                keys_changed = True
+                ensure_app_api_key(provider["appId"], lane_id, "LlmProxy", key_id)
 
-            config = lane["config"]
-            if config:
-                key_vars = config["api_key_var"]
-                for var in ([key_vars] if isinstance(key_vars, str) else key_vars):
-                    write_config_env(var, key)
-                print(f"  {key_vars} written to secrets/gateway-keys.env")
-            else:
-                print(f"  api key: {key}  (no showcases.json entry — not wired into ai-chatbot)")
+                # Written before the liveness wait, not after: the old key is
+                # already revoked, so the new one is the only one that can
+                # ever work -- a timeout below shouldn't leave the dead one
+                # in the file.
+                config = lane["config"]
+                if config:
+                    key_vars = config["api_key_var"]
+                    for var in ([key_vars] if isinstance(key_vars, str) else key_vars):
+                        write_config_env(var, key)
+                    print(f"  {key_vars} written to secrets/gateway-keys.env")
+                else:
+                    print(f"  api key: {key}  (no showcases.json entry — not wired into ai-chatbot)")
 
-    restart_ai_chatbot()
+                verdict = wait_for_key_live(lane["context"], provider["messagesSuffix"], key)
+                if verdict != "live":
+                    sys.exit("  " + KEY_NOT_LIVE[verdict].format(context=lane["context"],
+                                                                 endpoint=GATEWAY_ENDPOINT))
+                print("  key confirmed live on the gateway")
+    finally:
+        if keys_changed:
+            if sys.exc_info()[0] is not None:
+                print("### run stopped early -- restarting ai-chatbot anyway, so it picks up "
+                      "the keys issued so far")
+            restart_ai_chatbot()
+
     apps = ", ".join(f"'{p['appId']}'" for p in providers)
     print(f"\ndone. Lanes grouped under GenAI Application(s) {apps}. "
           "ai-chatbot restarted with the new keys.")

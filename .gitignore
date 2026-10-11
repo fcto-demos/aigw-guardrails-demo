@@ -55,3 +55,5 @@ __pycache__/
 
 # --- ap CLI, downloaded by scripts/reset-and-setup.sh -----------------------
 .bin/
+ai-chatbot/config.env
+demo.env

@@ -535,6 +535,8 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         stream = True
 
     context = showcase_context(url, provider_id)
+    own_key = _sc_conf(showcase_id, "API_KEY", provider_id)
+    fallback_key = CONF["GATEWAY_API_KEY"] if provider_id == DEFAULT_PROVIDER_ID else ""
     return {
         "id": showcase_id,
         "title": entry.get("title") or showcase_id,
@@ -559,8 +561,12 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         # one key for all lanes is not available and each needs its own.
         # GATEWAY_API_KEY remains the fallback for the default provider's
         # plain-chat.
-        "apiKey": (_sc_conf(showcase_id, "API_KEY", provider_id)
-                   or (CONF["GATEWAY_API_KEY"] if provider_id == DEFAULT_PROVIDER_ID else "")),
+        "apiKey": own_key or fallback_key,
+        # "showcase" (its own SHOWCASE_*_API_KEY), "fallback" (GATEWAY_API_KEY)
+        # or None. A fallback key is plain-chat's, so on any other lane it
+        # will 401 -- /health and the banner surface this instead of letting
+        # "keyed" look healthy.
+        "keySource": "showcase" if own_key else ("fallback" if fallback_key else None),
     }
 
 
@@ -743,6 +749,7 @@ class Handler(BaseHTTPRequestHandler):
             wiring = {}
             for entry in registry["list"]:
                 url, source = resolve_gateway(entry, provider_id)
+                resolved = resolve_showcase(entry["id"], provider_id)
                 wiring[entry["id"]] = {
                     "status": entry.get("status") or "ready",
                     "stream": (entry.get("gateway") or {}).get("stream") is not False,
@@ -752,7 +759,10 @@ class Handler(BaseHTTPRequestHandler):
                     # Never the key itself, only whether one is wired -- this
                     # endpoint is the first place a missing key shows up as a
                     # 401, so the boolean earns its place.
-                    "keyed": bool(resolve_showcase(entry["id"], provider_id)["apiKey"]),
+                    "keyed": bool(resolved["apiKey"]),
+                    # "fallback" next to keyed:true is plain-chat's key standing
+                    # in for a lane that has none of its own -- expect a 401.
+                    "keySource": resolved["keySource"],
                 }
             return self._json(200, {
                 "status": "ok",
@@ -1245,11 +1255,17 @@ def main():
     print("  model    %s  (max_tokens %s)" % (default_model(), CONF["MAX_TOKENS"]))
     print("           %sa default only - the gateway's routers decide which "
           "model answers%s" % (DIM, RESET))
-    keyed = sum(1 for s in _REGISTRY["by_id"]
-                if resolve_showcase(s)["apiKey"])
+    sources = {s: resolve_showcase(s)["keySource"] for s in _REGISTRY["by_id"]}
+    keyed = sum(1 for src in sources.values() if src)
     print("  key      %s" % ("gateway-side key on %d/%d showcases, header %s"
                              % (keyed, len(_REGISTRY["by_id"]), CONF["GATEWAY_API_KEY_HEADER"])
                              if keyed else "none sent - the gateway holds the Anthropic key"))
+    # GATEWAY_API_KEY is plain-chat's own key: any other lane falling back to
+    # it will be refused, so name them rather than count them as keyed.
+    borrowed = sorted(s for s, src in sources.items() if src == "fallback" and s != "plain-chat")
+    if borrowed:
+        print("           %sGATEWAY_API_KEY fallback only (expect 401): %s%s"
+              % (YELLOW, ", ".join(borrowed), RESET))
 
     print("\n  %sshowcases%s" % (BOLD, RESET))
     base_host = urllib.parse.urlsplit(gateway_base()).netloc

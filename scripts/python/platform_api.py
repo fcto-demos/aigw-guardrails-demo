@@ -5,7 +5,7 @@ used by both provision_showcases.py (provisioning) and failover_control.py
 Everything specific to the lane catalogue (showcases.json/lane_templates) or
 ai-chatbot integration (config.env, secrets/gateway-keys.env) stays in
 provision_showcases.py -- this module only knows the Platform API itself and
-the provider registry (providers.json). One exception: BUDGET_DURATION below
+the provider registry (providers.json). One exception: budget_duration() below
 reads a single field out of showcases.json, since that's the same kind of
 plain config read this module already does (DEMO_ENV, PROVIDERS), and the
 value must agree with what the UI displays.
@@ -51,14 +51,20 @@ def _read_demo_env() -> dict:
 
 DEMO_ENV = _read_demo_env()
 
-AIW = f"https://localhost:{DEMO_ENV['AI_WORKSPACE_PORT']}"  # ai-workspace BFF, see ai-workspace/docker-compose.yaml
+# AIW_URL / GATEWAY_ID / GATEWAY_ENDPOINT env vars retarget every script here
+# at an already-running deployment instead of this repo's own compose stacks
+# -- see provision_showcases.py's --existing-gateway. Unset, they fall back to
+# the local-dev values below.
+AIW = os.environ.get("AIW_URL") or f"https://localhost:{DEMO_ENV['AI_WORKSPACE_PORT']}"  # ai-workspace BFF, see ai-workspace/docker-compose.yaml
+AIW = AIW.rstrip("/")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")  # seeded by scripts/generate-local-certs.sh
 
-GATEWAY_ID = "local-gateway"                       # immutable resource id, not the display name
+GATEWAY_ID = os.environ.get("GATEWAY_ID") or "local-gateway"  # immutable resource id, not the display name
 # ai-gateway's own port, hand-set in its own .env (same value locally and on
 # the VM, no local-dev offset) -- not demo.env, see that file's own comment.
-GATEWAY_ENDPOINT = f"localhost:{_read_env_file(ROOT / 'ai-gateway' / '.env')['GATEWAY_HTTPS_PORT']}"
+GATEWAY_ENDPOINT = (os.environ.get("GATEWAY_ENDPOINT")
+                    or f"localhost:{_read_env_file(ROOT / 'ai-gateway' / '.env')['GATEWAY_HTTPS_PORT']}")
 
 # One entry per upstream LLM, loaded from providers.json at the repo root --
 # not defined here, because ai-chatbot/server.py needs the exact same
@@ -118,7 +124,7 @@ def load_providers() -> list:
         # config.env keep working untouched.
         p["lanePrefix"] = "" if p["id"] == providers[0]["id"] else f"{p['id']}-"
         p["providerId"] = p["id"]
-        p["providerContext"] = f"/{p['id']}-provider"
+        p["providerContext"] = f"/{p['id']}"
         p["appId"] = f"ai-chatbot-{p['id']}"
         p["appDisplayName"] = f"AI Chatbot ({p['displayName']})"
         p["appDescription"] = f"Public chatbot showcase — single key for all the {p['displayName']} lanes"
@@ -148,24 +154,22 @@ def budget_for(provider: dict) -> float:
     return provider["costBudget"]
 
 
-def _budget_duration() -> str:
-    """How often spend-limit's and cost-based-routing's gateway budgets roll
-    over and start fresh again -- read from ai-chatbot/showcases.json's
-    cost-based-routing.budget.duration, the ONE place this is also shown in
-    the UI, rather than a second literal in provision_showcases.py that could
-    drift from what the page displays. That field happens to live on one
-    specific showcase, but the value is shared by both."""
+def budget_duration(showcase_id: str) -> str:
+    """How often one showcase's gateway budget rolls over and starts fresh
+    again -- read from ai-chatbot/showcases.json's <showcase>.budget.duration,
+    the same place the UI displays it, rather than a literal in
+    provision_showcases.py that could drift from the page. Each budgeted
+    showcase has its own window: spend-limit wants a short one (the wall
+    resets quickly between rehearsals), cost-based-routing a longer one (time
+    to explain the switch before the large model comes back)."""
     path = ROOT / "ai-chatbot" / "showcases.json"
     showcases = json.loads(path.read_text())
-    entry = next((s for s in showcases if s["id"] == "cost-based-routing"), None)
+    entry = next((s for s in showcases if s["id"] == showcase_id), None)
     duration = ((entry or {}).get("budget") or {}).get("duration")
     if not duration:
-        sys.exit(f"{path}: cost-based-routing.budget.duration is missing -- "
-                  "both spend-limit's and cost-based-routing's gateway budgets read it from here")
+        sys.exit(f"{path}: {showcase_id}.budget.duration is missing -- "
+                  f"{showcase_id}'s gateway budget window is read from there")
     return duration
-
-
-BUDGET_DURATION = _budget_duration()
 
 
 # =============================================================================
@@ -236,13 +240,41 @@ def read_secret(provider: dict) -> str:
     sys.exit(f"{provider['secretVar']} not set in {SECRETS_FILE}")
 
 
+def gateway_verdict(status: int, body) -> str:
+    """Classifies a probe response by WHO produced it, since a probe that
+    gets through the gateway reaches the real upstream, whose own 401/404
+    (Anthropic: bad upstream key, unknown model "probe") must not be read as
+    the gateway's. Returns:
+      "transient"     -- no HTTP answer at all (status 0)
+      "no-route"      -- Envoy has no route for this context: not deployed
+      "key-rejected"  -- api-key-auth refused the key (or no key was sent)
+      "live"          -- the gateway matched the route and let it through
+    The two gateway bodies are its own fixed replies, confirmed on this
+    gateway: {"error":"Not Found"} and {"error":"Unauthorized","message":
+    "Valid API key required"}."""
+    if status == 0:
+        return "transient"
+    error = body.get("error") if isinstance(body, dict) else None
+    if status == 404 and error == "Not Found":
+        return "no-route"
+    if status == 401 and error == "Unauthorized":
+        return "key-rejected"
+    return "live"
+
+
+def probe(context: str, messages_suffix: str, key: str = None) -> str:
+    """One POST straight at the gateway (not the control plane), classified
+    by gateway_verdict()."""
+    status, body = request("POST", f"https://{GATEWAY_ENDPOINT}{context}{messages_suffix}",
+                           {"model": "probe", "max_tokens": 1, "messages": []},
+                           {"X-API-Key": key} if key else None)
+    return gateway_verdict(status, body)
+
+
 def route_is_live(context: str, messages_suffix: str) -> bool:
-    """Direct probe against the gateway itself (not the control plane) — a
-    404 means the route truly isn't wired, anything else (401 missing key,
-    400 bad body, ...) means Envoy matched it and the policy chain ran."""
-    status, _ = request("POST", f"https://{GATEWAY_ENDPOINT}{context}{messages_suffix}",
-                         {"model": "probe", "max_tokens": 1, "messages": []})
-    return status != 404
+    """Envoy matched the route -- anything but a missing route or no answer
+    (a 401 for the missing key still proves the route and its chain exist)."""
+    return probe(context, messages_suffix) in ("live", "key-rejected")
 
 
 def deploy(resource_id: str, context: str, messages_suffix: str,

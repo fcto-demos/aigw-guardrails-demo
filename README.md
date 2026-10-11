@@ -63,19 +63,14 @@ wso2-api-platform-ai-demo/
   it's the only embeddings provider supported today. The same key you use
   for Mistral chat works fine for this too.
 
-This demo has been tested most thoroughly with **Anthropic** and
-**Mistral** — that's the combination we recommend. **Gemini**'s free tier
-is more restrictive: some models aren't available on a newly created key,
+This demo has been tested most thoroughly with **Anthropic** and**Mistral** — that's the combination we recommend. **Gemini**'s free tier is more restrictive: some models aren't available on a newly created key,
 and you're more likely to hit rate limits.
 
 ## Installation
 
 ### First run
 
-`./scripts/reset-and-setup.sh` must be the first thing you run. It installs
-the `ap` CLI, builds the custom gateway image, generates local certificates,
-starts every container, and provisions all nine showcases — nothing else
-here creates any of that.
+`./scripts/reset-and-setup.sh` must be the first thing you run. It installs the `ap` CLI, builds the custom gateway image, generates local certificates, starts every container, and provisions all nine showcases — nothing else here creates any of that.
 
 ```bash
 cp secrets/api-keys.env.example secrets/api-keys.env
@@ -87,12 +82,8 @@ cp ai-gateway/api-platform.env.example ai-gateway/api-platform.env
 ./scripts/reset-and-setup.sh
 ```
 
-The two `api-platform.env` files above need no editing for a local run —
-every value in them is either already correct as shipped, or filled in
-automatically on first run: the admin password hash (by
-`generate-local-certs.sh`) and the gateway's control-plane registration
-token (by `provision_showcases.py`). Setting these up by hand, without
-`reset-and-setup.sh`, isn't documented here.
+The two `api-platform.env` files above need no editing for a local run — every value in them is either already correct as shipped, or filled in automatically on first run: the admin password hash (by
+`generate-local-certs.sh`) and the gateway's control-plane registration token (by `provision_showcases.py`). Setting these up by hand, without`reset-and-setup.sh`, isn't documented here.
 
 First run takes a few minutes.
 
