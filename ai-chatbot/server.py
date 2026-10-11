@@ -470,6 +470,17 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "%s is not an http(s) URL" % _env_key(sid, "URL", provider_id)
         return pinned, _env_key(sid, "URL", provider_id)
 
+    # A card with its own "route" talks to one fixed LlmProxy, in one wire
+    # format, whatever the provider dropdown says: a cross-provider proxy
+    # (intelligent-routing -- Mistral + Anthropic behind one context) belongs
+    # to no single provider, so the per-provider formula below can't name it.
+    route = entry.get("route")
+    if route:
+        ctx = route.get("context") or ""
+        if not CONTEXT_RE.match(ctx):
+            return None, "route.context %r is not a plain path" % ctx
+        return gateway_base() + ctx.rstrip("/") + (route.get("messagesSuffix") or ""), "showcases.json route"
+
     # The context for any (showcase, provider) pair is always exactly
     # /<providerId>-<contextSuffix>, or bare /<providerId> when contextSuffix
     # is empty -- scripts/python/provision_showcases.py builds the gateway's own
@@ -487,12 +498,14 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
     return gateway_base() + ctx.rstrip("/") + suffix, "showcases.json contextSuffix"
 
 
-def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID):
+def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
     """The provider path, host stripped -- safe to publish to the browser."""
     if not url:
         return None
     path = urllib.parse.urlsplit(url).path
-    return path.split(PROVIDERS[provider_id]["messagesSuffix"])[0] or "/"
+    route = (entry or {}).get("route")
+    suffix = (route.get("messagesSuffix") if route else None) or PROVIDERS[provider_id]["messagesSuffix"]
+    return path.split(suffix)[0] or "/"
 
 
 def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
@@ -506,20 +519,25 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     url, source = resolve_gateway(entry, provider_id)
     wiring = entry.get("gateway") or {}
     overrides = entry.get("overrides") or {}
+    # A routed card (see resolve_gateway) fixes its own wire and default
+    # model, and its env vars carry the default provider's (unsuffixed)
+    # names, since it belongs to no single provider.
+    route = entry.get("route")
+    conf_provider = DEFAULT_PROVIDER_ID if route else provider_id
 
-    fallback_model = default_model(provider_id)
+    fallback_model = (MODEL_OVERRIDE or route["model"]) if route and route.get("model") else default_model(provider_id)
     model = (MODEL_OVERRIDE
-             or _sc_conf(showcase_id, "MODEL", provider_id)
-             or _resolve_model_role(overrides.get("model"), provider_id)
+             or _sc_conf(showcase_id, "MODEL", conf_provider)
+             or (None if route else _resolve_model_role(overrides.get("model"), provider_id))
              or fallback_model)
     if not re.match(r"^[A-Za-z0-9._-]{1,64}$", str(model)):
         model = fallback_model
 
-    tokens = (_sc_conf(showcase_id, "MAX_TOKENS", provider_id)
+    tokens = (_sc_conf(showcase_id, "MAX_TOKENS", conf_provider)
               or overrides.get("maxTokens")
               or CONF["MAX_TOKENS"])
 
-    prompt = _sc_conf(showcase_id, "SYSTEM_PROMPT", provider_id) or overrides.get("systemPrompt")
+    prompt = _sc_conf(showcase_id, "SYSTEM_PROMPT", conf_provider) or overrides.get("systemPrompt")
 
     # Streaming is on everywhere except where a policy cannot cope with it.
     # semantic-cache v1.1.0 never stores a streamed response -- measured on this
@@ -528,20 +546,20 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     # stored at all. Overriding streamingJsonPath does not help. That card has
     # to send stream:false or it can never show a hit.
     stream = wiring.get("stream")
-    env_stream = _sc_conf(showcase_id, "STREAM", provider_id)
+    env_stream = _sc_conf(showcase_id, "STREAM", conf_provider)
     if env_stream:
         stream = _truthy(env_stream)
     if stream is None:
         stream = True
 
-    context = showcase_context(url, provider_id)
-    own_key = _sc_conf(showcase_id, "API_KEY", provider_id)
-    fallback_key = CONF["GATEWAY_API_KEY"] if provider_id == DEFAULT_PROVIDER_ID else ""
+    context = showcase_context(url, provider_id, entry)
+    own_key = _sc_conf(showcase_id, "API_KEY", conf_provider)
+    fallback_key = CONF["GATEWAY_API_KEY"] if conf_provider == DEFAULT_PROVIDER_ID else ""
     return {
         "id": showcase_id,
         "title": entry.get("title") or showcase_id,
         "provider": provider_id,
-        "wire": PROVIDERS[provider_id]["wire"],
+        "wire": (route.get("wire") if route else None) or PROVIDERS[provider_id]["wire"],
         "url": url,
         "source": source,
         "context": context,
@@ -811,7 +829,7 @@ class Handler(BaseHTTPRequestHandler):
             item = dict((k, v) for k, v in entry.items() if k != "gateway")
             item["configured"] = bool(url)
             item["streaming"] = (entry.get("gateway") or {}).get("stream") is not False
-            item["gatewayContext"] = showcase_context(url, provider_id)
+            item["gatewayContext"] = showcase_context(url, provider_id, entry)
             item["unwiredReason"] = None if url else source
             out.append(item)
         return {"brand": CONF["BRAND_NAME"],
@@ -1289,7 +1307,7 @@ def main():
                         if (entry.get("gateway") or {}).get("stream") is False
                         else "")
             print("    %s %-20s %-24s %s%s%s"
-                  % (tag, entry["id"], showcase_context(url), source, off, nostream))
+                  % (tag, entry["id"], showcase_context(url, entry=entry), source, off, nostream))
         else:
             # "ready" and unwired is an operator bug: this was supposed to work.
             tag = ("%sMISSING%s" % (RED, RESET) if ready

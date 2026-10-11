@@ -213,6 +213,77 @@
     "notes": "Four questions, none of them claiming to be the one that crosses the wall. The budget is shared across callers and runs on a fixed window, so which send steps down depends on what the lane has already spent this hour -- a step asserting a model would go red exactly when the policy was working. The rail reports the served model per step instead, and the meter and the stepped-down chip carry the story. Each question is written to be answered at length, because output tokens at $25/MTok on opus-4-6 are what actually walks the $0.02/1h budget down. WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. The policy keys on the model the CLIENT asks for -- requestModel is $.model in the payload -- and looks up that model’s budget entry. So this lane, alone among the three routers, depends on what the app sends: with the app default of claude-haiku-4-5 the request matches the economy budget ($1000/1h), which never runs out on stage, and the card would serve haiku from the first call and never step down. Hence overrides.model = claude-opus-4-6. The time lane needs no such override because its fallback names the deep model, and the semantic lane names a model on every route. Budgets are per model and shared across all callers. onExhausted is 'fallback'; the fallback model must have its own budget entry with capacity or the request returns 429 instead of stepping down, and there is no second hop -- an exhausted fallback does not try another model. The limit trips a call or two late because cost is only known after the response completes, so a request can overshoot. cost-based-model-routing is listed before llm-cost so reverse response-phase evaluation lets llm-cost publish the final cost first. No remaining-budget headers are emitted, by design -- the balance is unknown until the body completes. Excluded on gemini: this demo's Gemini account has exactly one usable model without billing (gemini-3.8-flash) -- every other variant (pro tier, lite, dated/preview versions) is either quota:0 or decommissioned for this account, confirmed by direct calls against the real API, not just this gateway. A route with small==large can't show a switch, so there's nothing honest to demo here for this provider."
   },
   {
+    "id": "intelligent-routing",
+    "route": {
+      "wire": "openai",
+      "context": "/intelligent-routing",
+      "messagesSuffix": "/v1/chat/completions",
+      "model": "mistral-small-latest"
+    },
+    "title": "Intelligent routing across providers",
+    "tagline": "An LLM reads each question and picks the provider and model — Anthropic first, Mistral as the backup.",
+    "capability": "intelligent-model-routing v0.9.0",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "intelligent-model-routing v0.9.0",
+      "openai-to-anthropic-transformer v0.9.2"
+    ],
+    "gateway": {},
+    "emphasis": [
+      "model",
+      "latency"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A simple question",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "model": "claude-haiku-4-5",
+              "text": "Anthropic's fast model. The classifier filed it under “Simple product question”, so the gateway switched this Mistral-fronted proxy to its Anthropic upstream."
+            }
+          }
+        ],
+        "notes": "One endpoint, OpenAI format in and out. The request was rewritten into Anthropic's Messages format on the way to Anthropic, and the answer rewritten back, by the openai-to-anthropic transformer that runs only when Anthropic is selected."
+      },
+      {
+        "n": 2,
+        "title": "A complex question",
+        "sends": [
+          {
+            "ask": "I use about 12 GB a month, travel to Spain twice a year and to the US in December. Which plan and add-ons work out cheapest over 12 months, and should I go 30-day or annual?",
+            "expect": {
+              "model": "claude-opus-4-6",
+              "text": "Anthropic's deep model — “Complex plan analysis”: arithmetic across plans, roaming zones and contract lengths."
+            }
+          }
+        ],
+        "notes": "Same provider as step 1, different model: the routing rules choose both."
+      },
+      {
+        "n": 3,
+        "title": "Something the rules don't cover",
+        "sends": [
+          {
+            "ask": "Write a haiku about autumn.",
+            "expect": {
+              "model": "mistral-small",
+              "text": "The backup: no rule matches, the classifier answers NONE, and the default route — the proxy's own provider, Mistral — answers instead."
+            }
+          }
+        ],
+        "notes": "The same fallback catches a classifier that fails or times out, so the card keeps answering even if the classification call breaks. It is not failover: an error from Anthropic itself is returned, not retried on Mistral."
+      }
+    ],
+    "notes": "intelligent-model-routing v0.9.0. One LlmProxy (/intelligent-routing) whose own provider is a demo-owned Mistral LlmProvider (demo-mistral, /demo-mistral, mistral-small-latest, real key from MISTRAL_API_KEY), with Anthropic in additionalProviders. Not the user's own mistral provider: its provider-level API-key/JWT security, kept for another demo, rejected the proxy's traffic (\"Valid API key required\"). A classifier LLM — Mistral's OpenAI-compatible chat API, set in the gateway's config.toml [policy_configurations.intelligent_model_routing_v1] — reads $.messages[-1].content and picks a routing rule; a rule naming provider anthropic switches the upstream. The client must speak OpenAI chat-completions: the proxy's primary provider is OpenAI-native (Mistral), and the openai-to-anthropic transformer rewrites requests to Anthropic Messages format and Anthropic's responses back to OpenAI format, only when Anthropic is selected. This card therefore ignores the provider dropdown (its \"route\" block fixes the wire and endpoint). Backup triggers: classifier answers NONE, classifier call fails, or the question can't be extracted. NOT failover — an upstream error from Anthropic is not retried on Mistral. Every request pays one extra classifier call (latency + a small Mistral cost). Streaming works on both routes (verified 2026-10-11): the transformer converts Anthropic's SSE into OpenAI chunks ending in [DONE]."
+  },
+  {
     "id": "model-failover",
     "contextSuffix": "failover",
     "unsupportedProviders": [

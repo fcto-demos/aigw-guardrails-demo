@@ -71,6 +71,7 @@ File layout (each section only calls the ones above it):
     7. Pre-flight check (--check)
     8. main()
 """
+import json
 import os
 import re
 import subprocess
@@ -388,9 +389,97 @@ def build_lanes(provider: dict) -> dict:
 
 
 PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
+
+
+# =============================================================================
+# 2b. Cross-provider lanes -- one LlmProxy spanning two LlmProviders, so they
+#     can't come from lane_templates(), which is instantiated per provider.
+#
+# intelligent-routing: an LLM classifier (config.toml's
+# [policy_configurations.intelligent_model_routing_v1] -- Mistral via its
+# OpenAI-compatible API) picks a routing rule; a rule naming a provider makes
+# the gateway switch upstream to that additionalProviders alias. The CLIENT
+# speaks OpenAI chat-completions: the proxy's own provider must therefore be
+# OpenAI-native (Mistral), and Anthropic sits in additionalProviders with the
+# openai-to-anthropic transformer, which rewrites the request into Anthropic
+# Messages format and Anthropic's response back into the OpenAI shape (the
+# image has no transformer for the reverse direction). Matched questions go
+# to Anthropic (the primary destination); NONE, a failed classifier call or
+# an unextractable question fall back to defaultModel on the proxy's own
+# provider -- Mistral, the backup. No failover on upstream errors.
+#
+# The Mistral side is a DEMO-OWNED LlmProvider ("demo-mistral"), created and
+# updated here from providers.json's mistral entry -- which stays
+# "enabled": false, so no per-provider Mistral lanes are made. Deliberately
+# not the user's own "mistral" provider: its provider-level API-key / JWT
+# security (kept for another demo) rejected this proxy's traffic ("Valid API
+# key required"). Anthropic is referenced only (existingProviders): the
+# per-provider loop owns it.
+# =============================================================================
+INTELLIGENT_ROUTING_BACKUP_MODEL = "mistral-small-latest"
+
+
+def _demo_mistral_provider() -> dict:
+    """The Mistral LlmProvider this card owns, shaped like a platform_api
+    PROVIDERS entry so upsert_shared_provider()/deploy()/read_secret() work
+    on it unchanged. Read straight from providers.json, because
+    load_providers() drops disabled entries. Upstream, auth header and key
+    (MISTRAL_API_KEY, a real Mistral key) are that entry's own."""
+    raw = next(p for p in json.loads((ROOT / "providers.json").read_text()) if p["id"] == "mistral")
+    return dict(raw, providerId="demo-mistral", providerContext="/demo-mistral",
+                displayName="Mistral (demo)",
+                models={"small": INTELLIGENT_ROUTING_BACKUP_MODEL, "large": "mistral-large-latest"})
+
+
+def cross_provider_lanes() -> dict:
+    anthropic = PROVIDER_BY_ID.get("anthropic")
+    if anthropic is None:   # disabled in providers.json -- nothing to route to
+        return {}
+    small, large = anthropic["models"]["small"], anthropic["models"]["large"]
+    path = "/v1/chat/completions"
+    demo_mistral = _demo_mistral_provider()
+    return {
+        "intelligent-routing": {
+            "id": "intelligent-routing", "base_id": "intelligent-routing",
+            "providerId": None,  # cross-provider: not part of any per-provider loop
+            "context": "/intelligent-routing", "messagesSuffix": path,
+            "displayName": "Intelligent Routing", "displayPrefix": "Anthropic + Mistral",
+            "providerRef": demo_mistral["providerId"],
+            "managedProviders": [demo_mistral],
+            "existingProviders": [anthropic["providerId"]],
+            "appId": anthropic["appId"],
+            "additionalProviders": [{"id": anthropic["providerId"], "as": "anthropic",
+                                     "transformer": {"type": "openai-to-anthropic", "version": "v0", "params": {}}}],
+            "globalPolicies": [],
+            # OPERATION scope, like the other routers: requestModel is only
+            # injected from the provider template for operation-scoped
+            # attachments.
+            "operationPolicies": [{"name": "intelligent-model-routing", "version": "v0", "paths": [{
+                "path": path, "methods": ["POST"], "params": {
+                    "contentPath": "$.messages[-1].content",
+                    "routingRules": [
+                        {"name": "Complex plan analysis",
+                         "context": ("Questions about mobile plans, tariffs or roaming that need reasoning across "
+                                     "several facts: comparing plans, working out total cost over months or a year, "
+                                     "combining data usage, travel and add-ons, or choosing between contract lengths."),
+                         "provider": "anthropic", "model": large},
+                        {"name": "Simple product question",
+                         "context": ("Short single-fact questions about the operator's products and services: whether "
+                                     "a feature is supported (eSIM, 5G, wifi calling), what a term means (PAC code, PUK, "
+                                     "rollover), one plan's price or allowance, or basic account and billing help."),
+                         "provider": "anthropic", "model": small},
+                    ],
+                    "defaultModel": INTELLIGENT_ROUTING_BACKUP_MODEL,
+                }}]}],
+            "config": {"api_key_var": "SHOWCASE_INTELLIGENT_ROUTING_API_KEY"},
+        },
+    }
+
+
 ALL_LANES = {}
 for _p in PROVIDERS:
     ALL_LANES.update(build_lanes(_p))
+ALL_LANES.update(cross_provider_lanes())
 DEFAULT_LANE_IDS = [lid for lid, l in ALL_LANES.items() if l["config"] is not None]
 
 
@@ -564,21 +653,26 @@ def ensure_app_api_key(app_id: str, entity_id: str, kind: str, key_id: str):
 #    Schemas confirmed against
 #    docs/rest-apis/platform-api/{llm-providers,llm-proxies}.md.
 # =============================================================================
-def upsert_proxy(provider: dict, lane: dict):
+def upsert_proxy(lane: dict, provider_ref: str, display_prefix: str):
+    """provider_ref is the proxy's own LlmProvider id; a cross-provider lane
+    also carries additionalProviders (selectable upstreams, each optionally
+    with a transformer) that its routing policy switches between."""
     payload = {
         "id": lane["id"],
-        "displayName": f"{provider['displayName']} - {lane['displayName']}",
+        "displayName": f"{display_prefix} - {lane['displayName']}",
         "description": f"{lane['displayName']} lane",
         "version": "v1",
         "projectId": PROJECT_ID,
         "context": lane["context"],
-        "provider": {"id": provider["providerId"]},
+        "provider": {"id": provider_ref},
         "globalPolicies": lane.get("globalPolicies", []),
         "operationPolicies": lane.get("operationPolicies", []),
         "policies": [],
         "openapi": "",
         "security": {"enabled": True, "apiKey": {"enabled": True, "key": "X-API-Key", "in": "header"}},
     }
+    if lane.get("additionalProviders"):
+        payload["additionalProviders"] = lane["additionalProviders"]
     status, _ = api("GET", f"/llm-proxies/{lane['id']}")
     if status == 200:
         status, resp = api("PUT", f"/llm-proxies/{lane['id']}", payload)
@@ -644,6 +738,39 @@ KEY_NOT_LIVE = {
                     "(a CPU-starved host can delay this by minutes)",
     "transient": "the gateway at {endpoint} never answered -- is it running?",
 }
+
+
+def provision_lane(lane: dict, provider_ref: str, display_prefix: str,
+                   messages_suffix: str, app_id: str, state: dict):
+    """Everything one LlmProxy needs, the same for a per-provider lane and a
+    cross-provider one: upsert, deploy, group under the app, mint its key,
+    write the key for ai-chatbot, and confirm the gateway accepts it.
+    state["keys_changed"] flips the moment a key is minted, since that
+    revokes the previous one (see main()'s finally)."""
+    lane_id = lane["id"]
+    upsert_proxy(lane, provider_ref, display_prefix)
+    deploy(lane_id, lane["context"], messages_suffix)
+    ensure_association(app_id, lane_id, "LlmProxy")
+    key_id, key = issue_key(lane_id)
+    state["keys_changed"] = True
+    ensure_app_api_key(app_id, lane_id, "LlmProxy", key_id)
+
+    # Written before the liveness wait, not after: the old key is already
+    # revoked, so the new one is the only one that can ever work -- a
+    # timeout below shouldn't leave the dead one in the file.
+    config = lane["config"]
+    if config:
+        key_vars = config["api_key_var"]
+        for var in ([key_vars] if isinstance(key_vars, str) else key_vars):
+            write_config_env(var, key)
+        print(f"  {key_vars} written to secrets/gateway-keys.env")
+    else:
+        print(f"  api key: {key}  (no showcases.json entry — not wired into ai-chatbot)")
+
+    verdict = wait_for_key_live(lane["context"], messages_suffix, key)
+    if verdict != "live":
+        sys.exit("  " + KEY_NOT_LIVE[verdict].format(context=lane["context"], endpoint=GATEWAY_ENDPOINT))
+    print("  key confirmed live on the gateway")
 
 
 # =============================================================================
@@ -749,6 +876,8 @@ def check(providers: list, requested: list) -> bool:
     require_existing_gateway(GATEWAY_ID)
 
     planned = [("llm-providers", p["providerId"], p["providerContext"]) for p in providers]
+    planned += [("llm-providers", mp["providerId"], mp["providerContext"])
+                for lid in requested for mp in ALL_LANES[lid].get("managedProviders", [])]
     planned += [("llm-proxies", lid, ALL_LANES[lid]["context"]) for lid in requested]
     planned += [("applications", p["appId"], None) for p in providers]
 
@@ -783,8 +912,52 @@ def check(providers: list, requested: list) -> bool:
                   f"{' in project ' + repr(owner_project) if owner_project else ''}")
             problems += 1
 
-    print(f"\n{len(planned)} resources planned, {problems} overwrite/collision(s)")
+    # Cross-provider lanes route through LlmProviders this script must NOT
+    # write (e.g. the user's own "mistral"). Report what traffic will meet
+    # there: any policy on such a provider runs on this lane's requests too.
+    referenced = []
+    for lid in requested:
+        for pid in ALL_LANES[lid].get("existingProviders", []):
+            if pid not in referenced and pid not in {p["providerId"] for p in providers}:
+                referenced.append(pid)
+    for pid in referenced:
+        problems += report_existing_provider(pid)
+
+    print(f"\n{len(planned)} resources planned, {problems} overwrite/collision(s)/blocker(s)")
     return problems == 0
+
+
+def report_existing_provider(pid: str) -> int:
+    """Read-only summary of an LlmProvider a cross-provider lane references
+    but never writes. Returns the number of blockers found. GET never
+    returns the upstream credential, and nothing under upstream is printed."""
+    status, p = api("GET", f"/llm-providers/{pid}")
+    print(f"\n  existing provider {pid!r} (referenced, never written):")
+    if status != 200:
+        print(f"    MISSING    GET /llm-providers/{pid} -> {status}")
+        return 1
+    models = [m.get("id") for mp in (p.get("modelProviders") or []) for m in (mp.get("models") or [])]
+    policies = [x.get("name") for x in (p.get("globalPolicies") or [])] + \
+               [x.get("name") for x in (p.get("operationPolicies") or []) + (p.get("policies") or [])]
+    access = (p.get("accessControl") or {}).get("mode")
+    print(f"    context {p.get('context')!r}, template {p.get('template')!r}, access control {access!r}")
+    print(f"    models: {models or '(none listed)'}")
+    print(f"    policies: {policies or 'none'}")
+    blockers = 0
+    if access == "deny_all":
+        print("    BLOCKER    accessControl deny_all -- proxy traffic routed through it would 404")
+        blockers += 1
+    if policies:
+        print("    REVIEW     these policies will also run on every request routed through this provider")
+    status, deps = api("GET", f"/llm-providers/{pid}/deployments")
+    on_gw = [d for d in _items(deps) if d.get("gatewayId") == GATEWAY_ID] if status == 200 else []
+    if status == 200 and not on_gw:
+        print(f"    BLOCKER    not deployed on gateway {GATEWAY_ID!r}")
+        blockers += 1
+    else:
+        print(f"    deployments on {GATEWAY_ID!r}: "
+              f"{[d.get('status') for d in on_gw] if status == 200 else f'(could not list: {status})'}")
+    return blockers
 
 
 # =============================================================================
@@ -805,8 +978,9 @@ def main():
 
     # Only the providers actually needed by what was requested — running
     # `./provision_showcases.py spend-limit` shouldn't require every other
-    # provider's key to be set in secrets/api-keys.env.
-    needed_provider_ids = {ALL_LANES[lid]["providerId"] for lid in requested}
+    # provider's key to be set in secrets/api-keys.env. Cross-provider lanes
+    # (providerId None) never write a provider, so they need no key at all.
+    needed_provider_ids = {ALL_LANES[lid]["providerId"] for lid in requested} - {None}
     providers = [p for p in PROVIDERS if p["id"] in needed_provider_ids]
 
     if "--check" in flags:
@@ -834,7 +1008,7 @@ def main():
     # restart therefore has to happen however this run ends -- a run that
     # aborts on lane N used to skip it and leave lanes 1..N-1 answering 401
     # with keys that had just been revoked.
-    keys_changed = False
+    state = {"keys_changed": False}
     try:
         for provider in providers:
             pid = provider["id"]
@@ -851,39 +1025,43 @@ def main():
                 if lane["providerId"] != pid:
                     continue
                 print(f"### {lane_id} ({lane['context']})")
-                upsert_proxy(provider, lane)
-                deploy(lane_id, lane["context"], provider["messagesSuffix"])
-                ensure_association(provider["appId"], lane_id, "LlmProxy")
-                key_id, key = issue_key(lane_id)
-                keys_changed = True
-                ensure_app_api_key(provider["appId"], lane_id, "LlmProxy", key_id)
+                provision_lane(lane, provider["providerId"], provider["displayName"],
+                               provider["messagesSuffix"], provider["appId"], state)
 
-                # Written before the liveness wait, not after: the old key is
-                # already revoked, so the new one is the only one that can
-                # ever work -- a timeout below shouldn't leave the dead one
-                # in the file.
-                config = lane["config"]
-                if config:
-                    key_vars = config["api_key_var"]
-                    for var in ([key_vars] if isinstance(key_vars, str) else key_vars):
-                        write_config_env(var, key)
-                    print(f"  {key_vars} written to secrets/gateway-keys.env")
-                else:
-                    print(f"  api key: {key}  (no showcases.json entry — not wired into ai-chatbot)")
-
-                verdict = wait_for_key_live(lane["context"], provider["messagesSuffix"], key)
-                if verdict != "live":
-                    sys.exit("  " + KEY_NOT_LIVE[verdict].format(context=lane["context"],
-                                                                 endpoint=GATEWAY_ENDPOINT))
-                print("  key confirmed live on the gateway")
+        # Cross-provider lanes: every provider they route through must already
+        # exist -- they are only REFERENCED, never upserted (providerRef may be
+        # the user's own LlmProvider).
+        for lane_id in requested:
+            lane = ALL_LANES[lane_id]
+            if lane["providerId"] is not None:
+                continue
+            print(f"### {lane_id} ({lane['context']}, cross-provider)")
+            for mp in lane.get("managedProviders", []):
+                print(f"  {mp['displayName']} provider ({mp['providerId']}, {mp['providerContext']})")
+                secret = read_secret(mp)
+                if len(secret) < 20 or secret.strip(".") == "":
+                    sys.exit(f"  {mp['secretVar']} in secrets/api-keys.env is still a placeholder -- "
+                             f"paste a real key before provisioning {lane_id}")
+                upsert_shared_provider(mp, secret)
+                deploy(mp["providerId"], mp["providerContext"], mp["messagesSuffix"], resource="llm-providers")
+                ensure_association(lane["appId"], mp["providerId"], "LlmProvider")
+            for ref in lane["existingProviders"]:
+                status, _ = api("GET", f"/llm-providers/{ref}")
+                if status != 200:
+                    sys.exit(f"  LlmProvider {ref!r} not found ({status}) -- this lane routes through it "
+                             f"and never creates it; run --check {lane_id} for details")
+            provision_lane(lane, lane["providerRef"], lane["displayPrefix"],
+                           lane["messagesSuffix"], lane["appId"], state)
     finally:
-        if keys_changed:
+        if state["keys_changed"]:
             if sys.exc_info()[0] is not None:
                 print("### run stopped early -- restarting ai-chatbot anyway, so it picks up "
                       "the keys issued so far")
             restart_ai_chatbot()
 
-    apps = ", ".join(f"'{p['appId']}'" for p in providers)
+    app_ids = sorted({p["appId"] for p in providers} |
+                     {ALL_LANES[lid]["appId"] for lid in requested if ALL_LANES[lid]["providerId"] is None})
+    apps = ", ".join(f"'{a}'" for a in app_ids)
     print(f"\ndone. Lanes grouped under GenAI Application(s) {apps}. "
           "ai-chatbot restarted with the new keys.")
 
