@@ -406,11 +406,8 @@ PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
 # gateway's transformers only go openai-to-<other>, and one is attached when
 # routedProvider speaks something else.
 #
-# defaultProvider gets a dedicated LlmProvider ("demo-<id>", same upstream,
-# key and models), not its per-provider one: on a shared control plane an
-# existing provider may carry its own security (seen rejecting this proxy's
-# traffic with "Valid API key required"). routedProvider is referenced only
-# (existingProviders): the per-provider loop owns it.
+# Both providers are referenced only (existingProviders): the per-provider
+# loop owns them.
 # =============================================================================
 def cross_provider_lanes() -> dict:
     route = showcase("intelligent-routing").get("route") or {}
@@ -421,8 +418,6 @@ def cross_provider_lanes() -> dict:
     if default["wire"] != "openai":
         sys.exit(f"showcases.json: intelligent-routing's defaultProvider must speak the OpenAI "
                  f"format, {default['id']!r} speaks {default['wire']!r}")
-    dedicated = dict(default, providerId=f"demo-{default['id']}", providerContext=f"/demo-{default['id']}",
-                     displayName=f"{default['displayName']} (demo)")
     additional = {"id": routed["providerId"], "as": routed["id"]}
     if routed["wire"] != default["wire"]:
         additional["transformer"] = {"type": f"openai-to-{routed['wire']}", "version": "v0", "params": {}}
@@ -434,9 +429,8 @@ def cross_provider_lanes() -> dict:
             "context": route["context"], "messagesSuffix": path,
             "displayName": "Intelligent Routing",
             "displayPrefix": f"{routed['displayName']} + {default['displayName']}",
-            "providerRef": dedicated["providerId"],
-            "managedProviders": [dedicated],
-            "existingProviders": [routed["providerId"]],
+            "providerRef": default["providerId"],
+            "existingProviders": [default["providerId"], routed["providerId"]],
             "appId": routed["appId"],
             "additionalProviders": [additional],
             "globalPolicies": [],
@@ -865,8 +859,6 @@ def check(providers: list, requested: list) -> bool:
     require_existing_gateway(GATEWAY_ID)
 
     planned = [("llm-providers", p["providerId"], p["providerContext"]) for p in providers]
-    planned += [("llm-providers", mp["providerId"], mp["providerContext"])
-                for lid in requested for mp in ALL_LANES[lid].get("managedProviders", [])]
     planned += [("llm-proxies", lid, ALL_LANES[lid]["context"]) for lid in requested]
     planned += [("applications", p["appId"], None) for p in providers]
 
@@ -968,10 +960,9 @@ def main():
     # Only the providers actually needed by what was requested — running
     # `./provision_showcases.py spend-limit` shouldn't require every other
     # provider's key to be set in secrets/api-keys.env. Cross-provider lanes
-    # (providerId None) bring their own managedProviders instead.
+    # (providerId None) only reference providers, so they need no key.
     needed_provider_ids = {ALL_LANES[lid]["providerId"] for lid in requested} - {None}
     providers = [p for p in PROVIDERS if p["id"] in needed_provider_ids]
-    managed = [mp for lid in requested for mp in ALL_LANES[lid].get("managedProviders", [])]
 
     if "--check" in flags:
         login()
@@ -979,7 +970,7 @@ def main():
 
     # Every key read up front: a missing one must stop the run before any
     # lane's key is rotated.
-    secrets = {p["providerId"]: read_secret(p) for p in providers + managed}
+    secrets = {p["providerId"]: read_secret(p) for p in providers}
 
     login()
 
@@ -1020,8 +1011,8 @@ def main():
                 provision_lane(lane, provider["providerId"], provider["displayName"],
                                provider["messagesSuffix"], provider["appId"], state)
 
-        # Cross-provider lanes: existingProviders are only referenced and must
-        # already exist; managedProviders are upserted here.
+        # Cross-provider lanes: the providers they route through are only
+        # referenced, and must already exist.
         for lane_id in requested:
             lane = ALL_LANES[lane_id]
             if lane["providerId"] is not None:
@@ -1032,11 +1023,6 @@ def main():
                 if status != 200:
                     sys.exit(f"  LlmProvider {ref!r} not found ({status}) -- this lane routes through it "
                              f"and never creates it; run --check {lane_id} for details")
-            for mp in lane["managedProviders"]:
-                print(f"  {mp['displayName']} provider ({mp['providerId']}, {mp['providerContext']})")
-                upsert_shared_provider(mp, secrets[mp["providerId"]])
-                deploy(mp["providerId"], mp["providerContext"], mp["messagesSuffix"], resource="llm-providers")
-                ensure_association(lane["appId"], mp["providerId"], "LlmProvider")
             provision_lane(lane, lane["providerRef"], lane["displayPrefix"],
                            lane["messagesSuffix"], lane["appId"], state)
     finally:
