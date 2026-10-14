@@ -408,27 +408,24 @@ PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
 # an unextractable question fall back to defaultModel on the proxy's own
 # provider -- Mistral, the backup. No failover on upstream errors.
 #
-# The Mistral side is a DEMO-OWNED LlmProvider ("demo-mistral"), created and
-# updated here from providers.json's mistral entry -- which stays
-# "enabled": false, so no per-provider Mistral lanes are made. Deliberately
-# not the user's own "mistral" provider: its provider-level API-key / JWT
-# security (kept for another demo) rejected this proxy's traffic ("Valid API
-# key required"). Anthropic is referenced only (existingProviders): the
-# per-provider loop owns it.
+# The Mistral side is a dedicated LlmProvider ("demo-mistral"), built from
+# providers.json's mistral entry whether or not that entry is enabled. Not
+# the per-provider "mistral" one: on a shared control plane an existing
+# "mistral" provider may carry its own security (seen rejecting this proxy's
+# traffic with "Valid API key required"). Anthropic is referenced only
+# (existingProviders): the per-provider loop owns it.
 # =============================================================================
-INTELLIGENT_ROUTING_BACKUP_MODEL = "mistral-small-latest"
-
-
 def _demo_mistral_provider() -> dict:
     """The Mistral LlmProvider this card owns, shaped like a platform_api
     PROVIDERS entry so upsert_shared_provider()/deploy()/read_secret() work
     on it unchanged. Read straight from providers.json, because
-    load_providers() drops disabled entries. Upstream, auth header and key
-    (MISTRAL_API_KEY, a real Mistral key) are that entry's own."""
+    load_providers() drops disabled entries. Upstream, auth header, key
+    (MISTRAL_API_KEY) and models are that entry's own; its small model is
+    the backup, and must match showcases.json's intelligent-routing
+    route.model."""
     raw = next(p for p in json.loads((ROOT / "providers.json").read_text()) if p["id"] == "mistral")
     return dict(raw, providerId="demo-mistral", providerContext="/demo-mistral",
-                displayName="Mistral (demo)",
-                models={"small": INTELLIGENT_ROUTING_BACKUP_MODEL, "large": "mistral-large-latest"})
+                displayName="Mistral (demo)")
 
 
 def cross_provider_lanes() -> dict:
@@ -469,7 +466,7 @@ def cross_provider_lanes() -> dict:
                                      "rollover), one plan's price or allowance, or basic account and billing help."),
                          "provider": "anthropic", "model": small},
                     ],
-                    "defaultModel": INTELLIGENT_ROUTING_BACKUP_MODEL,
+                    "defaultModel": demo_mistral["models"]["small"],
                 }}]}],
             "config": {"api_key_var": "SHOWCASE_INTELLIGENT_ROUTING_API_KEY"},
         },

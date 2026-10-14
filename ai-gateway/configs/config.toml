@@ -193,3 +193,13 @@ embedding_provider          = "MISTRAL"
 embedding_provider_endpoint = "https://api.mistral.ai/v1/embeddings"
 embedding_provider_model    = "mistral-embed"
 embedding_provider_api_key  = "{{ env \"APIP_GW_EMBEDDING_PROVIDER_API_KEY\" \"\" }}"
+
+# intelligent-model-routing's classifier: an LLM that reads each question and
+# picks a routing rule. Mistral's chat API is OpenAI-compatible, hence
+# llm_provider "OPENAI". Same Mistral key as the embeddings above, and a
+# model the free tier serves (mistral-small-latest is rate-limited there).
+[policy_configurations.intelligent_model_routing_v1]
+llm_provider          = "OPENAI"
+llm_provider_endpoint = "https://api.mistral.ai/v1/chat/completions"
+llm_provider_model    = "ministral-14b-latest"
+llm_provider_api_key  = "{{ env \"APIP_GW_EMBEDDING_PROVIDER_API_KEY\" \"\" }}"
