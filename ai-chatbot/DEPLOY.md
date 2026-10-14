@@ -46,7 +46,7 @@ nine lanes resolved and keyed:
     ok      prompt-injection     /anthropic-guardrail     showcases.json contextSuffix
     ok      pii-masking          /anthropic-pii-masking   showcases.json contextSuffix  (no streaming)
     ok      spend-limit          /anthropic-cost-limit    showcases.json contextSuffix  (no streaming)
-    ok      plain-chat           /anthropic               showcases.json contextSuffix
+    ok      plain-chat           /anthropic-plain         showcases.json contextSuffix
 
   9 of 9 wired.
 ```
@@ -283,11 +283,14 @@ curl -s localhost:8600/health | python3 -m json.tool
 
 Expect `status: ok`, `catalogue: true`, `gatewayApiKeySet: true`, and a
 `showcases` map with all nine `status: ready` **and `keyed: true`**. Any
-`keyed: false` is a missing key and will 401 on first use:
+`keyed: false` is a missing key and will 401 on first use. So is
+`keySource: "fallback"` on any card but plain-chat: that card has no key of its
+own and is borrowing `GATEWAY_API_KEY`, which is plain-chat's — the startup
+banner lists these as "GATEWAY_API_KEY fallback only":
 
 ```bash
 curl -s localhost:8600/health \
-  | python3 -c 'import json,sys; [print(k, v["keyed"]) for k,v in json.load(sys.stdin)["showcases"].items()]'
+  | python3 -c 'import json,sys; [print(k, v["keyed"], v["keySource"]) for k,v in json.load(sys.stdin)["showcases"].items()]'
 ```
 
 Then one real turn through the plain lane — it carries no cost policy, so it

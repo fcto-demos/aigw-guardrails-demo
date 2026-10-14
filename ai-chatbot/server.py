@@ -470,6 +470,21 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "%s is not an http(s) URL" % _env_key(sid, "URL", provider_id)
         return pinned, _env_key(sid, "URL", provider_id)
 
+    # A card with its own "route" talks to one LlmProxy spanning two
+    # providers (route.defaultProvider + route.routedProvider), whatever the
+    # provider dropdown says, in defaultProvider's wire format. Unwired when
+    # either one is disabled in providers.json.
+    route = entry.get("route")
+    if route:
+        ctx = route.get("context") or ""
+        if not CONTEXT_RE.match(ctx):
+            return None, "route.context %r is not a plain path" % ctx
+        disabled = [p for p in (route.get("defaultProvider"), route.get("routedProvider")) if p not in PROVIDERS]
+        if disabled:
+            return None, "route needs %s, disabled in providers.json" % " and ".join(map(str, disabled))
+        return (gateway_base() + ctx.rstrip("/") + PROVIDERS[route["defaultProvider"]]["messagesSuffix"],
+                "showcases.json route")
+
     # The context for any (showcase, provider) pair is always exactly
     # /<providerId>-<contextSuffix>, or bare /<providerId> when contextSuffix
     # is empty -- scripts/python/provision_showcases.py builds the gateway's own
@@ -487,12 +502,14 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
     return gateway_base() + ctx.rstrip("/") + suffix, "showcases.json contextSuffix"
 
 
-def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID):
+def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
     """The provider path, host stripped -- safe to publish to the browser."""
     if not url:
         return None
     path = urllib.parse.urlsplit(url).path
-    return path.split(PROVIDERS[provider_id]["messagesSuffix"])[0] or "/"
+    route = (entry or {}).get("route")
+    suffix = PROVIDERS[route["defaultProvider"] if route else provider_id]["messagesSuffix"]
+    return path.split(suffix)[0] or "/"
 
 
 def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
@@ -506,20 +523,26 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     url, source = resolve_gateway(entry, provider_id)
     wiring = entry.get("gateway") or {}
     overrides = entry.get("overrides") or {}
+    # A routed card (see resolve_gateway) speaks its defaultProvider's wire
+    # format and default model, and its env vars carry the default
+    # provider's (unsuffixed) names, since it belongs to no single provider.
+    route = entry.get("route")
+    conf_provider = DEFAULT_PROVIDER_ID if route else provider_id
+    wire_provider = route["defaultProvider"] if route and url else provider_id
 
-    fallback_model = default_model(provider_id)
+    fallback_model = default_model(wire_provider)
     model = (MODEL_OVERRIDE
-             or _sc_conf(showcase_id, "MODEL", provider_id)
-             or _resolve_model_role(overrides.get("model"), provider_id)
+             or _sc_conf(showcase_id, "MODEL", conf_provider)
+             or _resolve_model_role(overrides.get("model"), wire_provider)
              or fallback_model)
     if not re.match(r"^[A-Za-z0-9._-]{1,64}$", str(model)):
         model = fallback_model
 
-    tokens = (_sc_conf(showcase_id, "MAX_TOKENS", provider_id)
+    tokens = (_sc_conf(showcase_id, "MAX_TOKENS", conf_provider)
               or overrides.get("maxTokens")
               or CONF["MAX_TOKENS"])
 
-    prompt = _sc_conf(showcase_id, "SYSTEM_PROMPT", provider_id) or overrides.get("systemPrompt")
+    prompt = _sc_conf(showcase_id, "SYSTEM_PROMPT", conf_provider) or overrides.get("systemPrompt")
 
     # Streaming is on everywhere except where a policy cannot cope with it.
     # semantic-cache v1.1.0 never stores a streamed response -- measured on this
@@ -528,18 +551,20 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     # stored at all. Overriding streamingJsonPath does not help. That card has
     # to send stream:false or it can never show a hit.
     stream = wiring.get("stream")
-    env_stream = _sc_conf(showcase_id, "STREAM", provider_id)
+    env_stream = _sc_conf(showcase_id, "STREAM", conf_provider)
     if env_stream:
         stream = _truthy(env_stream)
     if stream is None:
         stream = True
 
-    context = showcase_context(url, provider_id)
+    context = showcase_context(url, provider_id, entry)
+    own_key = _sc_conf(showcase_id, "API_KEY", conf_provider)
+    fallback_key = CONF["GATEWAY_API_KEY"] if conf_provider == DEFAULT_PROVIDER_ID else ""
     return {
         "id": showcase_id,
         "title": entry.get("title") or showcase_id,
         "provider": provider_id,
-        "wire": PROVIDERS[provider_id]["wire"],
+        "wire": PROVIDERS[wire_provider]["wire"],
         "url": url,
         "source": source,
         "context": context,
@@ -559,8 +584,12 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         # one key for all lanes is not available and each needs its own.
         # GATEWAY_API_KEY remains the fallback for the default provider's
         # plain-chat.
-        "apiKey": (_sc_conf(showcase_id, "API_KEY", provider_id)
-                   or (CONF["GATEWAY_API_KEY"] if provider_id == DEFAULT_PROVIDER_ID else "")),
+        "apiKey": own_key or fallback_key,
+        # "showcase" (its own SHOWCASE_*_API_KEY), "fallback" (GATEWAY_API_KEY)
+        # or None. A fallback key is plain-chat's, so on any other lane it
+        # will 401 -- /health and the banner surface this instead of letting
+        # "keyed" look healthy.
+        "keySource": "showcase" if own_key else ("fallback" if fallback_key else None),
     }
 
 
@@ -743,6 +772,7 @@ class Handler(BaseHTTPRequestHandler):
             wiring = {}
             for entry in registry["list"]:
                 url, source = resolve_gateway(entry, provider_id)
+                resolved = resolve_showcase(entry["id"], provider_id)
                 wiring[entry["id"]] = {
                     "status": entry.get("status") or "ready",
                     "stream": (entry.get("gateway") or {}).get("stream") is not False,
@@ -752,7 +782,10 @@ class Handler(BaseHTTPRequestHandler):
                     # Never the key itself, only whether one is wired -- this
                     # endpoint is the first place a missing key shows up as a
                     # 401, so the boolean earns its place.
-                    "keyed": bool(resolve_showcase(entry["id"], provider_id)["apiKey"]),
+                    "keyed": bool(resolved["apiKey"]),
+                    # "fallback" next to keyed:true is plain-chat's key standing
+                    # in for a lane that has none of its own -- expect a 401.
+                    "keySource": resolved["keySource"],
                 }
             return self._json(200, {
                 "status": "ok",
@@ -801,7 +834,7 @@ class Handler(BaseHTTPRequestHandler):
             item = dict((k, v) for k, v in entry.items() if k != "gateway")
             item["configured"] = bool(url)
             item["streaming"] = (entry.get("gateway") or {}).get("stream") is not False
-            item["gatewayContext"] = showcase_context(url, provider_id)
+            item["gatewayContext"] = showcase_context(url, provider_id, entry)
             item["unwiredReason"] = None if url else source
             out.append(item)
         return {"brand": CONF["BRAND_NAME"],
@@ -1245,11 +1278,17 @@ def main():
     print("  model    %s  (max_tokens %s)" % (default_model(), CONF["MAX_TOKENS"]))
     print("           %sa default only - the gateway's routers decide which "
           "model answers%s" % (DIM, RESET))
-    keyed = sum(1 for s in _REGISTRY["by_id"]
-                if resolve_showcase(s)["apiKey"])
+    sources = {s: resolve_showcase(s)["keySource"] for s in _REGISTRY["by_id"]}
+    keyed = sum(1 for src in sources.values() if src)
     print("  key      %s" % ("gateway-side key on %d/%d showcases, header %s"
                              % (keyed, len(_REGISTRY["by_id"]), CONF["GATEWAY_API_KEY_HEADER"])
                              if keyed else "none sent - the gateway holds the Anthropic key"))
+    # GATEWAY_API_KEY is plain-chat's own key: any other lane falling back to
+    # it will be refused, so name them rather than count them as keyed.
+    borrowed = sorted(s for s, src in sources.items() if src == "fallback" and s != "plain-chat")
+    if borrowed:
+        print("           %sGATEWAY_API_KEY fallback only (expect 401): %s%s"
+              % (YELLOW, ", ".join(borrowed), RESET))
 
     print("\n  %sshowcases%s" % (BOLD, RESET))
     base_host = urllib.parse.urlsplit(gateway_base()).netloc
@@ -1273,7 +1312,7 @@ def main():
                         if (entry.get("gateway") or {}).get("stream") is False
                         else "")
             print("    %s %-20s %-24s %s%s%s"
-                  % (tag, entry["id"], showcase_context(url), source, off, nostream))
+                  % (tag, entry["id"], showcase_context(url, entry=entry), source, off, nostream))
         else:
             # "ready" and unwired is an operator bug: this was supposed to work.
             tag = ("%sMISSING%s" % (RED, RESET) if ready

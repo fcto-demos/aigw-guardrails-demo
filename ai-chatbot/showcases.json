@@ -134,7 +134,7 @@
     "budget": {
       "modelRole": "large",
       "fallbackModelRole": "small",
-      "duration": "1m",
+      "duration": "5m",
       "prices": {
         "claude-opus-4-6": {
           "input": 5e-06,
@@ -211,6 +211,76 @@
       }
     ],
     "notes": "Four questions, none of them claiming to be the one that crosses the wall. The budget is shared across callers and runs on a fixed window, so which send steps down depends on what the lane has already spent this hour -- a step asserting a model would go red exactly when the policy was working. The rail reports the served model per step instead, and the meter and the stepped-down chip carry the story. Each question is written to be answered at length, because output tokens at $25/MTok on opus-4-6 are what actually walks the $0.02/1h budget down. WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. The policy keys on the model the CLIENT asks for -- requestModel is $.model in the payload -- and looks up that model’s budget entry. So this lane, alone among the three routers, depends on what the app sends: with the app default of claude-haiku-4-5 the request matches the economy budget ($1000/1h), which never runs out on stage, and the card would serve haiku from the first call and never step down. Hence overrides.model = claude-opus-4-6. The time lane needs no such override because its fallback names the deep model, and the semantic lane names a model on every route. Budgets are per model and shared across all callers. onExhausted is 'fallback'; the fallback model must have its own budget entry with capacity or the request returns 429 instead of stepping down, and there is no second hop -- an exhausted fallback does not try another model. The limit trips a call or two late because cost is only known after the response completes, so a request can overshoot. cost-based-model-routing is listed before llm-cost so reverse response-phase evaluation lets llm-cost publish the final cost first. No remaining-budget headers are emitted, by design -- the balance is unknown until the body completes. Excluded on gemini: this demo's Gemini account has exactly one usable model without billing (gemini-3.8-flash) -- every other variant (pro tier, lite, dated/preview versions) is either quota:0 or decommissioned for this account, confirmed by direct calls against the real API, not just this gateway. A route with small==large can't show a switch, so there's nothing honest to demo here for this provider."
+  },
+  {
+    "id": "intelligent-routing",
+    "route": {
+      "context": "/intelligent-routing",
+      "defaultProvider": "mistral",
+      "routedProvider": "anthropic"
+    },
+    "title": "Intelligent routing across providers",
+    "tagline": "An LLM reads each question and picks the provider and model — Anthropic first, Mistral as the backup.",
+    "capability": "intelligent-model-routing v0.9.0",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "intelligent-model-routing v0.9.0",
+      "openai-to-anthropic-transformer v0.9.2"
+    ],
+    "gateway": {},
+    "emphasis": [
+      "model",
+      "latency"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A simple question",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "model": "claude-haiku-4-5",
+              "text": "Anthropic's fast model. The classifier filed it under “Simple product question”, so the gateway switched this Mistral-fronted proxy to its Anthropic upstream."
+            }
+          }
+        ],
+        "notes": "One endpoint, OpenAI format in and out. The request was rewritten into Anthropic's Messages format on the way to Anthropic, and the answer rewritten back, by the openai-to-anthropic transformer that runs only when Anthropic is selected."
+      },
+      {
+        "n": 2,
+        "title": "A complex question",
+        "sends": [
+          {
+            "ask": "I use about 12 GB a month, travel to Spain twice a year and to the US in December. Which plan and add-ons work out cheapest over 12 months, and should I go 30-day or annual?",
+            "expect": {
+              "model": "claude-opus-4-6",
+              "text": "Anthropic's deep model — “Complex plan analysis”: arithmetic across plans, roaming zones and contract lengths."
+            }
+          }
+        ],
+        "notes": "Same provider as step 1, different model: the routing rules choose both."
+      },
+      {
+        "n": 3,
+        "title": "Something the rules don't cover",
+        "sends": [
+          {
+            "ask": "Write a haiku about autumn.",
+            "expect": {
+              "model": "ministral-8b",
+              "text": "The backup: no rule matches, the classifier answers NONE, and the default route — the proxy's own provider, Mistral — answers instead."
+            }
+          }
+        ],
+        "notes": "The same fallback catches a classifier that fails or times out, so the card keeps answering even if the classification call breaks. It is not failover: an error from Anthropic itself is returned, not retried on Mistral."
+      }
+    ],
+    "notes": "intelligent-model-routing v0.9.0. One LlmProxy (/intelligent-routing) whose own provider is a demo-owned Mistral LlmProvider (demo-mistral, /demo-mistral, providers.json's mistral models, key from MISTRAL_API_KEY), with Anthropic in additionalProviders. Not the per-provider mistral provider, so the card works whether or not Mistral's own lanes are enabled. A classifier LLM — Mistral's OpenAI-compatible chat API, set in the gateway's config.toml [policy_configurations.intelligent_model_routing_v1] — reads $.messages[-1].content and picks a routing rule; a rule naming provider anthropic switches the upstream. The client must speak OpenAI chat-completions: the proxy's primary provider is OpenAI-native (Mistral), and the openai-to-anthropic transformer rewrites requests to Anthropic Messages format and Anthropic's responses back to OpenAI format, only when Anthropic is selected. This card therefore ignores the provider dropdown (its \"route\" block fixes the wire and endpoint). Backup triggers: classifier answers NONE, classifier call fails, or the question can't be extracted. NOT failover — an upstream error from Anthropic is not retried on Mistral. Every request pays one extra classifier call (latency + a small Mistral cost). Streaming works on both routes (verified 2026-10-11): the transformer converts Anthropic's SSE into OpenAI chunks ending in [DONE]."
   },
   {
     "id": "model-failover",
@@ -296,12 +366,12 @@
     "id": "semantic-caching",
     "contextSuffix": "cache",
     "title": "Semantic caching",
-    "tagline": "A repeated question is answered from cache — no model call, no tokens.",
-    "capability": "semantic-cache v1.1.0",
+    "tagline": "A reworded question is answered from cache — no model call, no tokens.",
+    "capability": "semantic-cache v1.2.0",
     "status": "ready",
     "blockedBy": [],
     "policies": [
-      "semantic-cache v1.1.0",
+      "semantic-cache v1.2.0",
       "llm-cost v1.1.0"
     ],
     "gateway": {
@@ -323,8 +393,8 @@
           {
             "ask": "What is a PAC code?",
             "expect": {
-              "text": "A cache MISS and a normal model call, 2-4 s. This is the answer the next step returns without a model. If this one reports a hit, the cache is still warm from an earlier run.",
-              "cache": false
+              "cache": false,
+              "text": "A cache MISS and a normal model call, 2-4 s. This answer is what the next two steps get back without a model. If this one reports a hit, the cache is still warm from an earlier run."
             }
           }
         ],
@@ -332,20 +402,48 @@
       },
       {
         "n": 2,
-        "title": "The same question again",
+        "title": "The same question, reworded",
         "sends": [
           {
-            "ask": "What is a PAC code?",
+            "ask": "What's a PAC code?",
             "expect": {
               "cache": true,
-              "text": "Served from cache: X-Cache-Status HIT, no model call, no tokens. The metrics strip shows how much faster it was than step 1."
+              "text": "Served from cache: X-Cache-Status HIT, no model call, no tokens — step 1's answer, word for word, for a question that is not the same text."
             }
           }
         ],
-        "notes": "Measured on this gateway: 2.3–4.8s for the model call against 0.68–0.78s from cache, a 3–6x drop. The gateway never called Anthropic — no tokens are billed for this turn. The speed is reported but no longer graded: X-Cache-Status is the real evidence, and a slow network or a warm-but-slow run was failing the step on a turn the cache had plainly served."
+        "notes": "Not a string match: the gateway embeds the question (mistral-embed) and finds step 1's entry by meaning. Similarity 0.979 against a cut-off of 0.966."
+      },
+      {
+        "n": 3,
+        "title": "Asked a different way",
+        "sends": [
+          {
+            "ask": "What does PAC code mean?",
+            "expect": {
+              "cache": true,
+              "text": "HIT again — different words, same intent, same cached answer."
+            }
+          }
+        ],
+        "notes": "Similarity 0.969: the loosest rewording this threshold catches. “Can you explain what a PAC code is?” scores 0.959 and goes to the model — the honest edge of semantic caching with this embedding model."
+      },
+      {
+        "n": 4,
+        "title": "One letter off, a different question",
+        "sends": [
+          {
+            "ask": "What is a PUK code?",
+            "expect": {
+              "cache": false,
+              "text": "A cache MISS and a fresh model answer about PUK codes: nearly the same text as step 1, but a different meaning, so it must not be served step 1's answer."
+            }
+          }
+        ],
+        "notes": "The negative control. Similarity to step 1 is 0.799, far below the cut-off — the cache matches meaning, not spelling."
       }
     ],
-    "notes": "CONFIGURED AND WORKING AT THE GATEWAY as of 2026-09-08 — mistral-embed (1024 dims), redis-stack-server, Mistral + Redis settings live in the gateway host config.toml. Non-streaming calls cache correctly: 2.4–4.8s on a miss against 0.7–1.8s on a hit, with X-Cache-Status: HIT. Three findings from measuring it, all of which contradict the plan. (1) similarityThreshold does not mean what it says. The engine logs the value it actually uses, and it is transformed: effective = 0.6 + 0.4 x configured. Configured 0.70/0.80/0.85/0.45/0.95 produced effective 0.88/0.92/0.94/0.78/0.98. So the documented recommendation of 0.85 is really 0.94, and to get an effective 0.85 you would configure 0.625. (2) There is no safe threshold. Real cosine scores from the logs: the paraphrase pair “How do I cancel my plan?” / “What are the ways to leave the network?” scores 0.763, while “price of the 10 GB plan” / “price of the 200 GB plan” — different answers — scores 0.930. The false positive sits 0.17 ABOVE the true positive, because with this embedding model lexical overlap dominates meaning on short questions. Any threshold catching rewording will serve the wrong price. Set to 0.95 (effective 0.98) so only near-identical text hits: verified that exact repeats hit at 1.000 while the 3 GB/300 GB pair misses at 0.925/0.953. (3) Streaming never caches, which is the blocker for this app. Also note cacheUnauthenticated: true is required here — entries are otherwise bound to a caller identity this allow_all path has none of — and it puts every caller in one shared bucket, defensible only while every answer is public. TTL 3600s, entries scoped per route, so flush Redis or wait out the hour between rehearsals."
+    "notes": "semantic-cache v1.2.0, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set — provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses — a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config — flush Redis or wait between rehearsals, or step 1 reports a hit."
   },
   {
     "id": "prompt-injection",
@@ -406,18 +504,18 @@
         "notes": "The assistant would have refused these anyway — its system prompt already declines to disclose itself, and that predates this use case. So a refusal proves nothing. What proves the guardrail is that the model was never called: no reply, and zero tokens billed for the turn. Show that in the analytics."
       }
     ],
-    "notes": "regex-guardrail is honest about what it is — a pattern match that catches the obvious “ignore your previous instructions” family and nothing subtle. granite-guardian-prompt-injection is the policy that would hold in production, and it needs a GPU-backed endpoint plus config.toml access. Mind the inverted logic: invert defaults to false, meaning validation passes when the regex matches, which for a deny pattern is backwards — set invert: true. Verified on the hosted gateway 2026-09-07: the refusal status is 422, not the 400 the policy docs imply, and the body is a structured {\"type\":\"REGEX_GUARDRAIL\",\"message\":{\"action\":\"GUARDRAIL_INTERVENED\",…}} — so the policy does set a usable marker after all."
+    "notes": "regex-guardrail is honest about what it is — a pattern match that catches the obvious “ignore your previous instructions” family and nothing subtle. granite-guardian-prompt-injection is the policy that would hold in production, and it needs a GPU-backed endpoint plus config.toml access. Mind the inverted logic: invert defaults to false, meaning validation passes when the regex matches, which for a deny pattern is backwards — set invert: true. Verified on the hosted gateway 2026-09-07: the refusal status is 422, not the 400 the policy docs imply, and the body is a structured {\"type\":\"REGEX_GUARDRAIL\",\"message\":{\"action\":\"GUARDRAIL_INTERVENED\",…}} — so the policy does set a usable marker after all. UPDATED 2026-10-11: the original pattern, (?i)ignore\\s+.{0,30}\\binstructions?\\b, only knew the word “ignore”, so this card's own second probe (“Disregard your prior instructions…”) went straight to the model. The pattern now covers three families: an override verb (ignore/disregard/forget/override/bypass) followed within 40 characters by instructions/rules/guidelines/directions/prompt(s); “you are now” + an unrestricted persona (unrestricted, unfiltered, uncensored, jailbroken, DAN, developer mode); and reveal/print/show/repeat/output/tell me + “system prompt”. Blocks 7/7 probes; none of a dozen close normal questions (“I forgot my PIN, what are the instructions…”, “please disregard my previous message”) are blocked. Still a pattern match: paraphrases outside these families get through."
   },
   {
     "id": "pii-masking",
     "contextSuffix": "pii-masking",
     "title": "PII masking",
     "tagline": "Personal data is swapped out before the request leaves the gateway.",
-    "capability": "pii-masking-regex v1.0.4",
+    "capability": "pii-masking-regex v1.0.6",
     "status": "ready",
     "blockedBy": [],
     "policies": [
-      "pii-masking-regex v1.0.4",
+      "pii-masking-regex v1.0.6",
       "llm-cost v1.1.0"
     ],
     "gateway": {
@@ -436,15 +534,35 @@
         "title": "A visitor volunteers personal data",
         "sends": [
           {
-            "ask": "My email is sarah.oconnell@gmail.com. Does my message contain an email address? Say what it is.",
+            "ask": "Repeat my message back word for word, in quotes, with no commentary: \"Hi, I'm Sarah - email sarah.oconnell@gmail.com, mobile +44 7700 900123.\"",
             "expect": {
-              "text": "The address comes back MASKED. sarah.oconnell@gmail.com must not appear in the answer — the gateway replaced it before the request left, so the model can only report the masked form it was given."
+              "text": "It comes back as \"Hi, I'm Sarah - email *****, mobile *****.\" — exactly what the model received. The gateway redacted both before the request left; the name stays, because regex masking only knows emails, phone numbers and SSNs."
             }
           }
         ],
-        "notes": "One self-contained turn, because jsonPath is $.messages[-1].content: only the current message is masked, and this app replays history. THIS STEP ASSUMES THE LANE RUNS WITH redactPII: true (hosted_pii_masking.py --redact), where the value is replaced one-way with *****. On the script default, redactPII: false, masking is REVERSIBLE: the model sees [EMAIL_0000] and the gateway substitutes the real address back into the response, so this same prompt returns sarah.oconnell@gmail.com and the step contradicts its own Expect line. Reversible masking needs a transform to be visible at all -- \"give me the text between the square brackets, without the brackets\" defeats restoration 5/5, because the substitution matches the placeholder including its brackets."
+        "notes": "Asking for a verbatim repeat is the proof: the ***** sit exactly where the data was. Avoid “does my message contain an email?” — the model infers yes from the wording around the ***** and that reads as if it saw the address."
+      },
+      {
+        "n": 2,
+        "title": "Data from earlier in the conversation",
+        "sends": [
+          {
+            "ask": "Also note my home number: 020 7946 0018.",
+            "expect": {
+              "text": "An acknowledgement — the number reached the model as *****."
+            }
+          },
+          {
+            "ask": "List every email address and phone number I have given you in this conversation, exactly as written.",
+            "expect": {
+              "text": "Only ***** — including step 1's email and mobile. The app resends the whole conversation every turn, and the gateway masks all of it, not just the newest message."
+            }
+          }
+        ],
+        "notes": "The leak this lane used to have: with only the newest message masked, step 1's data reached the model in clear on the next turn and it repeated it back. jsonPath is now $ (the whole request body)."
       }
-    ]
+    ],
+    "notes": "pii-masking-regex v1.0.6, redactPII: true. Re-measured 2026-10-11. (1) REQUEST ONLY. Personal data is redacted to ***** before the request leaves the gateway; the response is never scanned. redactPII: true makes the response phase a no-op; redactPII: false masks with reversible placeholders ([EMAIL_0000]) and the response phase only swaps those back to the real values — which would hide the effect on stage, so this card stays on redact. (2) jsonPath is $ — the whole request body. With $.messages[-1].content only the newest message was masked, and since the app replays history, data typed one turn earlier reached the model in clear. Run over a real body with no personal data, none of the patterns matched the system prompt, catalogue or JSON. (3) The built-in phone pattern is US-only (+1 / 3-3-4 digits): +44 7700 900123, 07700 900123 and +33 6 12 34 56 78 were never masked. Two customPIIEntities fill the gap: PHONE_INTL (any +<country code> number, incl. “+33 (0)6 …”) and PHONE_UK (0-prefixed mobiles and 020 / 0161 / 01632-style landlines). Names and postal addresses are not detected — regex masking covers emails, phone numbers and SSNs only. (4) The built-in ssn pattern is OFF, replaced by SSN_US (dashed 123-45-6789 only). The policy applies its patterns in random (Go map) order per request, and the built-in SSN regex also matches \"700 900123\" — so \"+44 7700 900123\" sometimes came back as \"+44 7*****\". Every ordering of the five patterns now masks each tested number completely. (5) Streaming stays off (gateway.stream false): a placeholder split across SSE deltas never matches in reversible mode."
   },
   {
     "id": "spend-limit",
@@ -460,6 +578,9 @@
     ],
     "gateway": {
       "stream": false
+    },
+    "budget": {
+      "duration": "1m"
     },
     "emphasis": [
       "budget",
@@ -483,9 +604,9 @@
             }
           },
           {
-            "ask": "And what is the largest?",
+            "ask": "And what is the largest? Then compare it side by side with every other plan you offer — data, monthly price, contract length, international minutes, roaming allowance and data rollover — and say who each plan suits.",
             "expect": {
-              "text": "Succeeds — Unlimited at £25. Watch the budget bar move."
+              "text": "Succeeds — Unlimited at £25, then a full comparison of every plan. Deliberately long: a few hundred output tokens on opus-4-6 spend the rest of the budget, so the next question hits the wall. Watch the budget bar."
             }
           }
         ],
@@ -506,11 +627,11 @@
         "notes": "The gateway's own response body is shown verbatim, and the question is handed back to the input box."
       }
     ],
-    "notes": "Runs on its own provider, /anthropic-cost-limit, where llm-cost and llm-cost-based-ratelimit are attached -- so exhausting the budget here refuses this card and nothing else. Unlike plain-chat, it never falls back to another provider's lane: a spend-limit card silently answering through the never-refuses /anthropic lane would look like a working demo while proving the opposite. It is a provider-wide kill switch, not a per-visitor quota: consumerBased is false because per-consumer counters key on x-wso2-application-id, which only api-key-auth sets. On a genuinely public chatbot one visitor can spend the budget for everyone -- a denial-of-service-by-cost worth naming rather than discovering. The window is fixed, not rolling. Cost headers vanish on a 429, so missing values must read as unknown, never zero."
+    "notes": "Runs on its own provider, /anthropic-cost-limit, where llm-cost and llm-cost-based-ratelimit are attached -- so exhausting the budget here refuses this card and nothing else. Unlike plain-chat, it never falls back to another provider's lane: a spend-limit card silently answering through the never-refuses /anthropic-plain lane would look like a working demo while proving the opposite. It is a provider-wide kill switch, not a per-visitor quota: consumerBased is false because per-consumer counters key on x-wso2-application-id, which only api-key-auth sets. On a genuinely public chatbot one visitor can spend the budget for everyone -- a denial-of-service-by-cost worth naming rather than discovering. The window is fixed, not rolling. Cost headers vanish on a 429, so missing values must read as unknown, never zero."
   },
   {
     "id": "plain-chat",
-    "contextSuffix": "",
+    "contextSuffix": "plain",
     "title": "Just chat",
     "tagline": "The assistant with no demo scaffolding.",
     "capability": "no policy under test",

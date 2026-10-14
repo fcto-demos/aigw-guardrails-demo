@@ -1,6 +1,6 @@
 # WSO2 AI Platform — Demo
 
-A self-contained, local demo of the WSO2 AI Platform's LLM gateway: nine
+A self-contained, local demo of the WSO2 AI Platform's LLM gateway: ten
 showcases, each driving a real policy (routing, caching, guardrails, spend
 limits, failover...) against Anthropic, Mistral and Gemini. Everything runs
 on your machine with Docker Compose — nothing to deploy, nothing shared.
@@ -22,7 +22,8 @@ Three components, wired together:
 | Time-based routing | During peak hours, even complex questions go to the fast model |
 | Cost-based routing | As spend rises, the gateway moves traffic to the cheaper model |
 | Model failover | A model goes down; the next request is answered by another one |
-| Semantic caching | A repeated question is answered from cache — no model call, no tokens |
+| Intelligent routing | An LLM reads each question and picks the provider and model |
+| Semantic caching | A reworded question is answered from cache — no model call, no tokens |
 | Prompt injection guardrail | The request is refused before any model is called |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
@@ -43,7 +44,7 @@ configures the gateway at request time — it only picks which lane to call.
 
 ```
 wso2-api-platform-ai-demo/
-├── ai-chatbot/       demo UI + the nine showcases (showcases.json)
+├── ai-chatbot/       demo UI + the ten showcases (showcases.json)
 ├── ai-gateway/       WSO2 AI Gateway — policies, custom image, compose stack
 ├── ai-workspace/     AI Workspace: AI control plane
 ├── scripts/          setup, run, stop, logs, certificate generation
@@ -68,13 +69,17 @@ This demo has been tested most thoroughly with **Anthropic** and
 is more restrictive: some models aren't available on a newly created key,
 and you're more likely to hit rate limits.
 
+Intelligent routing spans two providers: it needs both an **Anthropic** and
+a **Mistral** key, and is skipped when either is disabled in
+`providers.json`.
+
 ## Installation
 
 ### First run
 
 `./scripts/reset-and-setup.sh` must be the first thing you run. It installs
 the `ap` CLI, builds the custom gateway image, generates local certificates,
-starts every container, and provisions all nine showcases — nothing else
+starts every container, and provisions all ten showcases — nothing else
 here creates any of that.
 
 ```bash
@@ -137,6 +142,15 @@ never reads it), component versions, every port except ai-gateway's own
 The local dev scripts source it automatically; nothing needs editing for a
 first run on default ports.
 
+To provision the showcases onto an **already-running** AI Workspace and
+gateway instead of this repo's own stack, set `AIW_URL`, `GATEWAY_ID`,
+`GATEWAY_ENDPOINT`, `ADMIN_USERNAME`/`ADMIN_PASSWORD` (and optionally
+`DEMO_PROJECT_ID`), then run `scripts/python/provision_showcases.py --check`
+(read-only: lists what would be created or overwritten) before
+`--existing-gateway`. Point `ai-chatbot/config.env`'s `GATEWAY_BASE` at that
+gateway, and in `providers.json` disable any provider whose id already
+exists there.
+
 ## Troubleshooting
 
 - **"docker is not running"** — start Docker Desktop (or Colima) first.
@@ -145,6 +159,10 @@ first run on default ports.
 - **A showcase's card loads but refuses to chat** — that provider has no key
   set for that lane. Expected for any provider you left blank; check
   `secrets/api-keys.env` for the one you expected to work.
+- **Intelligent routing fails to deploy after a `git pull`** — the custom
+  gateway image is only built when missing. Remove it
+  (`docker image rm ghcr.io/wso2/api-platform/ai-demo-gateway-runtime:1.2.0`)
+  and re-run `reset-and-setup.sh` so it picks up the new policy.
 - **A fresh restart briefly 502s** — recreating `gateway-controller` and
   `gateway-runtime` together causes a short xDS reconnect race. It is
   benign and clears up within 10–20 seconds.

@@ -12,7 +12,7 @@
 #      job — it fails loudly there instead, after everything else below.)
 #   3. Installs the `ap` CLI into ./.bin/ap if it isn't already there
 #      (downloads the pinned release for this machine's OS/arch).
-#   4. Builds the custom gateway image (semantic/time/cost-based-model-routing
+#   4. Builds the custom gateway image (semantic/time/cost/intelligent-model-routing
 #      + model-round-robin need it — the stock image doesn't carry them) if
 #      it isn't already in the local Docker image store.
 #   5. Wipes ai-workspace + ai-gateway state (containers + volumes).
@@ -92,7 +92,7 @@ echo "### custom gateway image (routing + failover policies)"
 if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1; then
   echo "  $CUSTOM_IMAGE already present"
 else
-  echo "  building — this compiles semantic/time/cost-based-model-routing and"
+  echo "  building — this compiles semantic/time/cost/intelligent-model-routing and"
   echo "  model-round-robin into the image, takes a few minutes"
   (cd ai-gateway && "$AP_BIN" gateway image build --name "$DEMO_NAME")
 fi
