@@ -215,10 +215,9 @@
   {
     "id": "intelligent-routing",
     "route": {
-      "wire": "openai",
       "context": "/intelligent-routing",
-      "messagesSuffix": "/v1/chat/completions",
-      "model": "ministral-8b-latest"
+      "defaultProvider": "mistral",
+      "routedProvider": "anthropic"
     },
     "title": "Intelligent routing across providers",
     "tagline": "An LLM reads each question and picks the provider and model — Anthropic first, Mistral as the backup.",

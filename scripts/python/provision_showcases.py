@@ -80,7 +80,7 @@ import time
 from platform_api import (
     ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
     probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
-    budget_duration,
+    budget_duration, showcase,
 )
 
 # =============================================================================
@@ -395,48 +395,50 @@ PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
 #     can't come from lane_templates(), which is instantiated per provider.
 #
 # intelligent-routing: an LLM classifier (config.toml's
-# [policy_configurations.intelligent_model_routing_v1] -- Mistral via its
-# OpenAI-compatible API) picks a routing rule; a rule naming a provider makes
-# the gateway switch upstream to that additionalProviders alias. The CLIENT
-# speaks OpenAI chat-completions: the proxy's own provider must therefore be
-# OpenAI-native (Mistral), and Anthropic sits in additionalProviders with the
-# openai-to-anthropic transformer, which rewrites the request into Anthropic
-# Messages format and Anthropic's response back into the OpenAI shape (the
-# image has no transformer for the reverse direction). Matched questions go
-# to Anthropic (the primary destination); NONE, a failed classifier call or
-# an unextractable question fall back to defaultModel on the proxy's own
-# provider -- Mistral, the backup. No failover on upstream errors.
+# [policy_configurations.intelligent_model_routing_v1]) picks a routing rule;
+# a rule naming a provider makes the gateway switch upstream to that
+# additionalProviders alias. Which two providers is showcases.json's route
+# block: defaultProvider is the proxy's own provider (the backup, answering
+# when no rule matches or the classifier fails), routedProvider the one the
+# rules send questions to. No failover on upstream errors.
 #
-# The lane exists only when both anthropic and mistral are enabled in
-# providers.json. Its Mistral side is a dedicated LlmProvider
-# ("demo-mistral", same upstream, key and models as the mistral entry), not
-# the per-provider "mistral" one: on a shared control plane an existing
-# "mistral" provider may carry its own security (seen rejecting this proxy's
-# traffic with "Valid API key required"). Anthropic is referenced only
+# The client speaks defaultProvider's format, which must be OpenAI: the
+# gateway's transformers only go openai-to-<other>, and one is attached when
+# routedProvider speaks something else.
+#
+# defaultProvider gets a dedicated LlmProvider ("demo-<id>", same upstream,
+# key and models), not its per-provider one: on a shared control plane an
+# existing provider may carry its own security (seen rejecting this proxy's
+# traffic with "Valid API key required"). routedProvider is referenced only
 # (existingProviders): the per-provider loop owns it.
 # =============================================================================
 def cross_provider_lanes() -> dict:
-    anthropic, mistral = PROVIDER_BY_ID.get("anthropic"), PROVIDER_BY_ID.get("mistral")
-    if anthropic is None or mistral is None:
+    route = showcase("intelligent-routing").get("route") or {}
+    default = PROVIDER_BY_ID.get(route.get("defaultProvider"))
+    routed = PROVIDER_BY_ID.get(route.get("routedProvider"))
+    if default is None or routed is None:   # disabled in providers.json
         return {}
-    small, large = anthropic["models"]["small"], anthropic["models"]["large"]
-    # Its small model is the backup, and must match showcases.json's
-    # intelligent-routing route.model.
-    demo_mistral = dict(mistral, providerId="demo-mistral", providerContext="/demo-mistral",
-                        displayName="Mistral (demo)")
-    path = demo_mistral["messagesSuffix"]
+    if default["wire"] != "openai":
+        sys.exit(f"showcases.json: intelligent-routing's defaultProvider must speak the OpenAI "
+                 f"format, {default['id']!r} speaks {default['wire']!r}")
+    dedicated = dict(default, providerId=f"demo-{default['id']}", providerContext=f"/demo-{default['id']}",
+                     displayName=f"{default['displayName']} (demo)")
+    additional = {"id": routed["providerId"], "as": routed["id"]}
+    if routed["wire"] != default["wire"]:
+        additional["transformer"] = {"type": f"openai-to-{routed['wire']}", "version": "v0", "params": {}}
+    path = default["messagesSuffix"]
     return {
         "intelligent-routing": {
             "id": "intelligent-routing", "base_id": "intelligent-routing",
             "providerId": None,  # cross-provider: not part of any per-provider loop
-            "context": "/intelligent-routing", "messagesSuffix": path,
-            "displayName": "Intelligent Routing", "displayPrefix": "Anthropic + Mistral",
-            "providerRef": demo_mistral["providerId"],
-            "managedProviders": [demo_mistral],
-            "existingProviders": [anthropic["providerId"]],
-            "appId": anthropic["appId"],
-            "additionalProviders": [{"id": anthropic["providerId"], "as": "anthropic",
-                                     "transformer": {"type": "openai-to-anthropic", "version": "v0", "params": {}}}],
+            "context": route["context"], "messagesSuffix": path,
+            "displayName": "Intelligent Routing",
+            "displayPrefix": f"{routed['displayName']} + {default['displayName']}",
+            "providerRef": dedicated["providerId"],
+            "managedProviders": [dedicated],
+            "existingProviders": [routed["providerId"]],
+            "appId": routed["appId"],
+            "additionalProviders": [additional],
             "globalPolicies": [],
             # OPERATION scope, like the other routers: requestModel is only
             # injected from the provider template for operation-scoped
@@ -449,16 +451,16 @@ def cross_provider_lanes() -> dict:
                          "context": ("Questions about mobile plans, tariffs or roaming that need reasoning across "
                                      "several facts: comparing plans, working out total cost over months or a year, "
                                      "combining data usage, travel and add-ons, or choosing between contract lengths."),
-                         "provider": "anthropic", "model": large},
+                         "provider": routed["id"], "model": routed["models"]["large"]},
                         {"name": "Simple product question",
                          "context": ("Short single-fact questions about the operator's products and services: whether "
                                      "a feature is supported (eSIM, 5G, wifi calling), what a term means (PAC code, PUK, "
                                      "rollover), one plan's price or allowance, or basic account and billing help."),
-                         "provider": "anthropic", "model": small},
+                         "provider": routed["id"], "model": routed["models"]["small"]},
                     ],
-                    "defaultModel": demo_mistral["models"]["small"],
+                    "defaultModel": default["models"]["small"],
                 }}]}],
-            "config": {"api_key_var": "SHOWCASE_INTELLIGENT_ROUTING_API_KEY"},
+            "config": {"api_key_var": env_key("intelligent-routing", "API_KEY", DEFAULT_PROVIDER_ID)},
         },
     }
 
@@ -900,7 +902,7 @@ def check(providers: list, requested: list) -> bool:
             problems += 1
 
     # Cross-provider lanes route through LlmProviders this script must NOT
-    # write (e.g. the user's own "mistral"). Report what traffic will meet
+    # write (their existingProviders). Report what traffic will meet
     # there: any policy on such a provider runs on this lane's requests too.
     referenced = []
     for lid in requested:

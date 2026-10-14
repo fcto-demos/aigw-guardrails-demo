@@ -154,6 +154,12 @@ def budget_for(provider: dict) -> float:
     return provider["costBudget"]
 
 
+def showcase(showcase_id: str) -> dict:
+    """One ai-chatbot/showcases.json entry ({} if absent)."""
+    showcases = json.loads((ROOT / "ai-chatbot" / "showcases.json").read_text())
+    return next((s for s in showcases if s["id"] == showcase_id), {})
+
+
 def budget_duration(showcase_id: str) -> str:
     """How often one showcase's gateway budget rolls over and starts fresh
     again -- read from ai-chatbot/showcases.json's <showcase>.budget.duration,
@@ -162,12 +168,9 @@ def budget_duration(showcase_id: str) -> str:
     showcase has its own window: spend-limit wants a short one (the wall
     resets quickly between rehearsals), cost-based-routing a longer one (time
     to explain the switch before the large model comes back)."""
-    path = ROOT / "ai-chatbot" / "showcases.json"
-    showcases = json.loads(path.read_text())
-    entry = next((s for s in showcases if s["id"] == showcase_id), None)
-    duration = ((entry or {}).get("budget") or {}).get("duration")
+    duration = (showcase(showcase_id).get("budget") or {}).get("duration")
     if not duration:
-        sys.exit(f"{path}: {showcase_id}.budget.duration is missing -- "
+        sys.exit(f"ai-chatbot/showcases.json: {showcase_id}.budget.duration is missing -- "
                   f"{showcase_id}'s gateway budget window is read from there")
     return duration
 

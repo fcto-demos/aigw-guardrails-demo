@@ -470,16 +470,20 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "%s is not an http(s) URL" % _env_key(sid, "URL", provider_id)
         return pinned, _env_key(sid, "URL", provider_id)
 
-    # A card with its own "route" talks to one fixed LlmProxy, in one wire
-    # format, whatever the provider dropdown says: a cross-provider proxy
-    # (intelligent-routing -- Mistral + Anthropic behind one context) belongs
-    # to no single provider, so the per-provider formula below can't name it.
+    # A card with its own "route" talks to one LlmProxy spanning two
+    # providers (route.defaultProvider + route.routedProvider), whatever the
+    # provider dropdown says, in defaultProvider's wire format. Unwired when
+    # either one is disabled in providers.json.
     route = entry.get("route")
     if route:
         ctx = route.get("context") or ""
         if not CONTEXT_RE.match(ctx):
             return None, "route.context %r is not a plain path" % ctx
-        return gateway_base() + ctx.rstrip("/") + (route.get("messagesSuffix") or ""), "showcases.json route"
+        disabled = [p for p in (route.get("defaultProvider"), route.get("routedProvider")) if p not in PROVIDERS]
+        if disabled:
+            return None, "route needs %s, disabled in providers.json" % " and ".join(map(str, disabled))
+        return (gateway_base() + ctx.rstrip("/") + PROVIDERS[route["defaultProvider"]]["messagesSuffix"],
+                "showcases.json route")
 
     # The context for any (showcase, provider) pair is always exactly
     # /<providerId>-<contextSuffix>, or bare /<providerId> when contextSuffix
@@ -504,7 +508,7 @@ def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
         return None
     path = urllib.parse.urlsplit(url).path
     route = (entry or {}).get("route")
-    suffix = (route.get("messagesSuffix") if route else None) or PROVIDERS[provider_id]["messagesSuffix"]
+    suffix = PROVIDERS[route["defaultProvider"] if route else provider_id]["messagesSuffix"]
     return path.split(suffix)[0] or "/"
 
 
@@ -519,16 +523,17 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     url, source = resolve_gateway(entry, provider_id)
     wiring = entry.get("gateway") or {}
     overrides = entry.get("overrides") or {}
-    # A routed card (see resolve_gateway) fixes its own wire and default
-    # model, and its env vars carry the default provider's (unsuffixed)
-    # names, since it belongs to no single provider.
+    # A routed card (see resolve_gateway) speaks its defaultProvider's wire
+    # format and default model, and its env vars carry the default
+    # provider's (unsuffixed) names, since it belongs to no single provider.
     route = entry.get("route")
     conf_provider = DEFAULT_PROVIDER_ID if route else provider_id
+    wire_provider = route["defaultProvider"] if route and url else provider_id
 
-    fallback_model = (route or {}).get("model") or default_model(provider_id)
+    fallback_model = default_model(wire_provider)
     model = (MODEL_OVERRIDE
              or _sc_conf(showcase_id, "MODEL", conf_provider)
-             or (None if route else _resolve_model_role(overrides.get("model"), provider_id))
+             or _resolve_model_role(overrides.get("model"), wire_provider)
              or fallback_model)
     if not re.match(r"^[A-Za-z0-9._-]{1,64}$", str(model)):
         model = fallback_model
@@ -559,7 +564,7 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         "id": showcase_id,
         "title": entry.get("title") or showcase_id,
         "provider": provider_id,
-        "wire": (route.get("wire") if route else None) or PROVIDERS[provider_id]["wire"],
+        "wire": PROVIDERS[wire_provider]["wire"],
         "url": url,
         "source": source,
         "context": context,
