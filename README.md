@@ -69,8 +69,9 @@ This demo has been tested most thoroughly with **Anthropic** and
 is more restrictive: some models aren't available on a newly created key,
 and you're more likely to hit rate limits.
 
-Intelligent routing spans two providers, so it needs both an **Anthropic**
-and a **Mistral** key.
+Intelligent routing spans two providers: it needs both an **Anthropic** and
+a **Mistral** key, and is skipped when either is disabled in
+`providers.json`.
 
 ## Installation
 

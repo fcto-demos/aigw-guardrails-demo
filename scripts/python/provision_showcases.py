@@ -71,7 +71,6 @@ File layout (each section only calls the ones above it):
     7. Pre-flight check (--check)
     8. main()
 """
-import json
 import os
 import re
 import subprocess
@@ -408,33 +407,24 @@ PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
 # an unextractable question fall back to defaultModel on the proxy's own
 # provider -- Mistral, the backup. No failover on upstream errors.
 #
-# The Mistral side is a dedicated LlmProvider ("demo-mistral"), built from
-# providers.json's mistral entry whether or not that entry is enabled. Not
+# The lane exists only when both anthropic and mistral are enabled in
+# providers.json. Its Mistral side is a dedicated LlmProvider
+# ("demo-mistral", same upstream, key and models as the mistral entry), not
 # the per-provider "mistral" one: on a shared control plane an existing
 # "mistral" provider may carry its own security (seen rejecting this proxy's
 # traffic with "Valid API key required"). Anthropic is referenced only
 # (existingProviders): the per-provider loop owns it.
 # =============================================================================
-def _demo_mistral_provider() -> dict:
-    """The Mistral LlmProvider this card owns, shaped like a platform_api
-    PROVIDERS entry so upsert_shared_provider()/deploy()/read_secret() work
-    on it unchanged. Read straight from providers.json, because
-    load_providers() drops disabled entries. Upstream, auth header, key
-    (MISTRAL_API_KEY) and models are that entry's own; its small model is
-    the backup, and must match showcases.json's intelligent-routing
-    route.model."""
-    raw = next(p for p in json.loads((ROOT / "providers.json").read_text()) if p["id"] == "mistral")
-    return dict(raw, providerId="demo-mistral", providerContext="/demo-mistral",
-                displayName="Mistral (demo)")
-
-
 def cross_provider_lanes() -> dict:
-    anthropic = PROVIDER_BY_ID.get("anthropic")
-    if anthropic is None:   # disabled in providers.json -- nothing to route to
+    anthropic, mistral = PROVIDER_BY_ID.get("anthropic"), PROVIDER_BY_ID.get("mistral")
+    if anthropic is None or mistral is None:
         return {}
     small, large = anthropic["models"]["small"], anthropic["models"]["large"]
-    path = "/v1/chat/completions"
-    demo_mistral = _demo_mistral_provider()
+    # Its small model is the backup, and must match showcases.json's
+    # intelligent-routing route.model.
+    demo_mistral = dict(mistral, providerId="demo-mistral", providerContext="/demo-mistral",
+                        displayName="Mistral (demo)")
+    path = demo_mistral["messagesSuffix"]
     return {
         "intelligent-routing": {
             "id": "intelligent-routing", "base_id": "intelligent-routing",
@@ -976,15 +966,18 @@ def main():
     # Only the providers actually needed by what was requested — running
     # `./provision_showcases.py spend-limit` shouldn't require every other
     # provider's key to be set in secrets/api-keys.env. Cross-provider lanes
-    # (providerId None) never write a provider, so they need no key at all.
+    # (providerId None) bring their own managedProviders instead.
     needed_provider_ids = {ALL_LANES[lid]["providerId"] for lid in requested} - {None}
     providers = [p for p in PROVIDERS if p["id"] in needed_provider_ids]
+    managed = [mp for lid in requested for mp in ALL_LANES[lid].get("managedProviders", [])]
 
     if "--check" in flags:
         login()
         sys.exit(0 if check(providers, requested) else 1)
 
-    secrets = {p["id"]: read_secret(p) for p in providers}
+    # Every key read up front: a missing one must stop the run before any
+    # lane's key is rotated.
+    secrets = {p["providerId"]: read_secret(p) for p in providers + managed}
 
     login()
 
@@ -1012,7 +1005,7 @@ def main():
             print(f"### {provider['displayName']} application + provider")
             ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"])
 
-            upsert_shared_provider(provider, secrets[pid])
+            upsert_shared_provider(provider, secrets[provider["providerId"]])
             deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"],
                    resource="llm-providers")
             ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
@@ -1025,28 +1018,23 @@ def main():
                 provision_lane(lane, provider["providerId"], provider["displayName"],
                                provider["messagesSuffix"], provider["appId"], state)
 
-        # Cross-provider lanes: every provider they route through must already
-        # exist -- they are only REFERENCED, never upserted (providerRef may be
-        # the user's own LlmProvider).
+        # Cross-provider lanes: existingProviders are only referenced and must
+        # already exist; managedProviders are upserted here.
         for lane_id in requested:
             lane = ALL_LANES[lane_id]
             if lane["providerId"] is not None:
                 continue
             print(f"### {lane_id} ({lane['context']}, cross-provider)")
-            for mp in lane.get("managedProviders", []):
-                print(f"  {mp['displayName']} provider ({mp['providerId']}, {mp['providerContext']})")
-                secret = read_secret(mp)
-                if len(secret) < 20 or secret.strip(".") == "":
-                    sys.exit(f"  {mp['secretVar']} in secrets/api-keys.env is still a placeholder -- "
-                             f"paste a real key before provisioning {lane_id}")
-                upsert_shared_provider(mp, secret)
-                deploy(mp["providerId"], mp["providerContext"], mp["messagesSuffix"], resource="llm-providers")
-                ensure_association(lane["appId"], mp["providerId"], "LlmProvider")
             for ref in lane["existingProviders"]:
                 status, _ = api("GET", f"/llm-providers/{ref}")
                 if status != 200:
                     sys.exit(f"  LlmProvider {ref!r} not found ({status}) -- this lane routes through it "
                              f"and never creates it; run --check {lane_id} for details")
+            for mp in lane["managedProviders"]:
+                print(f"  {mp['displayName']} provider ({mp['providerId']}, {mp['providerContext']})")
+                upsert_shared_provider(mp, secrets[mp["providerId"]])
+                deploy(mp["providerId"], mp["providerContext"], mp["messagesSuffix"], resource="llm-providers")
+                ensure_association(lane["appId"], mp["providerId"], "LlmProvider")
             provision_lane(lane, lane["providerRef"], lane["displayPrefix"],
                            lane["messagesSuffix"], lane["appId"], state)
     finally:

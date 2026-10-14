@@ -525,7 +525,7 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     route = entry.get("route")
     conf_provider = DEFAULT_PROVIDER_ID if route else provider_id
 
-    fallback_model = (MODEL_OVERRIDE or route["model"]) if route and route.get("model") else default_model(provider_id)
+    fallback_model = (route or {}).get("model") or default_model(provider_id)
     model = (MODEL_OVERRIDE
              or _sc_conf(showcase_id, "MODEL", conf_provider)
              or (None if route else _resolve_model_role(overrides.get("model"), provider_id))
