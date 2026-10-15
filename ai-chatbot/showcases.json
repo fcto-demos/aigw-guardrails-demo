@@ -663,5 +663,463 @@
     },
     "steps": [],
     "notes": ""
+  },
+  {
+    "id": "mcp-tools",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": []
+    },
+    "title": "Agent with MCP tools",
+    "tagline": "The assistant reads and changes the customer's account through Acme's MCP server, behind the gateway.",
+    "capability": "MCP proxy, no policy",
+    "policies": [],
+    "intro": {
+      "chips": [
+        {
+          "label": "What plan am I on, and how much data have I used this month?",
+          "ask": "What plan am I on, and how much data have I used this month?"
+        },
+        {
+          "label": "Switch me to the Max plan.",
+          "ask": "Switch me to the Max plan."
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Read the account",
+        "sends": [
+          {
+            "ask": "What plan am I on, and how much data have I used this month?",
+            "expect": {
+              "text": "A get_my_account call through the gateway, then an answer built from what it returned."
+            }
+          }
+        ],
+        "notes": "The model asked for the tool; the app called it through the gateway's MCP proxy and handed the result back."
+      },
+      {
+        "n": 2,
+        "title": "Change the plan",
+        "sends": [
+          {
+            "ask": "Switch me to the Max plan.",
+            "expect": {
+              "text": "A change_plan call goes through and the plan changes. Nothing between the agent and the backend says no."
+            }
+          }
+        ],
+        "notes": "The baseline for the next two cards: same server, same tools, no rule on the way."
+      }
+    ],
+    "notes": "One MCP proxy (/acme-mcp) in front of Acme's MCP server (mcp-servers/acme-mobile/server.py), no policy. The agent's model is the mcp.provider's plain-chat lane, in the OpenAI format; the app runs the tool loop itself (tools/list, then tools/call for each call the model asks for). The demo account starts on Everyday and keeps every change, across every MCP card, until the server restarts: run ./scripts/reset-mcp.sh before a demo.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    }
+  },
+  {
+    "id": "mcp-tool-control",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp-acl",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": [
+        {
+          "name": "mcp-acl-list",
+          "version": "v1",
+          "params": {
+            "tools": {
+              "mode": "allow",
+              "exceptions": [
+                "change_plan"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "title": "Tool access control",
+    "tagline": "The gateway hides a tool from the agent. It can't call what it can't see.",
+    "capability": "mcp-acl-list v1",
+    "policies": [
+      "mcp-acl-list v1"
+    ],
+    "intro": {
+      "chips": [
+        {
+          "label": "What plan am I on, and how much data have I used this month?",
+          "ask": "What plan am I on, and how much data have I used this month?"
+        },
+        {
+          "label": "Switch me to the Unlimited plan.",
+          "ask": "Switch me to the Unlimited plan."
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Reading still works",
+        "sends": [
+          {
+            "ask": "What plan am I on, and how much data have I used this month?",
+            "expect": {
+              "text": "get_my_account goes through, as on the previous card."
+            }
+          }
+        ],
+        "notes": "Only change_plan is listed as an exception; every other tool stays allowed."
+      },
+      {
+        "n": 2,
+        "title": "The change is out of reach",
+        "sends": [
+          {
+            "ask": "Switch me to the Unlimited plan.",
+            "expect": {
+              "text": "No change_plan call at all: the gateway removed it from the tool list, so the agent says it can't make the change."
+            }
+          }
+        ],
+        "notes": "mcp-acl-list filters tools/list and refuses tools/call for the same names, so even a client that knew the tool's name could not call it."
+      }
+    ],
+    "notes": "mcp-acl-list, mode allow with change_plan as the one exception. Same server and tools as the previous card; only the proxy's policy differs.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    }
+  },
+  {
+    "id": "mcp-rate-limit",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp-ratelimit",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": [
+        {
+          "name": "mcp-ratelimit",
+          "version": "v1",
+          "params": {
+            "tools": [
+              {
+                "name": "change_plan",
+                "limits": [
+                  {
+                    "limit": 3,
+                    "duration": "1h"
+                  }
+                ],
+                "keyExtraction": [
+                  {
+                    "type": "routename"
+                  },
+                  {
+                    "type": "header",
+                    "key": "x-conversation-id"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "title": "Tool rate limit",
+    "tagline": "The gateway caps how often the agent can use a tool.",
+    "capability": "mcp-ratelimit v1",
+    "policies": [
+      "mcp-ratelimit v1"
+    ],
+    "intro": {
+      "chips": [
+        {
+          "label": "Switch me to the Unlimited plan.",
+          "ask": "Switch me to the Unlimited plan."
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Three changes",
+        "sends": [
+          {
+            "ask": "Switch me to the Unlimited plan.",
+            "expect": {
+              "text": "change_plan goes through."
+            }
+          },
+          {
+            "ask": "Actually, make it Everyday.",
+            "expect": {
+              "text": "Goes through: second change this hour."
+            }
+          },
+          {
+            "ask": "Hmm, go for Plus instead.",
+            "expect": {
+              "text": "Goes through: third and last change allowed this hour."
+            }
+          }
+        ],
+        "notes": "Three change_plan calls per hour and per conversation, counted at the gateway. Clear chat starts a new conversation, with a fresh count."
+      },
+      {
+        "n": 2,
+        "title": "The fourth is refused",
+        "sends": [
+          {
+            "ask": "OK, Max after all.",
+            "expect": {
+              "text": "The gateway answers 429 to change_plan and the agent says it couldn't make the change."
+            }
+          }
+        ],
+        "notes": "Only change_plan is limited: reading the account still works."
+      }
+    ],
+    "notes": "mcp-ratelimit, 3 change_plan calls per 1h window, keyed on the route plus the x-conversation-id header the app sends (a new id on Clear chat or on switching cards), so every conversation gets its own count and the card can be rerun at once. The header stands in for the customer until mcp-auth identifies them; a client could change it, so it is a demo key, not a security boundary. An hour rather than a minute because the gateway's default algorithm is a fixed window aligned to the clock, and a demo at a human pace straddles a minute boundary almost every time.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    }
+  },
+  {
+    "id": "mcp-authentication",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp-auth",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": [
+        {
+          "name": "mcp-auth",
+          "version": "v1",
+          "params": {
+            "issuers": [
+              "mcp-idp"
+            ],
+            "requiredScopes": [
+              "acme:plan:read"
+            ]
+          }
+        }
+      ]
+    },
+    "title": "Authentication",
+    "tagline": "Only a signed-in user's agent reaches the tools.",
+    "capability": "mcp-auth v1",
+    "policies": [
+      "mcp-auth v1"
+    ],
+    "intro": {
+      "chips": [
+        {
+          "label": "What plan am I on, and how much data have I used this month?",
+          "ask": "What plan am I on, and how much data have I used this month?"
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Signed out",
+        "sends": [
+          {
+            "ask": "What plan am I on, and how much data have I used this month?",
+            "expect": {
+              "text": "401 from the gateway, shown as Sign-in required with what an agent learns from it: the identity provider and the scopes. No login starts by itself.",
+              "gatewayStatus": 401
+            }
+          }
+        ],
+        "notes": "No token, no tools: mcp-auth rejects the MCP session itself, so the model is never called. The 401 points to the proxy's protected resource metadata, which names the identity provider."
+      },
+      {
+        "n": 2,
+        "title": "Signed in",
+        "sends": [
+          {
+            "ask": "What plan am I on, and how much data have I used this month?",
+            "expect": {
+              "text": "Signed in: get_my_account goes through."
+            }
+          }
+        ],
+        "notes": "The app sends the user's access token on this card's MCP calls only, never to the model; the gateway checks its issuer and signature against the provider's keys.",
+        "operator": {
+          "text": "Click Sign in, above the conversation: the page goes to the identity provider named in the 401's metadata and comes back signed in. Then ask again."
+        }
+      }
+    ],
+    "notes": "mcp-auth against the mcp-idp key manager (config.toml, from secrets/idp.env). The app finds the identity provider from the gateway's 401 and the proxy's protected resource metadata, signs the user in (authorization code + PKCE, IDP_CLIENT_ID) and keeps the token per card. Provider setup: .docs/mcp-identity-provider.md.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    },
+    "prerequisites": [
+      {
+        "text": "How agents sign in: an MCP client never logs in up front. It calls the server; the gateway's 401 carries a WWW-Authenticate header pointing to the proxy's protected resource metadata, which names the identity provider and the scopes to ask for. Nothing logs in by itself: the client tells the user the server needs authentication (Claude Code lists it under /mcp, where you start it) and, once they accept, opens the provider's login page, then retries with the token. On this page, Sign in plays that part."
+      },
+      {
+        "text": "Two users in the identity provider: one whose role grants acme:plan:read, one whose role also grants acme:plan:write. Setup: .docs/mcp-identity-provider.md."
+      }
+    ]
+  },
+  {
+    "id": "mcp-authorization",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp-authz",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": [
+        {
+          "name": "mcp-auth",
+          "version": "v1",
+          "params": {
+            "issuers": [
+              "mcp-idp"
+            ],
+            "requiredScopes": [
+              "acme:plan:read",
+              "acme:plan:write"
+            ]
+          }
+        },
+        {
+          "name": "mcp-authz",
+          "version": "v1",
+          "params": {
+            "tools": [
+              {
+                "name": "change_plan",
+                "scopes": {
+                  "allOf": [
+                    "acme:plan:write"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "title": "Authorization",
+    "tagline": "What the agent may do depends on who signed in.",
+    "capability": "mcp-auth v1 + mcp-authz v1",
+    "policies": [
+      "mcp-auth v1",
+      "mcp-authz v1"
+    ],
+    "intro": {
+      "chips": [
+        {
+          "label": "What plan am I on, and how much data have I used this month?",
+          "ask": "What plan am I on, and how much data have I used this month?"
+        },
+        {
+          "label": "Switch me to the Unlimited plan.",
+          "ask": "Switch me to the Unlimited plan."
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A user with read access",
+        "sends": [
+          {
+            "ask": "What plan am I on, and how much data have I used this month?",
+            "expect": {
+              "text": "get_my_account goes through."
+            }
+          },
+          {
+            "ask": "Switch me to the Unlimited plan.",
+            "expect": {
+              "text": "change_plan is refused by the gateway (403): the token has no acme:plan:write scope."
+            }
+          }
+        ],
+        "notes": "Same token, same proxy: reading is allowed, changing is not.",
+        "operator": {
+          "text": "Sign in as the user with read access only."
+        }
+      },
+      {
+        "n": 2,
+        "title": "A user with write access",
+        "sends": [
+          {
+            "ask": "Now switch me to the Unlimited plan.",
+            "expect": {
+              "text": "The same request goes through: this token carries acme:plan:write."
+            }
+          }
+        ],
+        "notes": "The identity provider put acme:plan:write in this user's token because their role carries it; the gateway rule did not change.",
+        "operator": {
+          "text": "Sign out, then sign in as the user who also has write access."
+        }
+      }
+    ],
+    "notes": "mcp-auth + mcp-authz: change_plan requires the acme:plan:write scope. The identity provider only issues the scopes a user's roles allow, so it decides and the gateway enforces. Both scopes are listed in mcp-auth's requiredScopes so the protected resource metadata advertises them and the sign-in asks for them. Provider setup: .docs/mcp-identity-provider.md.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    },
+    "prerequisites": [
+      {
+        "text": "mcp-auth checks who is calling; mcp-authz decides, tool by tool, what that caller may do: change_plan needs the acme:plan:write scope. The identity provider only puts that scope in the token of a user whose role grants it, so the same request is allowed or refused depending on who signed in."
+      },
+      {
+        "text": "Two users in the identity provider: one whose role grants acme:plan:read, one whose role also grants acme:plan:write. Setup: .docs/mcp-identity-provider.md."
+      }
+    ]
   }
 ]

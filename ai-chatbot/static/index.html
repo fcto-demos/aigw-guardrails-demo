@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 </head>
-<body data-screen="home">
+<body data-screen="home" data-page="llm">
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -26,7 +26,10 @@
         <span class="dot" aria-hidden="true"></span>
         <span id="status-text">via AI Gateway</span>
       </p>
-      <a class="ghost-btn" id="home" href="#/">All showcases</a>
+      <nav class="gw-nav" aria-label="Gateway">
+        <a class="ghost-btn" id="nav-llm" href="#/llm">LLM Gateway</a>
+        <a class="ghost-btn" id="nav-mcp" href="#/mcp">MCP Gateway</a>
+      </nav>
       <button type="button" class="ghost-btn" id="clear">Clear chat</button>
     </div>
   </div>
@@ -36,12 +39,19 @@
 <!-- ================= home ================= -->
 <section class="screen" id="screen-home">
   <div class="shell">
-    <div class="col-main home-head">
+    <div class="col-main home-head" data-page-only="llm">
       <h1>Which capability are you showing?</h1>
       <p>Every card below talks to its <strong>own pre-configured LLM
          provider</strong> on the WSO2 AI Gateway, with that policy already
          attached. This app never configures the gateway &mdash; it only picks
          which provider answers.</p>
+    </div>
+    <div class="col-main home-head" data-page-only="mcp">
+      <h1>Which MCP capability are you showing?</h1>
+      <p>Every card below gives the assistant the tools of Acme's MCP server
+         through its <strong>own MCP proxy</strong> on the WSO2 AI Gateway, with
+         one policy attached. Same server, same tools, same model &mdash; only
+         the gateway's rule on the tools changes.</p>
     </div>
     <div class="col-main cards" id="cards"></div>
   </div>
@@ -60,6 +70,12 @@
 
         <span class="provider-tag" id="provider" hidden
               title="The LLM provider on the gateway this showcase talks to. Each showcase has its own, with its policy already attached."></span>
+
+        <span class="signin" id="signin" hidden
+              title="This card's MCP proxy runs mcp-auth: tools are only reachable with a signed-in user's token. Signing in goes to the identity provider the proxy's metadata names.">
+          <span class="signin-who" id="signin-who"></span>
+          <a class="ghost-btn signin-btn" id="signin-link" href="#">Sign in</a>
+        </span>
 
         <div class="budget" id="budget" hidden
              title="Cost budget enforced by the gateway's llm-cost-based-ratelimit policy. Counted per provider, so each showcase has its own.">

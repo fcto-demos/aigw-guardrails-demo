@@ -46,6 +46,11 @@ services:
     mem_reservation: 2g
     cpus: 2.0
 
+    # Also on the MCP servers' network (../mcp-servers), to reach them.
+    networks:
+      - gateway-network
+      - mcp
+
     # Phase 8 only — a custom-policy build produces TWO images and both must
     # be swapped together, because the policy set is compiled into each: the
     # controller validates and deploys the policy, the runtime executes it.
@@ -79,3 +84,11 @@ services:
     volumes:
       - ./observability/jaeger/ui-config.json:/etc/jaeger/ui-config.json:ro
     command: ["--query.ui-config=/etc/jaeger/ui-config.json"]
+
+# The MCP servers' network (../mcp-servers), shared with ai-workspace too.
+# External, so `down` never removes it: scripts/run-local.sh creates it; on a
+# VM, create it once with `docker network create ai-demo-mcp`.
+networks:
+  mcp:
+    external: true
+    name: ${DEMO_NAME:-ai-demo}-mcp

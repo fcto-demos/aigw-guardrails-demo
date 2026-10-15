@@ -25,6 +25,10 @@ if [[ -z "$SERVICE" ]]; then
     | sed -u 's/^/[ai-gateway] /' &
   pids+=($!)
 
+  (cd "$ROOT/mcp-servers" && docker compose logs -f --tail=50) \
+    | sed -u 's/^/[mcp-servers] /' &
+  pids+=($!)
+
   tail -F "$ROOT/.logs/ai-chatbot.log" 2>/dev/null | sed -u 's/^/[ai-chatbot] /' &
   pids+=($!)
 else
@@ -32,6 +36,8 @@ else
     (cd "$ROOT/ai-workspace" && exec docker compose logs -f --tail=50 "$SERVICE")
   elif (cd "$ROOT/ai-gateway" && docker compose config --services 2>/dev/null | grep -qx "$SERVICE"); then
     (cd "$ROOT/ai-gateway" && exec docker compose logs -f --tail=50 "$SERVICE")
+  elif (cd "$ROOT/mcp-servers" && docker compose config --services 2>/dev/null | grep -qx "$SERVICE"); then
+    (cd "$ROOT/mcp-servers" && exec docker compose logs -f --tail=50 "$SERVICE")
   elif [[ "$SERVICE" == "ai-chatbot" ]]; then
     exec tail -F "$ROOT/.logs/ai-chatbot.log"
   else

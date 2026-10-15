@@ -1,17 +1,19 @@
 # WSO2 AI Platform — Demo
 
-A self-contained, local demo of the WSO2 AI Platform's LLM gateway: ten
+A self-contained, local demo of the WSO2 AI Platform's gateway: LLM
 showcases, each driving a real policy (routing, caching, guardrails, spend
-limits, failover...) against Anthropic, Mistral and Gemini. Everything runs
-on your machine with Docker Compose — nothing to deploy, nothing shared.
+limits, failover...) against Anthropic, Mistral and Gemini, and MCP showcases
+where an agent uses tools through the gateway. Everything runs on
+your machine with Docker Compose — nothing to deploy, nothing shared.
 
 ## Overview
 
 Three components, wired together:
 
-- **ai-chatbot** — the demo UI. A small chat app with one card per showcase.
+- **ai-chatbot** — the demo UI. A small chat app with one card per showcase,
+  on two pages: **LLM Gateway** and **MCP Gateway**.
 - **ai-gateway** — the WSO2 AI Gateway. Every request is policy-enforced
-  before it reaches an LLM provider.
+  before it reaches an LLM provider or an MCP server.
 - **ai-workspace** — the control plane. Registers the gateway and configures
   its providers and policies.
 
@@ -27,6 +29,26 @@ Three components, wired together:
 | Prompt injection guardrail | The request is refused before any model is called |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
+
+On the **MCP Gateway** page, the assistant becomes an agent. Its tools come
+from a small Acme Mobile MCP server (`mcp-servers/acme-mobile/`): list the
+plans, read the customer's account, change the plan. Its model goes through the
+LLM Gateway and its tool calls through MCP proxies; each call shows in the
+reply, with what the gateway did.
+
+| MCP showcase | What it shows |
+|---|---|
+| Agent with MCP tools | The agent reads and changes the account; no rule applied |
+| Tool access control | The gateway hides `change_plan`: the agent can't call what it can't see |
+| Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per conversation; the 4th gets 429 |
+| Authentication | Without a signed-in user the gateway answers 401; the page signs you in, as any MCP client would |
+| Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
+
+The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
+Server or any other): see [.docs/mcp-identity-provider.md](.docs/mcp-identity-provider.md).
+
+Before a demo, `./scripts/reset-mcp.sh` puts the account back on the Everyday
+plan.
 
 ## Preview
 
@@ -44,9 +66,10 @@ configures the gateway at request time — it only picks which lane to call.
 
 ```
 wso2-api-platform-ai-demo/
-├── ai-chatbot/       demo UI + the ten showcases (showcases.json)
+├── ai-chatbot/       demo UI + every showcase (showcases.json)
 ├── ai-gateway/       WSO2 AI Gateway — policies, custom image, compose stack
 ├── ai-workspace/     AI Workspace: AI control plane
+├── mcp-servers/      MCP servers behind the MCP showcases — own compose stack
 ├── scripts/          setup, run, stop, logs, certificate generation
 ├── secrets/          API keys
 ├── .docs/            architecture diagram and other reference docs
@@ -79,12 +102,15 @@ a **Mistral** key, and is skipped when either is disabled in
 
 `./scripts/reset-and-setup.sh` must be the first thing you run. It installs
 the `ap` CLI, builds the custom gateway image, generates local certificates,
-starts every container, and provisions all ten showcases — nothing else
+starts every container, and provisions every showcase — nothing else
 here creates any of that.
 
 ```bash
 cp secrets/api-keys.env.example secrets/api-keys.env
 # edit secrets/api-keys.env — paste in at least one provider key
+
+cp secrets/idp.env.example secrets/idp.env
+# edit secrets/idp.env — to configure the AuthN / AuthZ use cases (MCP)
 
 cp ai-workspace/api-platform.env.example ai-workspace/api-platform.env
 cp ai-gateway/api-platform.env.example ai-gateway/api-platform.env
@@ -107,6 +133,7 @@ First run takes a few minutes.
 ./scripts/run-local.sh      # start again — keeps existing data
 ./scripts/stop-local.sh     # stop everything
 ./scripts/logs-local.sh     # tail every component's logs together
+./scripts/reset-mcp.sh      # MCP demo account back on the Everyday plan
 ```
 
 Only reach for `reset-and-setup.sh` again if you actually want a clean
@@ -127,6 +154,9 @@ One LLM Provider per provider:
 
 One LLM Proxy per showcase / guardrail:
 ![LLMProxy](.docs/preview-ai-workspace-llm-proxy.png)
+
+One MCP proxy per showcase:
+![MCPProxy](.docs/preview-ai-workspace-mcp-proxy.png)
 
 One Application per provider (for analytics purposes):
 ![Apps](.docs/preview-ai-workspace-apps.png)

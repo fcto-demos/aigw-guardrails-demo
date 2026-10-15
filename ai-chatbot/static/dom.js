@@ -14,12 +14,14 @@ export const brandProduct = document.getElementById('brand-product');
 export const statusEl    = document.getElementById('status');
 export const statusText  = document.getElementById('status-text');
 export const clearBtn    = document.getElementById('clear');
-export const homeBtn     = document.getElementById('home');
 export const llmSelect   = document.getElementById('llm-provider');
 
 /* -- control strip ------------------------------------------------------- */
 export const routeEl     = document.getElementById('route');
 export const providerTag = document.getElementById('provider');
+export const signinBox   = document.getElementById('signin');
+export const signinWho   = document.getElementById('signin-who');
+export const signinLink  = document.getElementById('signin-link');
 export const budgetBox   = document.getElementById('budget');
 export const budgetText  = document.getElementById('budget-text');
 export const budgetFill  = document.getElementById('budget-fill');
@@ -116,6 +118,27 @@ export function modelFooter(model) {
  * footer has to be part of the same string rather than a separate append --
  * which is also why per-turn metrics are concatenated once at the end instead
  * of being computed in here. */
+/* One MCP tool call, as the gateway answered it: what was called, with what,
+ * and whether the gateway let it through. The result the model got is one
+ * click away. */
+const TOOL_OUTCOMES = {
+  ok:           ['✓', 'allowed'],
+  tool_error:   ['!', 'the tool failed'],
+  refused:      ['⛔', 'refused by the gateway'],
+  rate_limited: ['⏱', 'rate limited by the gateway'],
+  error:        ['!', 'failed'],
+};
+
+export function toolCallHtml(call) {
+  const [icon, label] = TOOL_OUTCOMES[call.outcome] || TOOL_OUTCOMES.error;
+  return '<details class="tool-call is-' + escapeHtml(call.outcome || 'error') + '">'
+    + '<summary><span class="tool-icon" aria-hidden="true">' + icon + '</span>'
+    + '<code>' + escapeHtml(call.name || '?') + '(' + escapeHtml(JSON.stringify(call.arguments || {}))
+    + ')</code><span class="tool-status">HTTP ' + escapeHtml(String(call.gatewayStatus))
+    + ' · ' + label + '</span></summary>'
+    + '<pre>' + escapeHtml(call.result || '') + '</pre></details>';
+}
+
 export function bubbleHtml(answer, model, streaming) {
   return renderMarkdown(answer)
     + (streaming ? '<span class="cursor"></span>' : '')

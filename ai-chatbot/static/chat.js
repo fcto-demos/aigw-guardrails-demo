@@ -10,9 +10,9 @@
 import { renderMarkdown, escapeHtml } from './markdown.js';
 import {
   transcript, intro, form, input, sendBtn, clearBtn,
-  alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, setBusy,
+  alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, toolCallHtml, setBusy,
   showError, showRefusal, clearError, showRoute, showBudget,
-  markBudgetExhausted, showSpendMeter, scrollDown, resetRoute,
+  markBudgetExhausted, showSpendMeter, scrollDown, resetRoute, signinBox,
 } from './dom.js';
 import { activeId, activeShowcase, activeProvider, onSessionReset } from './screens.js';
 import {
@@ -25,6 +25,10 @@ import { recordSpend } from './spend.js';
  * stored and never sent back, which is what keeps multi-turn safe here. */
 let messages = [];
 let inFlight = null;
+
+/* Sent with every turn; MCP cards forward it to the gateway, where the rate
+ * limit counts per conversation. A new conversation gets a new id. */
+let conversation = crypto.randomUUID();
 
 export async function ask(question, origin) {
   if (!activeShowcase) return;
@@ -54,6 +58,7 @@ export async function ask(question, origin) {
   markRunning(origin);
 
   let answer = '';
+  let tools = '';   // MCP cards: one line per tool call, above the answer
   let servedModel = null;
   let stopReason = null;
   let failed = false;
@@ -68,7 +73,7 @@ export async function ask(question, origin) {
       headers: { 'content-type': 'application/json' },
       /* A showcase *id*, never a URL. The server owns the id-to-provider
        * mapping; see the comment at the lookup in server.py. */
-      body: JSON.stringify({ messages, showcase: activeId, provider: activeProvider }),
+      body: JSON.stringify({ messages, showcase: activeId, provider: activeProvider, conversation }),
       signal: inFlight.signal,
     });
 
@@ -89,7 +94,7 @@ export async function ask(question, origin) {
       turn.outputTokens = 0;
 
       const outcome = payload.gatewayOutcome;
-      turn.outcome = outcome === 'policy_block' ? 'blocked'
+      turn.outcome = outcome === 'policy_block' || outcome === 'signin_required' ? 'blocked'
                    : outcome === 'budget_exhausted' ? 'refused'
                    : 'error';
 
@@ -99,7 +104,14 @@ export async function ask(question, origin) {
       if (turn.outcome === 'refused') markBudgetExhausted();
       else showBudget(payload.costLimit, payload.costRemaining);
 
-      if (turn.outcome === 'blocked') {
+      if (outcome === 'signin_required') {
+        /* The gateway's 401 is the cue any MCP client acts on: sign the user in. */
+        showRefusal('Sign-in required',
+                    (payload.error || 'This MCP server needs a signed-in user.') + status
+                    + '. Use Sign in, above.',
+                    payload.gatewayBody || '');
+        signinBox.classList.add('is-attention');
+      } else if (turn.outcome === 'blocked') {
         /* The block IS the demonstration, so it must not be painted as a
          * fault. The metrics strip carries the evidence: zero tokens. */
         showRefusal('Blocked by a gateway policy',
@@ -161,6 +173,11 @@ export async function ask(question, origin) {
           }
           continue;
         }
+        if (name === 'tool_call') {
+          tools += toolCallHtml(event);
+          bubble.innerHTML = tools + typingHtml();
+          continue;
+        }
         if (name === 'gateway_error') {
           failed = true;
           turn.outcome = 'error';
@@ -192,7 +209,7 @@ export async function ask(question, origin) {
           turn.inputTokens = usage.input_tokens === undefined
             ? null : usage.input_tokens;
           showRoute(servedModel);
-          bubble.innerHTML = typingHtml()
+          bubble.innerHTML = tools + typingHtml()
             + (servedModel ? '<p class="msg-model">' + escapeHtml(servedModel)
                              + '</p>' : '');
           continue;
@@ -206,7 +223,7 @@ export async function ask(question, origin) {
           if (event.delta.type === 'text_delta') {
             if (turn.ttft === null) turn.ttft = performance.now() - turn.t0;
             answer += event.delta.text || '';
-            bubble.innerHTML = bubbleHtml(answer, servedModel, true);
+            bubble.innerHTML = tools + bubbleHtml(answer, servedModel, true);
             scrollDown(false);
           }
         } else if (event.type === 'message_delta') {
@@ -238,7 +255,7 @@ export async function ask(question, origin) {
        * here from this turn's tokens -- and the step-down it detects is what
        * the card exists to show. A no-op on every other showcase. */
       showSpendMeter(recordSpend(turn));
-      bubble.innerHTML = bubbleHtml(answer, servedModel, false)
+      bubble.innerHTML = tools + bubbleHtml(answer, servedModel, false)
                        + metricsHtml(finishSnapshot(turn));
       messages.push({ role: 'assistant', content: answer });
     } else if (!failed) {
@@ -250,7 +267,7 @@ export async function ask(question, origin) {
        * carried forward. */
       turn.outcome = 'empty';
       dropPendingQuestion();
-      bubble.innerHTML = '<p class="notice">' + (stopReason === 'max_tokens'
+      bubble.innerHTML = tools + '<p class="notice">' + (stopReason === 'max_tokens'
         ? 'The model hit its token limit before writing an answer. Raise MAX_TOKENS in config.env and try again.'
         : 'The gateway returned no text for that request.') + '</p>';
     }
@@ -346,6 +363,7 @@ document.getElementById('alert-close').addEventListener('click', clearError);
 clearBtn.addEventListener('click', () => {
   if (inFlight) inFlight.abort();
   messages = [];
+  conversation = crypto.randomUUID();
   resetTurns();
   clearError();
   transcript.innerHTML = '';
@@ -361,4 +379,5 @@ clearBtn.addEventListener('click', () => {
 onSessionReset(() => {
   if (inFlight) inFlight.abort();
   messages = [];
+  conversation = crypto.randomUUID();
 });

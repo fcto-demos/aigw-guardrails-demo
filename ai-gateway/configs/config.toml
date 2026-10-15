@@ -101,28 +101,23 @@ jwksfetchretrycount = 3
 jwksfetchretryinterval = "2s"
 leeway = "30s"
 authheaderscheme = "Bearer"
-headername = "Authorization" # CHANGED 2026-09-09 Phase 4 D-3: was AuthorizationGW; breaks github-mcp gateway-token path (accepted)
+headername = "Authorization"
 onfailurestatuscode = 401
 errormessageformat = "json"
 errormessage = "Authentication failed"
 validateissuer = true
 
+# The MCP auth cards' identity provider, set in secrets/idp.env (IDP_*), which
+# both gateway containers load as an env_file. skipTlsVerify cannot come from
+# there (templates only fill strings, and this must be a boolean): true
+# accepts a self-signed IdP; set false for a publicly trusted one.
 [[policy_configurations.jwtauth_v1.keymanagers]]
-name   = "asgardeo"
-issuer = "https://api.asgardeo.io/t/aipoc/oauth2/token"
+name   = "mcp-idp"
+issuer = '{{ env "IDP_ISSUER" "" }}'
 
 [policy_configurations.jwtauth_v1.keymanagers.jwks.remote]
-uri = "https://api.asgardeo.io/t/aipoc/oauth2/jwks"
-skipTlsVerify = false
-
-[[policy_configurations.jwtauth_v1.keymanagers]]
-name   = "entra"
-issuer = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/v2.0"
-scopeClaim = "scp" # ADDED 2026-09-09 Phase 4: Entra scp claim is a space-separated string
-
-[policy_configurations.jwtauth_v1.keymanagers.jwks.remote]
-uri = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/discovery/v2.0/keys"
-skipTlsVerify = false
+uri = '{{ env "IDP_JWKS_URI" "" }}'
+skipTlsVerify = true
 
 [policy_configurations.mcpauth_v1]
 # Host published in the protected-resource metadata URL that mcp-auth serves at
@@ -130,22 +125,8 @@ skipTlsVerify = false
 # which no external MCP client can use. HOST ONLY — mcp-auth appends the
 # listener port itself, so including :8443 here yields a doubled ":8443:8443".
 gatewayhost = '{{ env "DEMO_HOSTNAME" "changeme.example.com" }}'
-
-[[policy_configurations.mcpauth_v1.keymanagers]]
-name   = "asgardeo"
-issuer = "https://api.asgardeo.io/t/aipoc/oauth2/token"
-
-[policy_configurations.mcpauth_v1.keymanagers.jwks.remote]
-uri = "https://api.asgardeo.io/t/aipoc/oauth2/jwks"
-skipTlsVerify = false
-
-[[policy_configurations.mcpauth_v1.keymanagers]]
-name   = "entra"
-issuer = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/v2.0"
-
-[policy_configurations.mcpauth_v1.keymanagers.jwks.remote]
-uri = "https://login.microsoftonline.com/48a341e3-6e1d-4a59-8342-3a81d1954e7c/discovery/v2.0/keys"
-skipTlsVerify = false
+# No key managers here: mcp-auth (and the mcp-auth-passthrough /
+# gateway-mcp-auth forks) read jwt-auth's list above.
 
 [router.upstream.timeouts]
 route_timeout_ms = 300000
