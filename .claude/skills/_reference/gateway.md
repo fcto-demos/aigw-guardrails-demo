@@ -315,8 +315,10 @@ issuer = "https://login.microsoftonline.com/<tenant-id>/v2.0"
 uri = "https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys"
 ```
 
-**Each policy carries its own list.** `mcp-auth` does not read `jwt-auth`'s —
-repeat the blocks under `policy_configurations.mcpauth_v1`.
+**One list for both.** `mcp-auth` (v1.4.0, and the `mcp-auth-passthrough` /
+`gateway-mcp-auth` forks) reads `policy_configurations.jwtauth_v1.keymanagers`
+— checked in the policy definitions. Blocks under `mcpauth_v1.keymanagers`
+are ignored.
 
 - Take `issuer` and the JWKS URI **verbatim from the provider's OIDC discovery
   document** (`/.well-known/openid-configuration`). Entra's v2.0 issuer ends

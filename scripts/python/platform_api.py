@@ -154,10 +154,14 @@ def budget_for(provider: dict) -> float:
     return provider["costBudget"]
 
 
+def showcases() -> list:
+    """ai-chatbot/showcases.json, the card catalogue."""
+    return json.loads((ROOT / "ai-chatbot" / "showcases.json").read_text())
+
+
 def showcase(showcase_id: str) -> dict:
-    """One ai-chatbot/showcases.json entry ({} if absent)."""
-    showcases = json.loads((ROOT / "ai-chatbot" / "showcases.json").read_text())
-    return next((s for s in showcases if s["id"] == showcase_id), {})
+    """One showcases.json entry ({} if absent)."""
+    return next((s for s in showcases() if s["id"] == showcase_id), {})
 
 
 def budget_duration(showcase_id: str) -> str:

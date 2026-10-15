@@ -2,8 +2,7 @@
 # Launch ai-workspace, ai-gateway and ai-chatbot locally.
 #
 # ai-gateway uses the same ports, image and config locally and on the VM --
-# see ai-gateway/.env. docker-compose.override.yaml (VM-only custom images)
-# is deliberately not passed here.
+# see ai-gateway/.env. Compose also loads each docker-compose.override.yaml.
 #
 # Requires api-platform.env in ai-gateway/ and ai-workspace/ (copy from
 # api-platform.env.example) and config.env in ai-chatbot/ (copy from
@@ -32,6 +31,13 @@ require_env "$ROOT/ai-chatbot/config.env"
 
 # Container noise goes to a log file, not the terminal; set -e still stops
 # the script on failure.
+# The MCP servers' network, shared by both stacks (see the two
+# docker-compose.override.yaml files).
+docker network inspect "$DEMO_NAME-mcp" >/dev/null 2>&1 || docker network create "$DEMO_NAME-mcp" >/dev/null
+
+echo "### mcp-servers"
+(cd "$ROOT/mcp-servers" && docker compose up -d) >"$LOGS/mcp-servers.log" 2>&1
+
 echo "### ai-workspace"
 (cd "$ROOT/ai-workspace" && docker compose up -d --wait) >"$LOGS/ai-workspace.log" 2>&1
 

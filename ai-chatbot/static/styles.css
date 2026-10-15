@@ -248,6 +248,35 @@ body {
   letter-spacing: .01em;
   color: var(--muted);
 }
+/* MCP cards: one line per tool call, above the answer. Red is the gateway
+   saying no, as everywhere else on this page. */
+.tool-call {
+  margin: 0 0 8px;
+  border-left: 3px solid var(--mint);
+  background: var(--grey);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.tool-call summary {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.tool-call summary::-webkit-details-marker { display: none; }
+.tool-call code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--navy); }
+.tool-call .tool-status { margin-left: auto; color: var(--muted); }
+.tool-call pre {
+  margin: 0; padding: 4px 10px 8px;
+  font-size: 11.5px; white-space: pre-wrap; word-break: break-word; color: var(--ink);
+}
+.tool-call.is-refused,
+.tool-call.is-rate_limited { border-left-color: var(--error); background: var(--error-bg); }
+.tool-call.is-refused .tool-status,
+.tool-call.is-rate_limited .tool-status { color: var(--error); font-weight: 600; }
+.tool-call.is-tool_error,
+.tool-call.is-error { border-left-color: var(--warn); }
+
 .msg p { margin: 0 0 .7em; }
 .msg ul, .msg ol { margin: 0 0 .7em; padding-left: 1.25em; }
 .msg li { margin-bottom: .25em; }
@@ -452,8 +481,9 @@ body {
 
 .controlbar-inner {
   display: flex;
+  flex-wrap: wrap;   /* a sign-in line moves below rather than truncating */
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   padding: 9px 20px;
 }
 
@@ -566,8 +596,22 @@ body {
 
 body[data-screen="home"] #screen-chat,
 body[data-screen="home"] #clear,
-body[data-screen="home"] #home,
 body[data-screen="chat"] #screen-home { display: none; }
+
+/* Two pages, one per gateway. MCP cards fix their own model, so the provider
+   picker has nothing to do there. */
+body[data-page="llm"] [data-page-only="mcp"],
+body[data-page="mcp"] [data-page-only="llm"],
+body[data-page="mcp"] #llm-provider { display: none; }
+
+.gw-nav { display: flex; gap: 6px; }
+.gw-nav a { text-decoration: none; }
+body[data-page="llm"] #nav-llm,
+body[data-page="mcp"] #nav-mcp {
+  background: var(--white);
+  border-color: var(--white);
+  color: var(--navy);
+}
 
 /* Plain chat has no steps, so it has no rail and no toggle. */
 body[data-rail="none"] .rail,
@@ -674,6 +718,22 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   border-color: rgba(232, 162, 0, .45);
 }
 
+
+/* ---------- MCP sign-in (cards behind mcp-auth) ---------- */
+
+.signin { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.signin[hidden] { display: none; }
+.signin-who {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; color: var(--muted);
+}
+/* In the white strip, so not the topbar's white-on-navy .ghost-btn look. */
+.signin-btn {
+  color: var(--navy); border: 1px solid rgba(13, 17, 103, .22);
+  font-size: 12px; padding: 5px 13px; text-decoration: none; white-space: nowrap;
+}
+.signin-btn:hover { background: var(--lavender); border-color: var(--magenta); color: var(--magenta); }
+.signin.is-attention .signin-btn { background: var(--magenta); border-color: var(--magenta); color: var(--white); }
 
 /* ---------- provider tag ---------- */
 

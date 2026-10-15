@@ -35,11 +35,12 @@ documented at github.com/wso2/api-platform/tree/main/docs/rest-apis/platform-api
 SPA — but the source markdown is readable straight from the repo).
 
 Usage:
-    ./scripts/python/provision_showcases.py                      # every wired lane, every provider
+    ./scripts/python/provision_showcases.py                      # every wired lane and MCP proxy
     ./scripts/python/provision_showcases.py spend-limit           # just Anthropic's spend-limit
     ./scripts/python/provision_showcases.py mistral-spend-limit   # just Mistral's
     ./scripts/python/provision_showcases.py model-failover        # just this lane (Anthropic)
     ./scripts/python/provision_showcases.py mistral-model-failover  # ... or Mistral's
+    ./scripts/python/provision_showcases.py mcp-rate-limit        # one MCP card's proxy
 
 Against an already-running deployment (not this repo's own compose stacks),
 set AIW_URL / GATEWAY_ID / GATEWAY_ENDPOINT / ADMIN_USERNAME / ADMIN_PASSWORD,
@@ -80,7 +81,7 @@ import time
 from platform_api import (
     ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
     probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
-    budget_duration, showcase,
+    budget_duration, showcase, showcases,
 )
 
 # =============================================================================
@@ -465,6 +466,11 @@ for _p in PROVIDERS:
 ALL_LANES.update(cross_provider_lanes())
 DEFAULT_LANE_IDS = [lid for lid, l in ALL_LANES.items() if l["config"] is not None]
 
+# MCP proxies: one per showcases.json card with an "mcp" block, which holds
+# its context, upstream MCP server and policies. No key is issued: the
+# platform's API keys cover LLM resources only, so these proxies are open.
+MCP_PROXIES = {s["id"]: s for s in showcases() if s.get("mcp")}
+
 
 # =============================================================================
 # 3. Gateway registration
@@ -636,6 +642,20 @@ def ensure_app_api_key(app_id: str, entity_id: str, kind: str, key_id: str):
 #    Schemas confirmed against
 #    docs/rest-apis/platform-api/{llm-providers,llm-proxies}.md.
 # =============================================================================
+def _upsert(resource: str, payload: dict, label: str):
+    """PUT over an existing id, POST a new one."""
+    status, _ = api("GET", f"/{resource}/{payload['id']}")
+    if status == 200:
+        status, resp = api("PUT", f"/{resource}/{payload['id']}", payload)
+        verb = "updated"
+    else:
+        status, resp = api("POST", f"/{resource}", payload)
+        verb = "created"
+    if status not in (200, 201):
+        sys.exit(f"  {label} {verb} failed: {status} {resp}")
+    print(f"  {label} {verb}")
+
+
 def upsert_proxy(lane: dict, provider_ref: str, display_prefix: str):
     """provider_ref is the proxy's own LlmProvider id; a cross-provider lane
     also carries additionalProviders (selectable upstreams, each optionally
@@ -656,16 +676,23 @@ def upsert_proxy(lane: dict, provider_ref: str, display_prefix: str):
     }
     if lane.get("additionalProviders"):
         payload["additionalProviders"] = lane["additionalProviders"]
-    status, _ = api("GET", f"/llm-proxies/{lane['id']}")
-    if status == 200:
-        status, resp = api("PUT", f"/llm-proxies/{lane['id']}", payload)
-        verb = "updated"
-    else:
-        status, resp = api("POST", "/llm-proxies", payload)
-        verb = "created"
-    if status not in (200, 201):
-        sys.exit(f"  proxy {verb} failed: {status} {resp}")
-    print(f"  proxy {verb}")
+    _upsert("llm-proxies", payload, "proxy")
+
+
+def upsert_mcp_proxy(card: dict):
+    mcp = card["mcp"]
+    _upsert("mcp-proxies", {
+        "id": card["id"],
+        # "<server> - <card>", like the LLM proxies' "<provider> - <lane>".
+        "displayName": " - ".join(filter(None, (mcp.get("server"), card.get("title") or card["id"]))),
+        "description": card.get("tagline", ""),
+        "version": "v1.0",
+        "projectId": PROJECT_ID,
+        "context": mcp["context"],
+        "upstream": {"main": {"url": mcp["upstream"]}},
+        "mcpSpecVersion": "2025-06-18",
+        "policies": mcp.get("policies", []),
+    }, "MCP proxy")
 
 
 def issue_key(lane_id: str) -> tuple[str, str]:
@@ -854,13 +881,14 @@ def _existing(resource: str, project_ids: list) -> dict:
     return found
 
 
-def check(providers: list, requested: list) -> bool:
+def check(providers: list, requested: list, mcp_requested: list) -> bool:
     print("### pre-flight check (read-only)")
     require_existing_gateway(GATEWAY_ID)
 
     planned = [("llm-providers", p["providerId"], p["providerContext"]) for p in providers]
     planned += [("llm-proxies", lid, ALL_LANES[lid]["context"]) for lid in requested]
     planned += [("applications", p["appId"], None) for p in providers]
+    planned += [("mcp-proxies", sid, MCP_PROXIES[sid]["mcp"]["context"]) for sid in mcp_requested]
 
     status, resp = api("GET", "/projects")
     if status != 200:
@@ -870,9 +898,10 @@ def check(providers: list, requested: list) -> bool:
     print(f"  demo resources go into project {PROJECT_ID!r} "
           f"({'exists, reused' if PROJECT_ID in projects else 'will be created'})")
 
-    existing = {r: _existing(r, list(projects)) for r in ("llm-providers", "llm-proxies", "applications")}
+    existing = {r: _existing(r, list(projects))
+                for r in ("llm-providers", "llm-proxies", "mcp-proxies", "applications")}
     context_owner = {}
-    for r in ("llm-providers", "llm-proxies"):
+    for r in ("llm-providers", "llm-proxies", "mcp-proxies"):
         for rid, item in existing[r].items():
             if item.get("context"):
                 context_owner[item["context"]] = (r, rid)
@@ -952,10 +981,12 @@ def main():
         sys.exit(f"unknown flag(s): {sorted(unknown_flags)}. Known: --existing-gateway, --check")
     existing_gateway = "--existing-gateway" in flags or "--check" in flags
 
-    requested = [a for a in args if not a.startswith("--")] or DEFAULT_LANE_IDS
-    unknown = [r for r in requested if r not in ALL_LANES]
+    requested = [a for a in args if not a.startswith("--")] or DEFAULT_LANE_IDS + list(MCP_PROXIES)
+    unknown = [r for r in requested if r not in ALL_LANES and r not in MCP_PROXIES]
     if unknown:
-        sys.exit(f"unknown lane(s): {unknown}. Known: {list(ALL_LANES.keys())}")
+        sys.exit(f"unknown lane(s): {unknown}. Known: {list(ALL_LANES) + list(MCP_PROXIES)}")
+    mcp_requested = [r for r in requested if r in MCP_PROXIES]
+    requested = [r for r in requested if r in ALL_LANES]
 
     # Only the providers actually needed by what was requested — running
     # `./provision_showcases.py spend-limit` shouldn't require every other
@@ -966,7 +997,7 @@ def main():
 
     if "--check" in flags:
         login()
-        sys.exit(0 if check(providers, requested) else 1)
+        sys.exit(0 if check(providers, requested, mcp_requested) else 1)
 
     # Every key read up front: a missing one must stop the run before any
     # lane's key is rotated.
@@ -1025,6 +1056,12 @@ def main():
                              f"and never creates it; run --check {lane_id} for details")
             provision_lane(lane, lane["providerRef"], lane["displayPrefix"],
                            lane["messagesSuffix"], lane["appId"], state)
+
+        for sid in mcp_requested:
+            card = MCP_PROXIES[sid]
+            print(f"### {sid} ({card['mcp']['context']}, MCP proxy)")
+            upsert_mcp_proxy(card)
+            deploy(sid, card["mcp"]["context"], "/mcp", resource="mcp-proxies")
     finally:
         if state["keys_changed"]:
             if sys.exc_info()[0] is not None:
@@ -1035,8 +1072,9 @@ def main():
     app_ids = sorted({p["appId"] for p in providers} |
                      {ALL_LANES[lid]["appId"] for lid in requested if ALL_LANES[lid]["providerId"] is None})
     apps = ", ".join(f"'{a}'" for a in app_ids)
-    print(f"\ndone. Lanes grouped under GenAI Application(s) {apps}. "
-          "ai-chatbot restarted with the new keys.")
+    print("\ndone."
+          + (f" Lanes grouped under GenAI Application(s) {apps}." if apps else "")
+          + (" ai-chatbot restarted with the new keys." if state["keys_changed"] else ""))
 
 
 if __name__ == "__main__":

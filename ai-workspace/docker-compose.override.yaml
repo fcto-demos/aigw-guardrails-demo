@@ -55,4 +55,14 @@ services:
     #   - ./secrets/api-portal_oidc_client_secret:/secrets/api-portal/oidc_client_secret:ro
 
   # platform-api needs no extra_hosts entry — nothing inside it dials the
-  # public hostname. It only serves on 9243.
+  # public hostname. It does join the MCP servers' network, because creating
+  # an MCP proxy fetches the server's tools from here.
+  platform-api:
+    networks:
+      - default
+      - mcp
+
+networks:
+  mcp:
+    external: true
+    name: ${DEMO_NAME:-ai-demo}-mcp

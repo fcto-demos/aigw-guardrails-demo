@@ -22,12 +22,17 @@ the tracked config file); real environment variables win over both.
 """
 
 import argparse
+import base64
+import hashlib
+import http.cookies
 import json
 import os
 import re
+import secrets
 import ssl
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -138,6 +143,7 @@ def _build_upstream_gemini(showcase, messages, prompt):
 # A showcase id is a dict key and nothing else -- never joined into a URL, a
 # path or a filename. This bounds what can reach a log line or an error body.
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+CONVERSATION_RE = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 # A provider context path: one or more plain path segments. Rejects a scheme,
 # a protocol-relative //host, query, fragment, userinfo and whitespace -- but
@@ -207,6 +213,24 @@ DEFAULTS = {
 MAX_MESSAGES = 200
 MAX_BODY_BYTES = 256 * 1024
 
+# MCP cards: how many model -> tool -> model rounds one turn may take, and
+# what the agent is told on top of the configured prompt.
+MCP_MAX_ROUNDS = 5
+MCP_PROMPT = ("You are talking to a signed-in customer. The only actions you can take on "
+              "their account are these tools: %s. You have no other way to change anything. "
+              "Never say you have changed something unless one of these tools returned a "
+              "successful result for that change. If none of them can do what the customer "
+              "asks, or a call is refused, say plainly that you can't do it from here and "
+              "suggest the app instead.")
+
+# Sign-ins in flight for the MCP cards that need one, by OAuth state: the
+# PKCE verifier and where to return. Lost on restart, like any login page.
+_PENDING_LOGINS = {}
+MAX_PENDING_LOGINS = 100
+# Standard OpenID scopes: always asked for (the profile and email ones let the
+# provider put a readable name in the token), never shown as permissions.
+OIDC_SCOPES = ["openid", "profile", "email"]
+
 GREEN, RED, YELLOW, DIM, BOLD, RESET = (
     "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m", "\033[0m",
 )
@@ -225,10 +249,12 @@ def _merge_env_file(conf, path):
 
 
 def load_config(path, secrets_path=None):
-    """DEFAULTS, overridden by config.env, overridden by secrets/gateway-keys.env
+    """DEFAULTS, overridden by ../demo.env, ../secrets/idp.env, config.env, then secrets/gateway-keys.env
     (the *_API_KEY vars provision_showcases.py routes there instead of into the
     tracked config.env), overridden by the real environment."""
     conf = dict(DEFAULTS)
+    _merge_env_file(conf, os.path.join(HERE, "..", "demo.env"))
+    _merge_env_file(conf, os.path.join(HERE, "..", "secrets", "idp.env"))
     _merge_env_file(conf, path)
     _merge_env_file(conf, secrets_path)
     for key in list(conf):
@@ -485,6 +511,21 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
         return (gateway_base() + ctx.rstrip("/") + PROVIDERS[route["defaultProvider"]]["messagesSuffix"],
                 "showcases.json route")
 
+    # An MCP card's url is its MCP proxy's endpoint. Its model is
+    # mcp.provider's plain-chat lane, in the OpenAI format the tool loop
+    # speaks (see Handler._mcp_turn).
+    mcp = entry.get("mcp")
+    if mcp:
+        ctx = mcp.get("context") or ""
+        if not CONTEXT_RE.match(ctx):
+            return None, "mcp.context %r is not a plain path" % ctx
+        provider = mcp.get("provider")
+        if provider not in PROVIDERS:
+            return None, "mcp needs %s, disabled in providers.json" % provider
+        if PROVIDERS[provider]["wire"] != "openai":
+            return None, "mcp.provider %s must speak the OpenAI format" % provider
+        return gateway_base() + ctx.rstrip("/") + "/mcp", "showcases.json mcp"
+
     # The context for any (showcase, provider) pair is always exactly
     # /<providerId>-<contextSuffix>, or bare /<providerId> when contextSuffix
     # is empty -- scripts/python/provision_showcases.py builds the gateway's own
@@ -508,7 +549,10 @@ def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
         return None
     path = urllib.parse.urlsplit(url).path
     route = (entry or {}).get("route")
-    suffix = PROVIDERS[route["defaultProvider"] if route else provider_id]["messagesSuffix"]
+    if (entry or {}).get("mcp"):
+        suffix = "/mcp"
+    else:
+        suffix = PROVIDERS[route["defaultProvider"] if route else provider_id]["messagesSuffix"]
     return path.split(suffix)[0] or "/"
 
 
@@ -523,12 +567,13 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     url, source = resolve_gateway(entry, provider_id)
     wiring = entry.get("gateway") or {}
     overrides = entry.get("overrides") or {}
-    # A routed card (see resolve_gateway) speaks its defaultProvider's wire
-    # format and default model, and its env vars carry the default
+    # A routed or MCP card (see resolve_gateway) speaks its own provider's
+    # wire format and default model, and its env vars carry the default
     # provider's (unsuffixed) names, since it belongs to no single provider.
-    route = entry.get("route")
-    conf_provider = DEFAULT_PROVIDER_ID if route else provider_id
-    wire_provider = route["defaultProvider"] if route and url else provider_id
+    mcp = entry.get("mcp")
+    own_provider = (entry.get("route") or {}).get("defaultProvider") or (mcp or {}).get("provider")
+    conf_provider = DEFAULT_PROVIDER_ID if own_provider else provider_id
+    wire_provider = own_provider if own_provider and url else provider_id
 
     fallback_model = default_model(wire_provider)
     model = (MODEL_OVERRIDE
@@ -559,7 +604,8 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
 
     context = showcase_context(url, provider_id, entry)
     own_key = _sc_conf(showcase_id, "API_KEY", conf_provider)
-    fallback_key = CONF["GATEWAY_API_KEY"] if conf_provider == DEFAULT_PROVIDER_ID else ""
+    # MCP proxies take no key (the platform issues keys for LLM resources only).
+    fallback_key = CONF["GATEWAY_API_KEY"] if conf_provider == DEFAULT_PROVIDER_ID and not mcp else ""
     return {
         "id": showcase_id,
         "title": entry.get("title") or showcase_id,
@@ -589,7 +635,8 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         # or None. A fallback key is plain-chat's, so on any other lane it
         # will 401 -- /health and the banner surface this instead of letting
         # "keyed" look healthy.
-        "keySource": "showcase" if own_key else ("fallback" if fallback_key else None),
+        "keySource": ("showcase" if own_key else "fallback" if fallback_key
+                      else "open" if mcp else None),
     }
 
 
@@ -720,6 +767,51 @@ def sanitise(messages):
     return clean
 
 
+def mcp_needs_signin(entry):
+    return any(p.get("name") == "mcp-auth" for p in ((entry.get("mcp") or {}).get("policies") or []))
+
+
+def token_cookie(showcase_id):
+    """One token per card: each MCP proxy is its own protected resource."""
+    return "mcp_token_" + showcase_id.replace("-", "_")
+
+
+def jwt_claims(token):
+    """The token's claims, for display only -- unverified here, since the
+    gateway is what checks the signature."""
+    try:
+        payload = token.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (AttributeError, IndexError, ValueError):
+        return None
+
+
+def _fetch_json(url):
+    request = urllib.request.Request(url, headers={"accept": "application/json"})
+    with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=15) as response:
+        return json.loads(response.read())
+
+
+def mcp_authorization_server(entry):
+    """What any MCP client reads after a 401: the proxy's protected resource
+    metadata (RFC 9728) names the authorization server and the scopes, and
+    that server's own metadata its endpoints. Fetched through GATEWAY_BASE,
+    not the URL the 401 advertises, which carries the gateway's public host."""
+    prm = _fetch_json(gateway_base() + entry["mcp"]["context"].rstrip("/")
+                      + "/.well-known/oauth-protected-resource")
+    issuer = (prm.get("authorization_servers") or [None])[0]
+    if not issuer:
+        raise ValueError("the protected resource metadata names no authorization server")
+    parts = urllib.parse.urlsplit(issuer)
+    for url in (issuer.rstrip("/") + "/.well-known/openid-configuration",
+                "%s://%s/.well-known/oauth-authorization-server%s" % (parts.scheme, parts.netloc, parts.path)):
+        try:
+            return prm, _fetch_json(url)
+        except (urllib.error.URLError, ValueError):
+            continue
+    raise ValueError("no authorization server metadata for %s" % issuer)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "AiChatbot/1.0"
@@ -813,6 +905,8 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/showcases":
             return self._json(200, self._registry_payload(provider_id))
+        if path in ("/oauth/login", "/oauth/callback", "/oauth/logout", "/api/session"):
+            return self._signin(path, query)
         if path == "/api/config":
             # No model list: the gateway decides which model answers, and the
             # page reads that decision back off the response instead.
@@ -820,6 +914,88 @@ class Handler(BaseHTTPRequestHandler):
                 "defaultModel": default_model(provider_id),
                 "brand": CONF["BRAND_NAME"]})
         return self._serve_static(path)
+
+    def _cookie(self, name):
+        jar = http.cookies.SimpleCookie(self.headers.get("cookie") or "")
+        return jar[name].value if name in jar else None
+
+    def _redirect(self, location, cookie=None):
+        self.send_response(302)
+        self.send_header("location", location)
+        if cookie:
+            self.send_header("set-cookie", cookie)
+        self.send_header("content-length", "0")
+        self.end_headers()
+
+    def _signin(self, path, query):
+        """Sign-in for the MCP cards whose proxy runs mcp-auth: authorization
+        code + PKCE against whichever authorization server the proxy's
+        metadata names, so IDP_CLIENT_ID is the only setting. The access token
+        stays in an HttpOnly cookie, per card, and goes on that card's MCP
+        calls only -- never to the model."""
+        arg = lambda key: (query.get(key) or [""])[0]
+        if path == "/oauth/callback":
+            pending = _PENDING_LOGINS.pop(arg("state"), None)
+            if not pending:
+                return self._json(400, {"error": "unknown or expired sign-in, start again from the card"})
+            if arg("error") or not arg("code"):  # cancelled or refused at the identity provider
+                return self._redirect("/#/" + pending["card"])
+            body = urllib.parse.urlencode({
+                "grant_type": "authorization_code", "code": arg("code"),
+                "redirect_uri": pending["redirect_uri"], "client_id": CONF.get("IDP_CLIENT_ID", ""),
+                "code_verifier": pending["verifier"]}).encode()
+            request = urllib.request.Request(pending["token_endpoint"], data=body, headers={
+                "content-type": "application/x-www-form-urlencoded", "accept": "application/json"})
+            try:
+                with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=15) as response:
+                    token = json.loads(response.read())
+            except urllib.error.HTTPError as exc:
+                return self._json(502, {"error": "the identity provider refused the code",
+                                        "detail": exc.read().decode("utf-8", "replace")[:500]})
+            except (urllib.error.URLError, ValueError) as exc:
+                return self._json(502, {"error": "cannot reach the identity provider",
+                                        "detail": str(getattr(exc, "reason", exc))})
+            return self._redirect("/#/" + pending["card"], "%s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d" % (
+                token_cookie(pending["card"]), token["access_token"], int(token.get("expires_in") or 3600)))
+
+        card = arg("card")
+        entry = load_showcases()["by_id"].get(card) if ID_RE.match(card) else None
+        if not entry or not mcp_needs_signin(entry):
+            return self._json(400, {"error": "not an MCP card that needs a sign-in", "card": card})
+        if path == "/oauth/logout":
+            return self._redirect("/#/" + card, "%s=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" % token_cookie(card))
+        if path == "/api/session":
+            claims = jwt_claims(self._cookie(token_cookie(card)))
+            if not claims or claims.get("exp", 0) < time.time():
+                return self._json(200, {"signedIn": False})
+            return self._json(200, {
+                "signedIn": True,
+                "user": claims.get("preferred_username") or claims.get("username") or claims.get("email")
+                        or claims.get("sub"),
+                "scopes": [s for s in (claims.get("scope") or "").split() if s not in OIDC_SCOPES]})
+
+        if not CONF.get("IDP_CLIENT_ID"):
+            return self._json(503, {"error": "IDP_CLIENT_ID is not set in secrets/idp.env"})
+        try:
+            prm, meta = mcp_authorization_server(entry)
+        except (urllib.error.URLError, ValueError, KeyError) as exc:
+            return self._json(502, {"error": "cannot discover the authorization server",
+                                    "detail": str(getattr(exc, "reason", exc))})
+        verifier, state = secrets.token_urlsafe(48), secrets.token_urlsafe(16)
+        redirect_uri = "http://%s/oauth/callback" % (self.headers.get("host") or "localhost:%s" % CONF["PORT"])
+        if len(_PENDING_LOGINS) >= MAX_PENDING_LOGINS:
+            _PENDING_LOGINS.clear()
+        _PENDING_LOGINS[state] = {"verifier": verifier, "card": card, "redirect_uri": redirect_uri,
+                                  "token_endpoint": meta["token_endpoint"]}
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        scopes = OIDC_SCOPES + [s for s in prm.get("scopes_supported") or [] if s not in OIDC_SCOPES]
+        return self._redirect(meta["authorization_endpoint"] + "?" + urllib.parse.urlencode({
+            "response_type": "code", "client_id": CONF["IDP_CLIENT_ID"], "redirect_uri": redirect_uri,
+            "scope": " ".join(scopes), "state": state,
+            "code_challenge": challenge, "code_challenge_method": "S256",
+            # Always ask for credentials, so a demo can switch users without the
+            # identity provider's own session signing the previous one back in.
+            "prompt": "login"}))
 
     def _registry_payload(self, provider_id=DEFAULT_PROVIDER_ID):
         """The registry as the browser sees it, for one provider.
@@ -946,6 +1122,14 @@ class Handler(BaseHTTPRequestHandler):
                 "provider": provider_id,
                 "gatewayOutcome": "not_configured",
                 "hint": showcase["source"]})
+
+        entry = registry["by_id"][showcase_id]
+        if entry.get("mcp"):
+            conversation = payload.get("conversation")
+            if not isinstance(conversation, str) or not CONVERSATION_RE.match(conversation):
+                conversation = None
+            token = self._cookie(token_cookie(showcase_id)) if mcp_needs_signin(entry) else None
+            return self._mcp_turn(showcase, messages, conversation, token)
 
         prompt = showcase["systemPrompt"]
         wire = WIRES.get(showcase["wire"])
@@ -1119,7 +1303,10 @@ class Handler(BaseHTTPRequestHandler):
             self._sse("gateway_error", {"error": "unparseable gateway response",
                                         "body": raw[:4000]})
             return self._end_chunks()
+        self._emit_openai(body)
 
+    def _emit_openai(self, body):
+        """One OpenAI-shaped reply as our event shape, then the end."""
         choice = (body.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         usage = self._usage_from_openai(body.get("usage"))
@@ -1135,6 +1322,174 @@ class Handler(BaseHTTPRequestHandler):
                                     "usage": usage})
         self._sse("message_stop", {"type": "message_stop"})
         self._end_chunks()
+
+    # -- MCP cards -------------------------------------------------------------
+    #
+    # The app is the agent: it lists the MCP proxy's tools, offers them to the
+    # model, and makes every tool call the model asks for through that proxy,
+    # so the gateway's MCP policies apply to each one. Not streamed: the turn
+    # is run to the end, then replayed in the usual event shape, preceded by
+    # one "tool_call" event per call.
+
+    def _mcp_turn(self, showcase, messages, conversation, token):
+        mcp_url = showcase["url"]
+        llm = resolve_showcase("plain-chat", _REGISTRY["by_id"][showcase["id"]]["mcp"]["provider"])
+        if not llm["url"]:
+            return self._json(503, {"error": "the agent's model has no gateway lane",
+                                    "showcase": showcase["id"], "gatewayOutcome": "not_configured",
+                                    "hint": "plain-chat: " + llm["source"]})
+
+        # The conversation id rides on every MCP call, so a gateway policy can
+        # key on it (the rate-limit card counts per conversation).
+        session = {"conversation": conversation, "token": token}
+        status, reply = self._mcp_rpc(mcp_url, "initialize", {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "ai-chatbot", "version": "1.0"}}, session)
+        if status == 200:
+            self._mcp_rpc(mcp_url, "notifications/initialized", None, session)
+            status, reply = self._mcp_rpc(mcp_url, "tools/list", {}, session)
+        if status == 401:
+            # Shown the way an MCP client reads it: the 401 points to the
+            # proxy's protected resource metadata, which names the identity
+            # provider and the scopes. The client then asks the user to sign in
+            # (here: Sign in, see _signin) -- nothing logs in by itself.
+            try:
+                prm = _fetch_json(gateway_base() + _REGISTRY["by_id"][showcase["id"]]["mcp"]["context"].rstrip("/")
+                                  + "/.well-known/oauth-protected-resource")
+                learned = ("An MCP client reads the 401's WWW-Authenticate header, then the protected resource metadata:\n"
+                           "  authorization server  %s\n  scopes                %s\n"
+                           "and asks the user to sign in there."
+                           % (", ".join(prm.get("authorization_servers") or []), " ".join(prm.get("scopes_supported") or [])))
+            except (urllib.error.URLError, ValueError):
+                learned = json.dumps(reply)[:4000]
+            return self._json(401, {"error": "this MCP server needs a signed-in user",
+                                    "gatewayStatus": 401, "gatewayOutcome": "signin_required",
+                                    "showcase": showcase["id"], "gatewayBody": learned})
+        if status != 200 or "result" not in reply:
+            return self._json(502, {"error": "the MCP proxy did not list its tools",
+                                    "gatewayStatus": status or None,
+                                    "gatewayOutcome": "error" if status else "unreachable",
+                                    "showcase": showcase["id"], "gatewayBody": json.dumps(reply)[:4000]})
+        tools = [{"type": "function", "function": {
+                     "name": t["name"], "description": t.get("description", ""),
+                     "parameters": t.get("inputSchema") or {"type": "object", "properties": {}}}}
+                 for t in reply["result"].get("tools") or []]
+
+        # The tool list is the gateway's answer, so it already reflects any
+        # tool a policy has hidden -- the model is told exactly what it has.
+        names = ", ".join(t["function"]["name"] for t in tools) or "none"
+        convo = [{"role": "system", "content": showcase["systemPrompt"] + "\n\n" + MCP_PROMPT % names}] + messages
+        headers = {"content-type": "application/json", "accept": "application/json"}
+        if llm["apiKey"]:
+            headers[CONF["GATEWAY_API_KEY_HEADER"]] = llm["apiKey"]
+        calls, usage = [], {"prompt_tokens": 0, "completion_tokens": 0}
+        results, must_answer = {}, False
+        for round_ in range(MCP_MAX_ROUNDS):
+            upstream = {"model": showcase["model"], "max_tokens": showcase["maxTokens"], "messages": convo}
+            if tools:
+                upstream["tools"] = tools
+                # A model going round in circles, or out of rounds, answers
+                # with what it has instead of ending the turn with no text.
+                must_answer = must_answer or round_ == MCP_MAX_ROUNDS - 1
+                if must_answer:
+                    upstream["tool_choice"] = "none"
+            request = urllib.request.Request(llm["url"], data=json.dumps(upstream).encode(),
+                                             headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=180) as response:
+                    response_headers, body = response.headers, json.loads(response.read() or b"{}")
+            except urllib.error.HTTPError as exc:
+                text = exc.read().decode("utf-8", "replace")
+                self.log_message("[%s] gateway HTTP %d: %s", showcase["id"], exc.code, text[:400])
+                outcome = classify_gateway_error(exc.code, exc.headers, text, llm)
+                return self._json(422 if outcome in ("policy_block", "budget_exhausted") else 502, {
+                    "error": "the agent's model call was rejected", "gatewayStatus": exc.code,
+                    "gatewayOutcome": outcome, "showcase": showcase["id"], "gatewayBody": text[:4000]})
+            except (urllib.error.URLError, ValueError) as exc:
+                return self._json(502, {"error": "no usable reply from the agent's model",
+                                        "gatewayOutcome": "unreachable", "showcase": showcase["id"],
+                                        "detail": str(getattr(exc, "reason", exc))})
+            for key in usage:
+                usage[key] += (body.get("usage") or {}).get(key) or 0
+            message = (body.get("choices") or [{}])[0].get("message") or {}
+            if not message.get("tool_calls") or must_answer:
+                break
+            convo.append({"role": "assistant", "content": message.get("content") or "",
+                          "tool_calls": message["tool_calls"]})
+            for call in message["tool_calls"]:
+                function = call.get("function") or {}
+                try:
+                    args = json.loads(function.get("arguments") or "{}")
+                except ValueError:
+                    args = {}
+                key = (function.get("name"), json.dumps(args, sort_keys=True))
+                if key in results:  # asked again: same answer, no second call
+                    must_answer = True
+                else:
+                    event = self._mcp_tool_call(mcp_url, function.get("name"), args, session)
+                    calls.append(event)
+                    results[key] = event["result"]
+                convo.append({"role": "tool", "tool_call_id": call.get("id"),
+                              "name": function.get("name"), "content": results[key]})
+
+        body["usage"] = usage  # every round's tokens, not just the last one's
+        self._begin_sse()
+        for event in calls:
+            self._sse("tool_call", event)
+        self._sse("gateway_meta", gateway_meta(response_headers, streamed=False))
+        self._emit_openai(body)
+
+    def _mcp_tool_call(self, url, name, args, session):
+        """One tools/call through the MCP proxy, as a tool_call event: what the
+        UI shows, and in "result" what the model is told."""
+        status, reply = self._mcp_rpc(url, "tools/call", {"name": name, "arguments": args}, session)
+        error = reply.get("error")
+        error = error.get("message") if isinstance(error, dict) else reply.get("message") or error
+        result = reply.get("result") or {}
+        if status == 200 and not error:
+            text = "\n".join(c.get("text", "") for c in result.get("content") or [] if c.get("type") == "text")
+            outcome = "tool_error" if result.get("isError") else "ok"
+        elif status == 200:
+            text, outcome = "The tool failed: %s" % error, "tool_error"
+        else:
+            text = "Refused (HTTP %s): %s" % (status, error or "no detail")
+            outcome = "rate_limited" if status == 429 else "refused" if status in (400, 401, 403) else "error"
+        return {"name": name, "arguments": args, "gatewayStatus": status,
+                "outcome": outcome, "result": text[:4000]}
+
+    def _mcp_rpc(self, url, method, params, session):
+        """One JSON-RPC message to an MCP proxy: (HTTP status, reply). params
+        None sends a notification, which gets no reply. The reply may come as
+        JSON or as an event stream; both are read."""
+        message = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            session["next_id"] = session.get("next_id", 0) + 1
+            message.update(id=session["next_id"], params=params)
+        headers = {"content-type": "application/json",
+                   "accept": "application/json, text/event-stream",
+                   "mcp-protocol-version": "2025-06-18"}
+        if session.get("sid"):
+            headers["mcp-session-id"] = session["sid"]
+        if session.get("conversation"):
+            headers["x-conversation-id"] = session["conversation"]
+        if session.get("token"):
+            headers["authorization"] = "Bearer " + session["token"]
+        request = urllib.request.Request(url, data=json.dumps(message).encode(),
+                                         headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=30) as response:
+                status, raw = response.status, response.read().decode("utf-8", "replace")
+                session["sid"] = response.headers.get("mcp-session-id") or session.get("sid")
+        except urllib.error.HTTPError as exc:
+            status, raw = exc.code, exc.read().decode("utf-8", "replace")
+        except urllib.error.URLError as exc:
+            return 0, {"error": {"message": str(exc.reason)}}
+        data = [line[5:] for line in raw.splitlines() if line.startswith("data:")]
+        try:
+            reply = json.loads(data[-1] if data else raw) if raw.strip() else {}
+        except ValueError:
+            reply = {"error": {"message": raw[:300]}}
+        return status, reply if isinstance(reply, dict) else {}
 
     # -- Gemini's native wire -----------------------------------------------
     #

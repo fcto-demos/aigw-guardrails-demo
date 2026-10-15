@@ -104,6 +104,7 @@ echo "### wiping ai-workspace + ai-gateway state (containers + volumes)"
 # Forces every profile regardless of demo.env's current ANALYTICS_MODE --
 # see stop-local.sh's own identical comment on why.
 (cd ai-gateway && COMPOSE_PROFILES=tracing,logging,metrics docker compose down -v) >"$LOGS/ai-gateway-down.log" 2>&1
+(cd mcp-servers && docker compose down) >"$LOGS/mcp-servers-down.log" 2>&1
 
 echo "### certs and keys (idempotent — fills in only what's missing)"
 ./scripts/generate-local-certs.sh
