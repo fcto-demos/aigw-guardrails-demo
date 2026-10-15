@@ -57,5 +57,5 @@ The page does what any MCP client (Claude Code, for one) does with a 401:
 3. The token goes on that proxy's MCP calls only, never to the model.
    `mcp-authz` then requires `acme:plan:write` for `change_plan` (else **403**).
 
-An external client follows the 401's URL as-is: the gateway advertises
-`DEMO_HOSTNAME` (`demo.env`), which it must be able to reach.
+An external client follows the 401's URL as-is: its host is `DEMO_HOSTNAME`
+(`demo.env`), `localhost` when blank.

@@ -121,10 +121,10 @@ skipTlsVerify = true
 
 [policy_configurations.mcpauth_v1]
 # Host published in the protected-resource metadata URL that mcp-auth serves at
-# <context>/.well-known/oauth-protected-resource. Defaults to "localhost",
-# which no external MCP client can use. HOST ONLY — mcp-auth appends the
-# listener port itself, so including :8443 here yields a doubled ":8443:8443".
-gatewayhost = '{{ env "DEMO_HOSTNAME" "changeme.example.com" }}'
+# <context>/.well-known/oauth-protected-resource: DEMO_HOSTNAME, localhost
+# when blank. HOST ONLY — mcp-auth appends the request's port itself, so
+# including :8443 here yields a doubled ":8443:8443".
+gatewayhost = '{{ env "DEMO_HOSTNAME" "localhost" }}'
 # No key managers here: mcp-auth (and the mcp-auth-passthrough /
 # gateway-mcp-auth forks) read jwt-auth's list above.
 

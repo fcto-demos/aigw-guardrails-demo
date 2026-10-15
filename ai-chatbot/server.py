@@ -792,13 +792,18 @@ def _fetch_json(url):
         return json.loads(response.read())
 
 
-def mcp_authorization_server(entry):
-    """What any MCP client reads after a 401: the proxy's protected resource
-    metadata (RFC 9728) names the authorization server and the scopes, and
-    that server's own metadata its endpoints. Fetched through GATEWAY_BASE,
-    not the URL the 401 advertises, which carries the gateway's public host."""
-    prm = _fetch_json(gateway_base() + entry["mcp"]["context"].rstrip("/")
-                      + "/.well-known/oauth-protected-resource")
+def protected_resource_metadata(www_authenticate):
+    """What any MCP client reads after a 401: the protected resource metadata
+    (RFC 9728) its WWW-Authenticate header points to, naming the
+    authorization server and the scopes."""
+    match = re.search(r'resource_metadata="([^"]+)"', www_authenticate or "")
+    if not match:
+        raise ValueError("no resource_metadata in the gateway's WWW-Authenticate")
+    return _fetch_json(match.group(1))
+
+
+def mcp_authorization_server(prm):
+    """The authorization server's own metadata: its endpoints."""
     issuer = (prm.get("authorization_servers") or [None])[0]
     if not issuer:
         raise ValueError("the protected resource metadata names no authorization server")
@@ -806,7 +811,7 @@ def mcp_authorization_server(entry):
     for url in (issuer.rstrip("/") + "/.well-known/openid-configuration",
                 "%s://%s/.well-known/oauth-authorization-server%s" % (parts.scheme, parts.netloc, parts.path)):
         try:
-            return prm, _fetch_json(url)
+            return _fetch_json(url)
         except (urllib.error.URLError, ValueError):
             continue
     raise ValueError("no authorization server metadata for %s" % issuer)
@@ -977,7 +982,11 @@ class Handler(BaseHTTPRequestHandler):
         if not CONF.get("IDP_CLIENT_ID"):
             return self._json(503, {"error": "IDP_CLIENT_ID is not set in secrets/idp.env"})
         try:
-            prm, meta = mcp_authorization_server(entry)
+            # As any MCP client: call the proxy, follow its 401.
+            session = {}
+            self._mcp_rpc(gateway_base() + entry["mcp"]["context"].rstrip("/") + "/mcp", "tools/list", {}, session)
+            prm = protected_resource_metadata((session.get("headers") or {}).get("www-authenticate"))
+            meta = mcp_authorization_server(prm)
         except (urllib.error.URLError, ValueError, KeyError) as exc:
             return self._json(502, {"error": "cannot discover the authorization server",
                                     "detail": str(getattr(exc, "reason", exc))})
@@ -1354,8 +1363,7 @@ class Handler(BaseHTTPRequestHandler):
             # provider and the scopes. The client then asks the user to sign in
             # (here: Sign in, see _signin) -- nothing logs in by itself.
             try:
-                prm = _fetch_json(gateway_base() + _REGISTRY["by_id"][showcase["id"]]["mcp"]["context"].rstrip("/")
-                                  + "/.well-known/oauth-protected-resource")
+                prm = protected_resource_metadata(session["headers"].get("www-authenticate"))
                 learned = ("An MCP client reads the 401's WWW-Authenticate header, then the protected resource metadata:\n"
                            "  authorization server  %s\n  scopes                %s\n"
                            "and asks the user to sign in there."
@@ -1364,7 +1372,8 @@ class Handler(BaseHTTPRequestHandler):
                 learned = json.dumps(reply)[:4000]
             return self._json(401, {"error": "this MCP server needs a signed-in user",
                                     "gatewayStatus": 401, "gatewayOutcome": "signin_required",
-                                    "showcase": showcase["id"], "gatewayBody": learned})
+                                    "showcase": showcase["id"], "gatewayBody": learned,
+                                    "headers": {"www-authenticate": session["headers"].get("www-authenticate")}})
         if status != 200 or "result" not in reply:
             return self._json(502, {"error": "the MCP proxy did not list its tools",
                                     "gatewayStatus": status or None,
@@ -1482,6 +1491,7 @@ class Handler(BaseHTTPRequestHandler):
                 session["sid"] = response.headers.get("mcp-session-id") or session.get("sid")
         except urllib.error.HTTPError as exc:
             status, raw = exc.code, exc.read().decode("utf-8", "replace")
+            session["headers"] = exc.headers
         except urllib.error.URLError as exc:
             return 0, {"error": {"message": str(exc.reason)}}
         data = [line[5:] for line in raw.splitlines() if line.startswith("data:")]
