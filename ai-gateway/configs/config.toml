@@ -139,7 +139,8 @@ per_connection_buffer_limit_bytes = 52428800  # 50 MiB
 # =============================================================================
 # TRACING — OTLP export to the OpenTelemetry Collector
 # =============================================================================
-# Requires the `tracing` compose profile to be running (otel-collector + jaeger).
+# Sent to otel-collector: otel-collector-local + jaeger (profile tracing), or
+# otel-collector-moesif (profile moesif), per ANALYTICS_MODE.
 # If this is enabled while the collector is down, every export logs a warning.
 #
 # Jaeger stores traces IN MEMORY — restarting it loses all trace history.

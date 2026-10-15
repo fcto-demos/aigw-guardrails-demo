@@ -88,6 +88,21 @@ services:
 # The MCP servers' network (../mcp-servers), shared with ai-workspace too.
 # External, so `down` never removes it: scripts/run-local.sh creates it; on a
 # VM, create it once with `docker network create ai-demo-mcp`.
+  # ANALYTICS_MODE=moesif: forwards the gateway's traces to Moesif. Answers as
+  # otel-collector, where config.toml's [tracing] sends them;
+  # otel-collector-local (profile tracing) never runs at the same time.
+  otel-collector-moesif:
+    image: otel/opentelemetry-collector:0.112.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector/config-moesif.yaml:/etc/otel-collector-config.yaml:ro
+    environment:
+      - MOESIF_APPLICATION_ID=${APIP_GW_ANALYTICS_PUBLISHERS_MOESIF_APPLICATION_ID:-}
+    networks:
+      gateway-network:
+        aliases: [otel-collector]
+    profiles: ["moesif"]
+
 networks:
   mcp:
     external: true

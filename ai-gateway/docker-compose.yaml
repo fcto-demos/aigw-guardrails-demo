@@ -117,7 +117,9 @@ services:
       - gateway-network
     profiles: ["tracing"]
 
-  otel-collector:
+  # Traces to Jaeger. Answers as otel-collector, where config.toml's
+  # [tracing] sends them -- as otel-collector-moesif does in moesif mode.
+  otel-collector-local:
     image: otel/opentelemetry-collector:0.112.0
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
@@ -126,7 +128,8 @@ services:
       - "4317:4317"   # OTLP gRPC receiver
       - "4318:4318"   # OTLP HTTP receiver
     networks:
-      - gateway-network
+      gateway-network:
+        aliases: [otel-collector]
     depends_on:
       - jaeger
     profiles: ["tracing"]

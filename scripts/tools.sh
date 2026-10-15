@@ -40,13 +40,14 @@ resolve_analytics() {
       # config validation rejects it and the container refuses to start.
       if [[ -n "$ANALYTICS_MOESIF_ID" ]]; then
         ANALYTICS_ENABLED=true
+        ANALYTICS_COMPOSE_PROFILES="moesif"   # the collector sending traces to Moesif
       else
         ANALYTICS_ENABLED=false
+        ANALYTICS_COMPOSE_PROFILES=""
         echo "  analytics: ANALYTICS_MODE=moesif but secrets/api-keys.env has no" \
              "APIP_GW_ANALYTICS_PUBLISHERS_MOESIF_APPLICATION_ID -- leaving analytics off" \
              "(set ANALYTICS_MODE=local instead for the local observability stack)" >&2
       fi
-      ANALYTICS_COMPOSE_PROFILES=""
       ;;
     local)
       ANALYTICS_ENABLED=false

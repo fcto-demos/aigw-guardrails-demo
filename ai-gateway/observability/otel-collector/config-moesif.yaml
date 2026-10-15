@@ -1,0 +1,25 @@
+# ANALYTICS_MODE=moesif: the gateway's traces to Moesif. The gateway exports
+# OTLP over gRPC only, and Moesif takes OTLP over HTTP with its application
+# id as a header, hence this collector in between.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  otlphttp:
+    endpoint: https://api.moesif.net
+    headers:
+      X-Moesif-Application-Id: ${env:MOESIF_APPLICATION_ID}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]

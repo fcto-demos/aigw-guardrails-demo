@@ -10,7 +10,7 @@ echo "### ai-gateway"
 # Forces every profile: unlike up, down only tears down what the resolved
 # COMPOSE_PROFILES selects, so switching ANALYTICS_MODE between runs would
 # otherwise orphan containers.
-(cd "$ROOT/ai-gateway" && COMPOSE_PROFILES=tracing,logging,metrics docker compose down)
+(cd "$ROOT/ai-gateway" && COMPOSE_PROFILES=moesif,tracing,logging,metrics docker compose down)
 
 echo "### ai-workspace"
 (cd "$ROOT/ai-workspace" && docker compose down)
