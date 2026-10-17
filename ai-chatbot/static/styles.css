@@ -492,19 +492,37 @@ body {
   border-bottom: 1px solid rgba(13, 17, 103, .09);
 }
 
+/* Across the whole width: what the gateway did on the left, what the
+   presenter can do on the right. A group that runs out of room wraps below
+   rather than truncating. */
 .controlbar-inner {
+  grid-column: 1 / -1;
   display: flex;
-  flex-wrap: wrap;   /* a sign-in line moves below rather than truncating */
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  padding: 9px 20px;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 11px 20px;
 }
+.control-group,
+.control-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.control-actions { margin-left: auto; }
+
+/* Buttons in the white strip (Steps, Clear chat): navy outline, magenta on hover. */
+.control-btn {
+  font: inherit; font-size: 13.5px; font-weight: 600; white-space: nowrap;
+  color: var(--navy); background: var(--white);
+  border: 1px solid rgba(13, 17, 103, .22); border-radius: 999px;
+  padding: 7px 16px; cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.control-btn:hover { background: var(--lavender); border-color: var(--magenta); color: var(--magenta); }
 
 .control-label {
   flex: 0 0 auto;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--muted);
@@ -514,14 +532,14 @@ body {
    not a control -- no pointer cursor, no hover affordance, nothing to click. */
 .route {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--navy);
   background: var(--lavender);
   border: 1px solid rgba(13, 17, 103, .12);
   border-radius: 999px;
-  padding: 5px 12px;
-  max-width: 260px;
+  padding: 6px 14px;
+  max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -540,7 +558,6 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-left: auto;
   min-width: 0;
 }
 /* A class selector outranks the UA [hidden] rule, so say it explicitly. */
@@ -608,7 +625,6 @@ body {
 #screen-chat { display: flex; flex-direction: column; }
 
 body[data-screen="home"] #screen-chat,
-body[data-screen="home"] #clear,
 body[data-screen="chat"] #screen-home { display: none; }
 
 /* Two pages, one per gateway. MCP cards fix their own model, so the provider
@@ -758,48 +774,57 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 
 .tier { display: flex; align-items: center; gap: 8px; }
 .tier[hidden] { display: none; }
+/* Filled, unlike the other controls, and coloured by tier: navy for
+   standard, gold for premium. */
 .tier select {
-  font: inherit; font-size: 12.5px; font-weight: 600;
-  color: var(--navy); background: var(--white);
-  border: 1px solid rgba(13, 17, 103, .22); border-radius: 999px;
-  padding: 4px 10px; cursor: pointer;
+  appearance: none;
+  font: inherit; font-size: 13.5px; font-weight: 700;
+  color: var(--white);
+  background: var(--navy) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid var(--navy); border-radius: 999px;
+  padding: 7px 32px 7px 16px; cursor: pointer;
 }
-.tier select:hover { border-color: var(--magenta); }
+.tier select[data-tier="premium"] {
+  color: #3D2A00;
+  background: #F5B700 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%233D2A00' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border-color: #F5B700;
+}
+.tier select:hover { box-shadow: 0 0 0 3px rgba(219, 0, 175, .18); }
 
 
 /* ---------- MCP sign-in (cards behind mcp-auth) ---------- */
 
-.signin { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.signin { display: flex; align-items: center; gap: 12px; }
 .signin[hidden] { display: none; }
+/* Signed out or in, as a status with a dot: grey, then green. */
 .signin-who {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13.5px; font-weight: 600; color: var(--muted);
 }
-/* In the white strip, so not the topbar's white-on-navy .ghost-btn look. */
+.signin-who::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: #B9BFE2;
+}
+.signin.is-signed-in .signin-who { color: var(--navy); }
+.signin.is-signed-in .signin-who::before { background: var(--mint); }
+/* Signed out, signing in is the next thing to do: the primary button. */
 .signin-btn {
-  color: var(--navy); border: 1px solid rgba(13, 17, 103, .22);
-  font-size: 12px; padding: 5px 13px; text-decoration: none; white-space: nowrap;
+  font-size: 13.5px; font-weight: 700; white-space: nowrap; text-decoration: none;
+  color: var(--white); background: var(--magenta);
+  border: 1px solid var(--magenta); border-radius: 999px;
+  padding: 7px 18px;
+  transition: background .15s, box-shadow .15s;
 }
-.signin-btn:hover { background: var(--lavender); border-color: var(--magenta); color: var(--magenta); }
-.signin.is-attention .signin-btn { background: var(--magenta); border-color: var(--magenta); color: var(--white); }
+.signin-btn:hover { background: var(--magenta-hi); }
+.signin.is-signed-in .signin-btn {
+  color: var(--navy); background: var(--white); border-color: rgba(13, 17, 103, .22);
+}
+.signin.is-signed-in .signin-btn:hover { border-color: var(--magenta); color: var(--magenta); }
+/* After the gateway's 401, the button asks for attention. */
+.signin.is-attention .signin-btn { box-shadow: 0 0 0 4px rgba(219, 0, 175, .22); }
 
-/* Lives in the white control strip, not the navy topbar, so it cannot inherit
-   .ghost-btn's white-on-transparent -- that renders as white on white. */
-.rail-toggle {
-  display: none;
-  margin-left: auto;
-  color: var(--navy);
-  /* Full shorthand, not just border-color: .ghost-btn sets `border` and the
-     two are easy to get the wrong way round when this is read later. */
-  border: 1px solid rgba(13, 17, 103, .22);
-  font-size: 12px;
-  padding: 5px 13px;
-}
-.rail-toggle:hover {
-  background: var(--lavender);
-  border-color: var(--magenta);
-  color: var(--magenta);
-}
+/* Shown only when the rail becomes a slide-over (small screens). */
+.rail-toggle { display: none; }
 
 
 /* ---------- notice strip ----------
@@ -893,12 +918,28 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 
 .rail-prereq { padding: 14px 18px 0; }
 .rail-prereq:empty { display: none; }
-.rail-prereq h3 {
-  margin: 0 0 6px; font-size: 12px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+.prereq {
+  background: var(--lavender);
+  border-radius: 12px;
+  padding: 11px 14px 13px;
 }
-.rail-prereq li { font-size: 13px; margin-bottom: 8px; color: var(--ink); }
-.rail-prereq ul { margin: 0; padding-left: 18px; }
+.prereq summary {
+  cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--navy);
+}
+.prereq-item { margin-top: 12px; }
+.prereq-item h4 { margin: 0 0 5px; font-size: 14px; font-weight: 700; color: var(--navy); }
+.prereq-item p,
+.prereq-item li { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.prereq-item ol { margin: 0; padding-left: 18px; }
+.prereq-item li + li { margin-top: 5px; }
+.prereq code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .9em; background: var(--white);
+  border-radius: 4px; padding: 0 4px;
+  white-space: nowrap;
+}
 
 .steps { list-style: none; margin: 0; padding: 14px 18px 0; }
 

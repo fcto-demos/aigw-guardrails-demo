@@ -30,7 +30,6 @@
         <a class="ghost-btn" id="nav-llm" href="#/llm">LLM Gateway</a>
         <a class="ghost-btn" id="nav-mcp" href="#/mcp">MCP Gateway</a>
       </nav>
-      <button type="button" class="ghost-btn" id="clear">Clear chat</button>
     </div>
   </div>
 </header>
@@ -63,31 +62,38 @@
 
   <div class="controlbar">
     <div class="shell">
-      <div class="col-main controlbar-inner">
-        <span class="control-label">Answered by</span>
-        <span class="route" id="route" data-idle="true"
-              title="The model that actually served the last reply, read back from the gateway's message_start event. The gateway's routing policies choose it; this page does not.">no reply yet</span>
+      <div class="controlbar-inner">
+        <div class="control-group">
+          <span class="control-label">Answered by</span>
+          <span class="route" id="route" data-idle="true"
+                title="The model that actually served the last reply, read back from the gateway's message_start event. The gateway's routing policies choose it; this page does not.">no reply yet</span>
 
-        <label class="tier" id="tier" hidden
-               title="Stands in for the customer's tier, which in production the gateway reads from the signed-in customer's token.">
-          <span class="control-label">Customer tier</span>
-          <select id="tier-select"></select>
-        </label>
-
-        <span class="signin" id="signin" hidden
-              title="This card's MCP proxy runs mcp-auth: tools are only reachable with a signed-in user's token. Signing in goes to the identity provider the proxy's metadata names.">
-          <span class="signin-who" id="signin-who"></span>
-          <a class="ghost-btn signin-btn" id="signin-link" href="#">Sign in</a>
-        </span>
-
-        <div class="budget" id="budget" hidden
-             title="Cost budget enforced by the gateway's llm-cost-based-ratelimit policy. Counted per provider, so each showcase has its own.">
-          <span class="budget-bar" aria-hidden="true"><i id="budget-fill"></i></span>
-          <span class="budget-text" id="budget-text"></span>
         </div>
 
-        <button type="button" class="ghost-btn rail-toggle" id="rail-toggle"
-                aria-expanded="false" aria-controls="rail">Steps</button>
+        <div class="control-actions">
+          <label class="tier" id="tier" hidden
+                 title="Stands in for the customer's tier, which in production the gateway reads from the signed-in customer's token.">
+            <span class="control-label">Customer tier</span>
+            <select id="tier-select"></select>
+          </label>
+
+          <span class="signin" id="signin" hidden
+                title="This card's MCP proxy runs mcp-auth: tools are only reachable with a signed-in user's token. Signing in goes to the identity provider the proxy's metadata names.">
+            <span class="signin-who" id="signin-who"></span>
+            <a class="signin-btn" id="signin-link" href="#">Sign in</a>
+          </span>
+
+          <div class="budget" id="budget" hidden
+               title="Cost budget enforced by the gateway's llm-cost-based-ratelimit policy. Counted per provider, so each showcase has its own.">
+            <span class="budget-bar" aria-hidden="true"><i id="budget-fill"></i></span>
+            <span class="budget-text" id="budget-text"></span>
+          </div>
+
+          <button type="button" class="control-btn rail-toggle" id="rail-toggle"
+                  aria-expanded="false" aria-controls="rail">Steps</button>
+          <button type="button" class="control-btn" id="clear"
+                  title="Start a new conversation on this card">Clear chat</button>
+        </div>
       </div>
     </div>
   </div>

@@ -279,6 +279,9 @@ function mountShowcase(showcase) {
   tierBox.hidden = !tiers.length;
   tierSelect.innerHTML = tiers.map((t) => '<option value="' + escapeHtml(t) + '">'
     + escapeHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</option>').join('');
+  /* Its colour follows the tier, so a switch shows from across the room. */
+  tierSelect.dataset.tier = tierSelect.value;
+  tierSelect.onchange = () => { tierSelect.dataset.tier = tierSelect.value; };
 
   const notice = noticeFor(showcase);
   noticeBox.hidden = !notice;
@@ -320,6 +323,7 @@ async function refreshSignin(showcase) {
   let session = { signedIn: false };
   try { session = await (await fetch('/api/session?card=' + card)).json(); }
   catch (e) { /* shown as signed out */ }
+  signinBox.classList.toggle('is-signed-in', Boolean(session.signedIn));
   signinWho.textContent = session.signedIn
     ? 'Signed in as ' + session.user + (session.scopes.length ? ' · ' + session.scopes.join(', ') : '')
     : 'Signed out';

@@ -1188,10 +1188,17 @@
     },
     "prerequisites": [
       {
-        "text": "How agents sign in: an MCP client never logs in up front. It calls the server; the gateway's 401 carries a WWW-Authenticate header pointing to the proxy's protected resource metadata, which names the identity provider and the scopes to ask for. Nothing logs in by itself: the client tells the user the server needs authentication (Claude Code lists it under /mcp, where you start it) and, once they accept, opens the provider's login page, then retries with the token. On this page, Sign in plays that part."
+        "title": "How an agent signs in",
+        "steps": [
+          "The agent calls the MCP server through the gateway, without a token.",
+          "The gateway answers 401. Its `WWW-Authenticate` header points to the proxy's metadata: which identity provider, which scopes.",
+          "The client asks the user to sign in (Claude Code lists the server under `/mcp`), then retries with the token. Nothing logs in by itself.",
+          "On this page, Sign in plays the client's part."
+        ]
       },
       {
-        "text": "Two users in the identity provider: one whose role grants acme:plan:read, one whose role also grants acme:plan:write. Setup: .docs/mcp-identity-provider.md."
+        "title": "Test users",
+        "text": "One user whose role grants `acme:plan:read`, one whose role also grants `acme:plan:write`. Setup: `.docs/mcp-identity-provider.md`."
       }
     ]
   },
@@ -1308,10 +1315,16 @@
     },
     "prerequisites": [
       {
-        "text": "mcp-auth checks who is calling; mcp-authz decides, tool by tool, what that caller may do: change_plan needs the acme:plan:write scope. The identity provider only puts that scope in the token of a user whose role grants it, so the same request is allowed or refused depending on who signed in."
+        "title": "Who checks what",
+        "steps": [
+          "`mcp-auth` checks who is calling.",
+          "`mcp-authz` decides, tool by tool, what that caller may do: `change_plan` needs `acme:plan:write`.",
+          "The identity provider only puts that scope in the token of a user whose role grants it: the same request is allowed or refused depending on who signed in."
+        ]
       },
       {
-        "text": "Two users in the identity provider: one whose role grants acme:plan:read, one whose role also grants acme:plan:write. Setup: .docs/mcp-identity-provider.md."
+        "title": "Test users",
+        "text": "One user whose role grants `acme:plan:read`, one whose role also grants `acme:plan:write`. Setup: `.docs/mcp-identity-provider.md`."
       }
     ]
   },

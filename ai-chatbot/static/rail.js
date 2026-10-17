@@ -55,13 +55,20 @@ export function buildRail(showcase) {
   }
 }
 
+/* Before you start, as a callout the presenter can fold once read. Each item
+ * has a title and a sentence or numbered steps; `backticks` mark names. */
 function prereqHtml(showcase) {
   const items = showcase.prerequisites || [];
   if (!items.length) return '';
-  return '<h3>Before you start</h3><ul>'
-    + items.map((p) => '<li>' + escapeHtml(p.text || '')
-        + (p.command ? commandHtml(p.command) : '') + '</li>').join('')
-    + '</ul>';
+  const inline = (text) => escapeHtml(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+  return '<details class="prereq" open><summary>Before you start</summary>'
+    + items.map((p) => '<div class="prereq-item">'
+        + (p.title ? '<h4>' + escapeHtml(p.title) + '</h4>' : '')
+        + (p.text ? '<p>' + inline(p.text) + '</p>' : '')
+        + (p.steps ? '<ol>' + p.steps.map((s) => '<li>' + inline(s) + '</li>').join('') + '</ol>' : '')
+        + (p.command ? commandHtml(p.command) : '')
+        + '</div>').join('')
+    + '</details>';
 }
 
 function commandHtml(command) {
