@@ -26,7 +26,7 @@ Three components, wired together:
 | Model failover | A model goes down; the next request is answered by another one |
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Semantic caching | A reworded question is answered from cache — no model call, no tokens |
-| Prompt injection guardrail | The request is refused before any model is called |
+| Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
 

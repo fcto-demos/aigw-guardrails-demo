@@ -113,8 +113,13 @@ export async function ask(question, origin) {
         signinBox.classList.add('is-attention');
       } else if (turn.outcome === 'blocked') {
         /* The block IS the demonstration, so it must not be painted as a
-         * fault. The metrics strip carries the evidence: zero tokens. */
-        showRefusal('Blocked by a gateway policy',
+         * fault. The metrics strip carries the evidence: zero tokens.
+         * Guardrails name themselves in the body, which tells apart two
+         * guardrails on the same lane. */
+        let guard = '';
+        try { guard = JSON.parse(payload.gatewayBody).message.interveningGuardrail || ''; }
+        catch (e) { /* not a guardrail body */ }
+        showRefusal('Blocked by a gateway policy' + (guard ? ': ' + guard : ''),
                     (payload.error || 'The request was refused.') + status,
                     payload.gatewayBody || '');
       } else if (turn.outcome === 'refused') {
