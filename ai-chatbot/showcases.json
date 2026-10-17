@@ -717,6 +717,54 @@
     "notes": "semantic-prompt-guard v1.0.1 in allow-list mode: the gateway embeds the visitor's last message with mistral-embed and refuses it when its best cosine similarity to the allowedPhrases above is below 0.71. Measured 2026-10-17 on 31 on-topic questions (lowest 0.73: a question in French) and 20 off-topic requests (highest 0.70: “How do I change a tyre?”). The margin is narrow: wording close to the line can go either way, so re-measure before editing the phrases."
   },
   {
+    "id": "prompt-decoration",
+    "group": "Safety",
+    "contextSuffix": "decorator",
+    "title": "Prompt decoration",
+    "tagline": "The gateway adds an instruction to every request: here, a legal line at the end of each answer.",
+    "capability": "prompt-decorator v1.0.2",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "prompt-decorator v1.0.2",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A question about a price",
+        "sends": [
+          {
+            "ask": "How much is the Plus plan?",
+            "expect": {
+              "text": "An answer that ends with “Prices include VAT and may change at any time.” The app asked nothing of the sort: the gateway added the instruction on the way to the model."
+            }
+          }
+        ],
+        "contains": "Prices include VAT and may change at any time.",
+        "notes": "Point at the last line. The question on screen is exactly what the visitor typed; the instruction was appended to it at the gateway."
+      },
+      {
+        "n": 2,
+        "title": "Any question, same rule",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "text": "The same closing line: the rule applies to every request on this lane, for every app that uses it."
+            }
+          }
+        ],
+        "notes": "For contrast, ask the same question on the Just chat card: no closing line. Same app, same model; only the gateway's policy differs."
+      }
+    ],
+    "notes": "prompt-decorator v1.0.2 in text mode, appended to the visitor's last message (each provider's own path to it): “End your answer with this exact sentence, on its own line: Prices include VAT and may change at any time.” Text mode rather than an added system message, because Anthropic only accepts user and assistant roles in its messages. Tested 2026-10-17: 9 answers out of 9 ended with the sentence on Anthropic, Mistral and Gemini; Just chat, without the policy, never adds it."
+  },
+  {
     "id": "pii-masking",
     "group": "Safety",
     "contextSuffix": "pii-masking",

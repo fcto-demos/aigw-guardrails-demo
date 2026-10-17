@@ -212,6 +212,15 @@ def lane_templates(provider: dict) -> dict:
                 "jsonPath": provider["contentPath"], "allowSimilarityThreshold": 0.71, "showAssessment": True,
                 "allowedPhrases": showcase("topic-guardrail")["allowedPhrases"]}}],
         },
+        # The gateway adds an instruction to every request: here a legal line
+        # each answer must end with, for every app on this lane at once.
+        "prompt-decoration": {
+            "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,
+            "globalPolicies": [{"name": "prompt-decorator", "version": "v1", "params": {
+                "jsonPath": provider["contentPath"], "append": True,
+                "promptDecoratorConfig": {"text": "\n\nEnd your answer with this exact sentence, on its "
+                                                  "own line: Prices include VAT and may change at any time."}}}],
+        },
         "semantic-caching": {
             "context_suffix": "cache", "displayName": "Semantic Caching", "wired": True,
             # jsonPath is not optional in practice: without it semantic-cache
