@@ -17,6 +17,35 @@ Three components, wired together:
 - **ai-workspace** — the control plane. Registers the gateway and configures
   its providers and policies.
 
+## Preview
+
+![Preview](.docs/preview.gif)
+
+## Architecture
+
+![Architecture diagram](.docs/architecture.svg)
+
+Every showcase is its own lane: one gateway proxy per (showcase, provider),
+each with the policy it demonstrates already attached. `ai-chatbot` never
+configures the gateway at request time — it only picks which lane to call.
+
+## Project structure
+
+```
+wso2-api-platform-ai-demo/
+├── ai-chatbot/       demo UI + every showcase (showcases.json)
+├── ai-gateway/       WSO2 AI Gateway — policies, custom image, compose stack
+├── ai-workspace/     AI Workspace: AI control plane
+├── mcp-servers/      MCP servers behind the MCP showcases — own compose stack
+├── scripts/          setup, run, stop, logs, certificate generation
+├── secrets/          API keys
+├── .docs/            architecture diagram and other reference docs
+├── demo.env          single source of truth: identity, versions, ports, analytics mode
+└── providers.json    the LLM providers wired into every showcase
+```
+
+## Showcases
+
 | Showcase | What it shows |
 |---|---|
 | Just chat | The assistant with no demo scaffolding |
@@ -53,33 +82,6 @@ Server or any other): see [.docs/mcp-identity-provider.md](.docs/mcp-identity-pr
 Before a demo, `./scripts/reset-mcp.sh` puts the account back on the Everyday
 plan.
 
-## Preview
-
-![Preview](.docs/preview.gif)
-
-## Architecture
-
-![Architecture diagram](.docs/architecture.svg)
-
-Every showcase is its own lane: one gateway proxy per (showcase, provider),
-each with the policy it demonstrates already attached. `ai-chatbot` never
-configures the gateway at request time — it only picks which lane to call.
-
-## Project structure
-
-```
-wso2-api-platform-ai-demo/
-├── ai-chatbot/       demo UI + every showcase (showcases.json)
-├── ai-gateway/       WSO2 AI Gateway — policies, custom image, compose stack
-├── ai-workspace/     AI Workspace: AI control plane
-├── mcp-servers/      MCP servers behind the MCP showcases — own compose stack
-├── scripts/          setup, run, stop, logs, certificate generation
-├── secrets/          API keys
-├── .docs/            architecture diagram and other reference docs
-├── demo.env          single source of truth: identity, versions, ports, analytics mode
-└── providers.json    the LLM providers wired into every showcase
-```
-
 ## Prerequisites
 
 - **Docker**, with Compose v2 (`docker compose version`)
@@ -99,13 +101,16 @@ Intelligent routing spans two providers: it needs both an **Anthropic** and
 a **Mistral** key, and is skipped when either is disabled in
 `providers.json`.
 
-Optional, for the Content safety cards (values in `secrets/content-safety.env`;
-a card left out shows "No provider wired"):
+Optional, for the cards that rely on an outside service (left out until it is
+set up):
 
 - **Content safety · Azure (Tested)**: an [Azure AI Content Safety resource](https://aka.ms/acs-create),
-  its endpoint and key
+  its endpoint and key, in `secrets/content-safety.env`
 - **Content safety · AWS Bedrock (Not Tested yet)**: a [Bedrock guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-components.html)
-  and a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)
+  and a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html), in `secrets/content-safety.env`
+- **MCP Authentication and Authorization**: an OpenID Connect identity provider,
+  for example [Asgardeo](https://asgardeo.io/signup), in `secrets/idp.env`
+  (setup: [.docs/mcp-identity-provider.md](.docs/mcp-identity-provider.md))
 
 ## Installation
 
