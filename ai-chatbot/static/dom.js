@@ -133,6 +133,14 @@ const TOOL_OUTCOMES = {
   error:        ['!', 'failed'],
 };
 
+/* The tools the gateway offered the agent this turn, one line per MCP server. */
+export function toolListHtml(servers) {
+  return servers.map((server) => '<p class="tool-list"><span>'
+    + escapeHtml(server.name) + ' tools offered by the gateway</span>'
+    + (server.tools.length ? server.tools.map((n) => '<code>' + escapeHtml(n) + '</code>').join('') : '<em>none</em>')
+    + '</p>').join('');
+}
+
 export function toolCallHtml(call) {
   const [icon, label] = TOOL_OUTCOMES[call.outcome] || TOOL_OUTCOMES.error;
   return '<details class="tool-call is-' + escapeHtml(call.outcome || 'error') + '">'

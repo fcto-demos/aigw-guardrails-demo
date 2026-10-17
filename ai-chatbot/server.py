@@ -25,6 +25,7 @@ import argparse
 import base64
 import hashlib
 import http.cookies
+import itertools
 import json
 import os
 import re
@@ -230,10 +231,20 @@ MCP_PROMPT = ("You are talking to a signed-in customer. The only actions you can
               "suggest trying again, never call the same tool again for it, and do not offer "
               "other changes you have not checked.")
 
+MCP_REMINDER = ("Your only tools right now are: %s. Anything they cannot do has not been "
+                "done: never say otherwise, say plainly that you can't do it from here.")
+
 # Sign-ins in flight for the MCP cards that need one, by OAuth state: the
 # PKCE verifier and where to return. Lost on restart, like any login page.
 _PENDING_LOGINS = {}
 MAX_PENDING_LOGINS = 100
+# The MCP session each chat has open, by (conversation, card), kept for the
+# whole chat as any MCP client keeps its session. Lost on restart: the next
+# turn then opens a new one.
+_MCP_SESSIONS = {}
+MAX_MCP_SESSIONS = 1000
+# JSON-RPC request ids, never reused, since a session may span many turns.
+_RPC_IDS = itertools.count(1)
 # Standard OpenID scopes: always asked for (the profile and email ones let the
 # provider put a readable name in the token), never shown as permissions.
 OIDC_SCOPES = ["openid", "profile", "email"]
@@ -1404,15 +1415,25 @@ class Handler(BaseHTTPRequestHandler):
                                     "showcase": showcase["id"], "gatewayOutcome": "not_configured",
                                     "hint": "plain-chat: " + llm["source"]})
 
-        # The conversation id rides on every MCP call, so a gateway policy can
-        # key on it (the rate-limit card counts per conversation).
-        session = {"conversation": conversation, "token": token}
-        status, reply = self._mcp_rpc(mcp_url, "initialize", {
-            "protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "ai-chatbot", "version": "1.0"}}, session)
-        if status == 200:
-            self._mcp_rpc(mcp_url, "notifications/initialized", None, session)
+        # The chat's MCP session if it has one, else a new one: the server's
+        # state and the gateway's per-session limits last for the whole chat.
+        key = (conversation, showcase["id"])
+        session = {"sid": _MCP_SESSIONS.get(key) if conversation else None, "token": token}
+        status = 0
+        if session["sid"]:
             status, reply = self._mcp_rpc(mcp_url, "tools/list", {}, session)
+        if status != 200:  # no session yet, or one the server no longer knows
+            session["sid"] = None
+            status, reply = self._mcp_rpc(mcp_url, "initialize", {
+                "protocolVersion": "2025-06-18", "capabilities": {},
+                "clientInfo": {"name": "ai-chatbot", "version": "1.0"}}, session)
+            if status == 200:
+                self._mcp_rpc(mcp_url, "notifications/initialized", None, session)
+                status, reply = self._mcp_rpc(mcp_url, "tools/list", {}, session)
+        if status == 200 and conversation and session.get("sid"):
+            if len(_MCP_SESSIONS) >= MAX_MCP_SESSIONS:
+                _MCP_SESSIONS.clear()
+            _MCP_SESSIONS[key] = session["sid"]
         if status == 401:
             # Shown the way an MCP client reads it: the 401 points to the
             # proxy's protected resource metadata, which names the identity
@@ -1444,6 +1465,9 @@ class Handler(BaseHTTPRequestHandler):
         # tool a policy has hidden -- the model is told exactly what it has.
         names = ", ".join(t["function"]["name"] for t in tools) or "none"
         convo = [{"role": "system", "content": showcase["systemPrompt"] + "\n\n" + MCP_PROMPT % names}] + messages
+        # Repeated last, where a small model weighs it most: without it, the
+        # agent sometimes reports a change no tool made.
+        convo.append({"role": "system", "content": MCP_REMINDER % names})
         headers = {"content-type": "application/json", "accept": "application/json"}
         if llm["apiKey"]:
             headers[CONF["GATEWAY_API_KEY_HEADER"]] = llm["apiKey"]
@@ -1499,6 +1523,11 @@ class Handler(BaseHTTPRequestHandler):
 
         body["usage"] = usage  # every round's tokens, not just the last one's
         self._begin_sse()
+        # The tools the gateway listed, per MCP server, as it listed them: a
+        # tool a policy hides is visibly missing, even when the agent calls nothing.
+        entry = _REGISTRY["by_id"][showcase["id"]]["mcp"]
+        self._sse("tool_list", {"servers": [{"name": entry.get("server") or entry["context"],
+                                             "tools": [t["function"]["name"] for t in tools]}]})
         for event in calls:
             self._sse("tool_call", event)
         self._sse("gateway_meta", gateway_meta(response_headers, streamed=False))
@@ -1537,15 +1566,12 @@ class Handler(BaseHTTPRequestHandler):
         JSON or as an event stream; both are read."""
         message = {"jsonrpc": "2.0", "method": method}
         if params is not None:
-            session["next_id"] = session.get("next_id", 0) + 1
-            message.update(id=session["next_id"], params=params)
+            message.update(id=next(_RPC_IDS), params=params)
         headers = {"content-type": "application/json",
                    "accept": "application/json, text/event-stream",
                    "mcp-protocol-version": "2025-06-18"}
         if session.get("sid"):
             headers["mcp-session-id"] = session["sid"]
-        if session.get("conversation"):
-            headers["x-conversation-id"] = session["conversation"]
         if session.get("token"):
             headers["authorization"] = "Bearer " + session["token"]
         request = urllib.request.Request(url, data=json.dumps(message).encode(),

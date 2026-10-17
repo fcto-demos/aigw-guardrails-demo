@@ -10,7 +10,7 @@
 import { renderMarkdown, escapeHtml } from './markdown.js';
 import {
   transcript, intro, form, input, sendBtn, clearBtn,
-  alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, toolCallHtml, setBusy,
+  alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, toolListHtml, toolCallHtml, setBusy,
   showError, showRefusal, clearError, showRoute, showBudget, tierBox, tierSelect,
   markBudgetExhausted, showSpendMeter, scrollDown, resetRoute, signinBox,
 } from './dom.js';
@@ -177,6 +177,11 @@ export async function ask(question, origin) {
           if (isFinite(prev) && isFinite(now) && prev > now) {
             turn.budgetDelta = prev - now;
           }
+          continue;
+        }
+        if (name === 'tool_list') {
+          tools += toolListHtml(event.servers || []);
+          bubble.innerHTML = tools + typingHtml();
           continue;
         }
         if (name === 'tool_call') {

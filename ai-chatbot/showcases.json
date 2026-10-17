@@ -1164,7 +1164,7 @@
           {
             "ask": "What plan am I on, and how much data have I used this month?",
             "expect": {
-              "text": "Signed in: get_my_account goes through."
+              "text": "Signed in: get_account_details goes through."
             }
           }
         ],
@@ -1269,7 +1269,7 @@
           {
             "ask": "What plan am I on, and how much data have I used this month?",
             "expect": {
-              "text": "get_my_account goes through."
+              "text": "get_account_details goes through."
             }
           },
           {
@@ -1377,7 +1377,7 @@
           {
             "ask": "What plan am I on, and how much data have I used this month?",
             "expect": {
-              "text": "get_my_account goes through, as on the previous card."
+              "text": "The gateway offers list_plans and get_account_details, no change_plan. get_account_details goes through, as on the previous card."
             }
           }
         ],
@@ -1390,7 +1390,7 @@
           {
             "ask": "Switch me to the Unlimited plan.",
             "expect": {
-              "text": "No change_plan call at all: the gateway removed it from the tool list, so the agent says it can't make the change."
+              "text": "change_plan is still missing from the tools the gateway offered, so the agent cannot call it and says it can't make the change. It may still read the account first."
             }
           }
         ],
@@ -1524,7 +1524,7 @@
                   },
                   {
                     "type": "header",
-                    "key": "x-conversation-id"
+                    "key": "mcp-session-id"
                   }
                 ]
               }
@@ -1571,7 +1571,7 @@
             }
           }
         ],
-        "notes": "Three change_plan calls per hour and per conversation, counted at the gateway. Clear chat starts a new conversation, with a fresh count."
+        "notes": "Three change_plan calls per hour and per MCP session, counted at the gateway. Clear chat opens a new MCP session, with a fresh count."
       },
       {
         "n": 2,
@@ -1587,7 +1587,7 @@
         "notes": "Only change_plan is limited: reading the account still works."
       }
     ],
-    "notes": "mcp-ratelimit, 3 change_plan calls per 1h window, keyed on the route plus the x-conversation-id header the app sends (a new id on Clear chat or on switching cards), so every conversation gets its own count and the card can be rerun at once. The header stands in for the customer until mcp-auth identifies them; a client could change it, so it is a demo key, not a security boundary. An hour rather than a minute because the gateway's default algorithm is a fixed window aligned to the clock, and a demo at a human pace straddles a minute boundary almost every time.",
+    "notes": "mcp-ratelimit, 3 change_plan calls per 1h window, keyed on the route plus the Mcp-Session-Id header, the standard MCP session every client sends after initialize. The app keeps one MCP session per chat and opens a new one on Clear chat or on switching cards, so the card can be rerun at once. In production the key would rather be the user, from the token mcp-auth validates. An hour rather than a minute because the gateway's default algorithm is a fixed window aligned to the clock, and a demo at a human pace straddles a minute boundary almost every time.",
     "status": "ready",
     "blockedBy": [],
     "gateway": {
@@ -1634,7 +1634,7 @@
           {
             "ask": "What plan am I on, and how much data have I used this month?",
             "expect": {
-              "text": "A get_my_account call through the gateway, then an answer built from what it returned."
+              "text": "A get_account_details call through the gateway, then an answer built from what it returned."
             }
           }
         ],

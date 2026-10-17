@@ -372,6 +372,18 @@ body {
 }
 /* MCP cards: one line per tool call, above the answer. Red is the gateway
    saying no, as everywhere else on this page. */
+.tool-list {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tool-list span { font-weight: 600; margin-right: 2px; }
+.tool-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--soft); color: var(--text-strong);
+}
 .tool-call {
   margin: 0 0 8px;
   border-left: 3px solid var(--success);

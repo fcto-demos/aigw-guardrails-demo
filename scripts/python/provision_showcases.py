@@ -788,6 +788,10 @@ def upsert_proxy(lane: dict, provider_ref: str, display_prefix: str):
 
 def upsert_mcp_proxy(card: dict):
     mcp = card["mcp"]
+    # The server's tools as AI Workspace lists them, read again on every run:
+    # an update without them would leave the console with no tools, or stale ones.
+    status, info = api("POST", "/mcp-proxies/fetch-server-info", {"url": mcp["upstream"]})
+    capabilities = {k: info.get(k) or [] for k in ("tools", "resources", "prompts")} if status == 200 else None
     _upsert("mcp-proxies", {
         "id": card["id"],
         # "<server> - <card>", like the LLM proxies' "<provider> - <lane>".
@@ -799,6 +803,7 @@ def upsert_mcp_proxy(card: dict):
         "upstream": {"main": {"url": mcp["upstream"]}},
         "mcpSpecVersion": "2025-06-18",
         "policies": mcp.get("policies", []),
+        **({"capabilities": capabilities} if capabilities else {}),
     }, "MCP proxy")
 
 
