@@ -192,7 +192,8 @@ function cardHtml(showcase) {
     + '<h3>' + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
     + (caps.length
-        ? '<p class="card-cap">' + caps.map((c) => '<span>' + escapeHtml(c) + '</span>').join('')
+        ? '<p class="card-cap">' + caps.map((c) => '<span title="' + escapeHtml(c) + '">'
+            + escapeHtml(c) + '</span>').join('')
           + '</p>'
         : '')
     + (needs.length

@@ -28,6 +28,8 @@ Three components, wired together:
 | Semantic caching | A reworded question is answered from cache — no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
+| Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
+| Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
 
 On the **MCP Gateway** page, the assistant becomes an agent. Its tools come
@@ -97,6 +99,14 @@ Intelligent routing spans two providers: it needs both an **Anthropic** and
 a **Mistral** key, and is skipped when either is disabled in
 `providers.json`.
 
+Optional, for the Content safety cards (values in `secrets/content-safety.env`;
+a card left out shows "No provider wired"):
+
+- **Content safety · Azure (Tested)**: an [Azure AI Content Safety resource](https://aka.ms/acs-create),
+  its endpoint and key
+- **Content safety · AWS Bedrock (Not Tested yet)**: a [Bedrock guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-components.html)
+  and a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)
+
 ## Installation
 
 ### First run
@@ -112,6 +122,9 @@ cp secrets/api-keys.env.example secrets/api-keys.env
 
 cp secrets/idp.env.example secrets/idp.env
 # edit secrets/idp.env — to configure the AuthN / AuthZ use cases (MCP)
+
+cp secrets/content-safety.env.example secrets/content-safety.env
+# edit secrets/content-safety.env — Azure Content Safety and/or AWS Bedrock Guardrails (optional, Content safety cards)
 
 cp ai-workspace/api-platform.env.example ai-workspace/api-platform.env
 cp ai-gateway/api-platform.env.example ai-gateway/api-platform.env
@@ -135,6 +148,10 @@ First run takes a few minutes.
 ./scripts/stop-local.sh     # stop everything
 ./scripts/logs-local.sh     # tail every component's logs together
 ./scripts/reset-mcp.sh      # MCP demo account back on the Everyday plan
+
+# Content safety, once secrets/content-safety.env is filled in after the first run
+./scripts/python/provision_showcases.py content-safety mistral-content-safety gemini-content-safety
+./scripts/python/provision_showcases.py content-safety-bedrock mistral-content-safety-bedrock gemini-content-safety-bedrock
 ```
 
 Only reach for `reset-and-setup.sh` again if you actually want a clean

@@ -247,6 +247,36 @@ def read_secret(provider: dict) -> str:
     sys.exit(f"{provider['secretVar']} not set in {SECRETS_FILE}")
 
 
+# The Content safety cards' cloud services. A service left blank here has its
+# card's lanes left out, so a run without either cloud account still works.
+CONTENT_SAFETY_FILE = ROOT / "secrets" / "content-safety.env"
+
+
+def _content_safety_conf() -> dict:
+    return _read_env_file(CONTENT_SAFETY_FILE) if CONTENT_SAFETY_FILE.exists() else {}
+
+
+def azure_safety_missing() -> str:
+    """What the Azure Content Safety card still needs; "" once it is set up."""
+    conf = _content_safety_conf()
+    endpoint = conf.get("AZURE_CONTENT_SAFETY_ENDPOINT", "")
+    if conf.get("AZURE_CONTENT_SAFETY_KEY") and endpoint.startswith("https://") and "<" not in endpoint:
+        return ""
+    return "an Azure Content Safety endpoint and key in secrets/content-safety.env"
+
+
+def bedrock_safety_missing() -> str:
+    """What the AWS Bedrock card still needs; "" once it is set up."""
+    conf = _content_safety_conf()
+    guardrail = all(conf.get(k) for k in ("AWS_BEDROCK_REGION", "AWS_BEDROCK_GUARDRAIL_ID",
+                                          "AWS_BEDROCK_GUARDRAIL_VERSION"))
+    access = conf.get("AWS_BEARER_TOKEN_BEDROCK") or \
+        (conf.get("AWS_ACCESS_KEY_ID") and conf.get("AWS_SECRET_ACCESS_KEY"))
+    if guardrail and access:
+        return ""
+    return "a Bedrock guardrail and API key in secrets/content-safety.env"
+
+
 def gateway_verdict(status: int, body) -> str:
     """Classifies a probe response by WHO produced it, since a probe that
     gets through the gateway reaches the real upstream, whose own 401/404

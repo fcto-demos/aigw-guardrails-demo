@@ -188,9 +188,24 @@ function detailHtml(detail) {
   const message = body && typeof body.message === 'object' ? body.message : null;
   const rows = [];
   if (message && message.actionReason) rows.push(['Reason', message.actionReason]);
-  if (message && message.assessments) {
-    rows.push(['Detail', typeof message.assessments === 'string'
-      ? message.assessments : JSON.stringify(message.assessments)]);
+  const assessments = message && message.assessments;
+  if (typeof assessments === 'string') {
+    rows.push(['Detail', assessments]);
+  } else if (assessments && Array.isArray(assessments.categories)) {
+    // Azure scores each category; the highest one is the reason.
+    rows.push(['Severity (0-7)', assessments.categories.slice()
+      .sort((a, b) => b.severity - a.severity)
+      .map((c) => c.category + ' ' + c.severity).join(' · ')]);
+  } else if (assessments && (assessments.contentPolicy || assessments.topicPolicy || assessments.wordPolicy)) {
+    // Bedrock lists what tripped: content filters, denied topics, blocked words.
+    const hits = [
+      ...((assessments.contentPolicy || {}).filters || []).map((f) => f.type + ' (' + f.confidence + ')'),
+      ...((assessments.topicPolicy || {}).topics || []).map((t) => 'topic ' + t.name),
+      ...((assessments.wordPolicy || {}).customWords || []).map((w) => 'word "' + w.match + '"'),
+    ];
+    rows.push(['Tripped', hits.join(' · ') || JSON.stringify(assessments)]);
+  } else if (assessments) {
+    rows.push(['Detail', JSON.stringify(assessments)]);
   }
   if (!rows.length && body && typeof body.message === 'string') rows.push(['Reason', body.message]);
   const raw = '<pre>' + escapeHtml(detail) + '</pre>';

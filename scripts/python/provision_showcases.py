@@ -81,7 +81,7 @@ import time
 from platform_api import (
     ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
     probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
-    budget_duration, showcase, showcases,
+    budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
 )
 
 # =============================================================================
@@ -262,6 +262,27 @@ def lane_templates(provider: dict) -> dict:
                      "piiRegex": r"\b0[1-9][0-9]{1,4}[\s-]?[0-9]{3,4}[\s-]?[0-9]{3,4}\b"},
                 ]}}],
         },
+        # Azure Content Safety checks the visitor's message and the model's
+        # answer. The answer is only readable whole, so the card does not
+        # stream; each provider's reply format has its own path to the text.
+        "content-safety": {
+            "context_suffix": "content-safety", "displayName": "Content Safety", "wired": True,
+            "requires": azure_safety_missing,
+            "globalPolicies": [{"name": "azure-content-safety-content-moderation", "version": "v1", "params": {
+                "request": {"jsonPath": provider["contentPath"], "showAssessment": True},
+                "response": {"jsonPath": provider["responseContentPath"], "showAssessment": True},
+            }}],
+        },
+        # The same check through AWS Bedrock Guardrails: the guardrail, its
+        # region and the credentials all come from the gateway configuration.
+        "content-safety-bedrock": {
+            "context_suffix": "content-safety-bedrock", "displayName": "Content Safety (AWS Bedrock)", "wired": True,
+            "requires": bedrock_safety_missing,
+            "globalPolicies": [{"name": "aws-bedrock-guardrail", "version": "v1", "params": {
+                "request": {"jsonPath": provider["contentPath"], "showAssessment": True},
+                "response": {"enabled": True, "jsonPath": provider["responseContentPath"], "showAssessment": True},
+            }}],
+        },
         "semantic-routing": {
             "context_suffix": "semantic-routing", "displayName": "Semantic Routing", "wired": True,
             # Confirmed directly in ai-gateway/policies/semantic-model-routing
@@ -383,6 +404,11 @@ def build_lanes(provider: dict) -> dict:
         if supported is not None and location not in supported:
             continue
         lane_id = provider["lanePrefix"] + base_id
+        # A lane whose outside service is not set up is left out, and says why.
+        missing = tpl["requires"]() if "requires" in tpl else ""
+        if missing:
+            SKIPPED_LANES[lane_id] = missing
+            continue
         config = None
         if tpl["wired"]:
             # Only the key -- ai-chatbot/server.py computes this same lane's
@@ -482,6 +508,7 @@ def cross_provider_lanes() -> dict:
 
 
 ALL_LANES = {}
+SKIPPED_LANES = {}  # lane id -> what it still needs
 for _p in PROVIDERS:
     ALL_LANES.update(build_lanes(_p))
 ALL_LANES.update(cross_provider_lanes())
@@ -1005,7 +1032,8 @@ def main():
     requested = [a for a in args if not a.startswith("--")] or DEFAULT_LANE_IDS + list(MCP_PROXIES)
     unknown = [r for r in requested if r not in ALL_LANES and r not in MCP_PROXIES]
     if unknown:
-        sys.exit(f"unknown lane(s): {unknown}. Known: {list(ALL_LANES) + list(MCP_PROXIES)}")
+        sys.exit("\n".join(f"{r} needs {SKIPPED_LANES[r]}" if r in SKIPPED_LANES else f"unknown lane: {r}"
+                           for r in unknown) + f"\nKnown: {list(ALL_LANES) + list(MCP_PROXIES)}")
     mcp_requested = [r for r in requested if r in MCP_PROXIES]
     requested = [r for r in requested if r in ALL_LANES]
 
