@@ -1453,7 +1453,13 @@ class Handler(BaseHTTPRequestHandler):
         UI shows, and in "result" what the model is told."""
         status, reply = self._mcp_rpc(url, "tools/call", {"name": name, "arguments": args}, session)
         error = reply.get("error")
+        # A gateway policy may say which argument broke which rule.
+        data = error.get("data") if isinstance(error, dict) else None
+        reasons = "; ".join("%s %s" % (e.get("path", ""), e.get("message", ""))
+                            for e in (data.get("errors") or [] if isinstance(data, dict) else []))
         error = error.get("message") if isinstance(error, dict) else reply.get("message") or error
+        if reasons:
+            error = "%s (%s)" % (error, reasons)
         result = reply.get("result") or {}
         if status == 200 and not error:
             text = "\n".join(c.get("text", "") for c in result.get("content") or [] if c.get("type") == "text")

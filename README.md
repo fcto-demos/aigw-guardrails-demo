@@ -26,7 +26,7 @@ Three components, wired together:
 | Model failover | A model goes down; the next request is answered by another one |
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Semantic caching | A reworded question is answered from cache — no model call, no tokens |
-| Prompt injection guardrail | The request is refused before any model is called |
+| Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
 
@@ -40,6 +40,7 @@ reply, with what the gateway did.
 |---|---|
 | Agent with MCP tools | The agent reads and changes the account; no rule applied |
 | Tool access control | The gateway hides `change_plan`: the agent can't call what it can't see |
+| Tool argument check | The gateway checks each `change_plan` call's arguments: switching to Plus goes through, to Unlimited is refused before the server sees it |
 | Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per conversation; the 4th gets 429 |
 | Authentication | Without a signed-in user the gateway answers 401; the page signs you in, as any MCP client would |
 | Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
