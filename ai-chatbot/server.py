@@ -25,6 +25,7 @@ import argparse
 import base64
 import hashlib
 import http.cookies
+import io
 import itertools
 import json
 import os
@@ -768,6 +769,18 @@ def gateway_meta(headers, streamed=True):
     return meta
 
 
+def guardrail_verdict(raw):
+    """True when a guardrail replaced the model's answer with its verdict. One
+    that steps in after the gateway has started the reply can only swap the
+    body: the status stays 200."""
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return False
+    message = body.get("message") if isinstance(body, dict) else None
+    return isinstance(message, dict) and message.get("action") == "GUARDRAIL_INTERVENED"
+
+
 def classify_gateway_error(status, headers, body, showcase):
     """Did the gateway refuse on purpose, or did it break?
 
@@ -1261,6 +1274,18 @@ class Handler(BaseHTTPRequestHandler):
 
         ctype = (response.headers.get("content-type") or "").lower()
         streamed = "text/event-stream" in ctype
+        if not streamed:
+            raw = response.read()
+            response.close()
+            if guardrail_verdict(raw):
+                self.log_message("[%s] a guardrail replaced the answer: %s", showcase_id, raw[:400])
+                payload = {"error": "a gateway policy blocked the model's answer",
+                           "gatewayOutcome": "policy_block", "showcase": showcase_id,
+                           "gatewayBody": raw.decode("utf-8", "replace")[:4000]}
+                payload.update(gateway_meta(response.headers))
+                return self._json(422, payload)
+            headers, response = response.headers, io.BytesIO(raw)
+            response.headers = headers
         relay = wire["relayStream" if streamed else "relayWhole"]
         try:
             relay(self, response)

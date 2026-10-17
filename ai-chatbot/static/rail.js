@@ -254,7 +254,8 @@ export function evaluateExpect(expect, turn) {
    * An unexpected refusal is the most useful thing the rail can report. */
   const unexpected = !expect || !(expect.blocked || expect.gatewayStatus);
   if (unexpected && turn.outcome !== 'ok') {
-    return { ok: false, text: OUTCOME_TEXT[turn.outcome] || turn.outcome };
+    return { ok: false, text: turn.afterModel ? 'blocked by a gateway policy after the model answered'
+                                              : OUTCOME_TEXT[turn.outcome] || turn.outcome };
   }
 
   /* No expectation declared at all -- the cost-routing steps are deliberately
@@ -265,9 +266,12 @@ export function evaluateExpect(expect, turn) {
   if (!expect) return ran(turn);
 
   if (expect.blocked) {
-    return turn.outcome === 'blocked' && !turn.outputTokens
-      ? { ok: true, text: 'blocked at the gateway · 0 tokens · the model was never called' }
-      : { ok: false, text: 'not blocked, outcome was ' + turn.outcome };
+    if (turn.outcome !== 'blocked' || turn.outputTokens) {
+      return { ok: false, text: 'not blocked, outcome was ' + turn.outcome };
+    }
+    return { ok: true, text: turn.afterModel
+      ? 'the answer was blocked at the gateway before the customer saw it'
+      : 'blocked at the gateway · 0 tokens · the model was never called' };
   }
 
   if (expect.gatewayStatus) {

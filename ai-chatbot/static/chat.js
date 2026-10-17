@@ -91,8 +91,14 @@ export async function ask(question, origin) {
       /* A guardrail's assessment header rides on the 400, so this is the one
        * response the disclosure most needs to show. */
       showHeaders(turn.headers);
-      turn.inputTokens = 0;
-      turn.outputTokens = 0;
+      /* A guardrail on the answer steps in after the model has replied, so the
+       * tokens were spent; one on the request stops the call before it. */
+      let verdict = {};
+      try { verdict = JSON.parse(payload.gatewayBody).message || {}; }
+      catch (e) { /* not a guardrail body */ }
+      turn.afterModel = verdict.direction === 'RESPONSE';
+      turn.inputTokens = turn.afterModel ? null : 0;
+      turn.outputTokens = turn.afterModel ? null : 0;
 
       const outcome = payload.gatewayOutcome;
       turn.outcome = outcome === 'policy_block' || outcome === 'signin_required' ? 'blocked'
@@ -117,9 +123,7 @@ export async function ask(question, origin) {
          * fault. The metrics strip carries the evidence: zero tokens.
          * Guardrails name themselves in the body, which tells apart two
          * guardrails on the same lane. */
-        let guard = '';
-        try { guard = JSON.parse(payload.gatewayBody).message.interveningGuardrail || ''; }
-        catch (e) { /* not a guardrail body */ }
+        const guard = verdict.interveningGuardrail || '';
         showRefusal('Blocked by a gateway policy' + (guard ? ': ' + guard : ''),
                     (payload.error || 'The request was refused.') + status,
                     payload.gatewayBody || '');
