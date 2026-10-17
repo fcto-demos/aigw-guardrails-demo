@@ -228,6 +228,15 @@ def lane_templates(provider: dict) -> dict:
                     "rules": [{"upperTokenLimit": 200, "type": "ratio", "value": 1.0},
                               {"upperTokenLimit": -1, "type": "ratio", "value": 0.6}]}}],
         },
+        # Every link in the answer must open (HTTP HEAD, 2xx or 3xx) before the
+        # customer sees it; a dead one blocks the answer with a 422.
+        "link-check": {
+            "context_suffix": "link-check", "displayName": "Link Check", "wired": True,
+            "globalPolicies": [{"name": "url-guardrail", "version": "v1", "params": {
+                "request": {"enabled": False},
+                "response": {"enabled": True, "jsonPath": provider["responseContentPath"],
+                             "showAssessment": True}}}],
+        },
         "prompt-decoration": {
             "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,
             "globalPolicies": [{"name": "prompt-decorator", "version": "v1", "params": {

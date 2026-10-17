@@ -63,6 +63,7 @@ wso2-api-platform-ai-demo/
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
+| Link check | Every link in an answer must open before the customer sees it: a help page that no longer exists blocks the answer |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
 | Prompt compression | The gateway compresses the system prompt, and long messages, before the model reads them: about a fifth fewer input tokens, same answers |
 

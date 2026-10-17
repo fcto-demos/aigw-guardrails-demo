@@ -1001,6 +1001,62 @@
     "notes": "aws-bedrock-guardrail v1.2.1 calls Bedrock's ApplyGuardrail with the guardrail, region and IAM credentials from secrets/content-safety.env, read by the gateway through config.toml, so no AWS secret is stored in the proxy definition. It checks the visitor's last message before the model, and the model's answer before the visitor sees it. The answer check needs the whole reply, so this card does not stream. Bedrock guardrails can also deny topics, filter words and mask PII: whatever the guardrail in AWS is set to do, the gateway enforces."
   },
   {
+    "id": "link-check",
+    "group": "Safety",
+    "contextSuffix": "link-check",
+    "title": "Link check",
+    "tagline": "Every link in an answer must open before the customer sees it.",
+    "capability": "url-guardrail v1.0.1",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "url-guardrail v1.0.1",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [
+      "blocked"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "overrides": {
+      "systemPrompt": "You are the AI assistant for {brand}, a mobile network operator. Be warm, concise and practical. Never name, recommend or compare real-world mobile operators, networks or consumer brands. Refer to the operator only as {brand}. {brand}'s website is https://example.com, and its help page on the roaming zones is https://example.com/roaming-zones. When a customer asks where to read about something online, give them the link. Write every link in full, starting with https://, as plain text: never as a Markdown link and never inside brackets or parentheses."
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A link that works",
+        "sends": [
+          {
+            "ask": "What is your website address?",
+            "expect": {
+              "text": "The answer gives https://example.com. The gateway opened it before the answer left: it works, so the answer goes through."
+            }
+          }
+        ]
+      },
+      {
+        "n": 2,
+        "title": "A link that no longer works",
+        "sends": [
+          {
+            "ask": "Where can I read about the roaming zones online?",
+            "expect": {
+              "blocked": true,
+              "text": "The answer passes on https://example.com/roaming-zones, the page the assistant was given. That page no longer exists: the gateway gets a 404 and blocks the answer (url-guardrail), with the dead link in the details."
+            }
+          }
+        ],
+        "notes": "The same check catches a link the model makes up: any link that does not open is stopped, whoever wrote it."
+      }
+    ],
+    "notes": "url-guardrail v1.0.1 on the response: each link in the answer gets an HTTP HEAD from the gateway, which must return 2xx or 3xx within 3 seconds. The card's prompt gives the brand a real address, https://example.com, and a help page under it that does not exist, as a knowledge base can go out of date. A DNS-only check would let it through: the domain exists, the page does not. The prompt asks for bare links because the policy's link pattern keeps a closing parenthesis, so a Markdown link [text](url) always fails the check (still the case on the policy's main branch). When the gateway has already started sending the reply, as with Anthropic here, the policy can only replace its body, so the status stays 200: the app reads the verdict and shows the block. The policy also checks error replies: a provider error (Gemini's free-tier quota, for one) shows up as a block whose reason is that no answer text was found.",
+    "gateway": {
+      "stream": false,
+      "blockStatus": 422
+    }
+  },
+  {
     "id": "spend-limit",
     "group": "Cost and performance",
     "contextSuffix": "cost-limit",

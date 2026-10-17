@@ -217,6 +217,9 @@ function detailHtml(detail) {
       ...((assessments.wordPolicy || {}).customWords || []).map((w) => 'word "' + w.match + '"'),
     ];
     rows.push(['Tripped', hits.join(' · ') || JSON.stringify(assessments)]);
+  } else if (assessments && Array.isArray(assessments.invalidUrls)) {
+    // A link check lists the links that did not open.
+    rows.push(['Links that failed', assessments.invalidUrls.join(' · ')]);
   } else if (assessments) {
     rows.push(['Detail', JSON.stringify(assessments)]);
   }
