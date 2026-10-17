@@ -247,6 +247,25 @@ def read_secret(provider: dict) -> str:
     sys.exit(f"{provider['secretVar']} not set in {SECRETS_FILE}")
 
 
+# The Content safety card's cloud service. Left blank here, the card's lanes
+# are left out, so a run without it still works.
+CONTENT_SAFETY_FILE = ROOT / "secrets" / "content-safety.env"
+
+
+def _content_safety_conf() -> dict:
+    return _read_env_file(CONTENT_SAFETY_FILE) if CONTENT_SAFETY_FILE.exists() else {}
+
+
+def azure_safety_missing() -> str:
+    """What the Azure Content Safety card still needs; "" once it is set up."""
+    conf = _content_safety_conf()
+    endpoint = conf.get("AZURE_CONTENT_SAFETY_ENDPOINT", "")
+    if conf.get("AZURE_CONTENT_SAFETY_KEY") and endpoint.startswith("https://") and "<" not in endpoint:
+        return ""
+    return "an Azure Content Safety endpoint and key in secrets/content-safety.env"
+
+
+
 def gateway_verdict(status: int, body) -> str:
     """Classifies a probe response by WHO produced it, since a probe that
     gets through the gateway reaches the real upstream, whose own 401/404

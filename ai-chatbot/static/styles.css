@@ -700,7 +700,11 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   font-size: 11px;
   color: var(--muted);
 }
+/* A name too long for the card is cut, with the full name on hover. */
 .card-cap span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   background: var(--grey);
   border-radius: 6px;

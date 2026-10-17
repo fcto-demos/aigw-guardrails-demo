@@ -28,6 +28,11 @@ vector_db_provider_username = "default"
 vector_db_provider_password = "default"
 vector_db_provider_ttl = 3600
 
+# Content safety card (Azure Content Safety), set in
+# secrets/content-safety.env. Left blank, the card is not provisioned.
+azurecontentsafety_endpoint = '{{ env "AZURE_CONTENT_SAFETY_ENDPOINT" "" }}'
+azurecontentsafety_key = '{{ env "AZURE_CONTENT_SAFETY_KEY" "" }}'
+
 [analytics]
 enabled = '{{ env "APIP_GW_ANALYTICS_ENABLED" "false" }}'
 enabled_publishers = ["moesif"]

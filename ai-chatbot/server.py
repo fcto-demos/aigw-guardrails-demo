@@ -1021,6 +1021,11 @@ class Handler(BaseHTTPRequestHandler):
         out = []
         for entry in registry["list"]:
             url, source = resolve_gateway(entry, provider_id)
+            # A card whose lane was never provisioned has no gateway key of its
+            # own, and every call would be refused: show it as not wired.
+            if url and not entry.get("mcp") \
+                    and resolve_showcase(entry["id"], provider_id)["keySource"] != "showcase":
+                url, source = None, "not provisioned on this gateway yet, see the README"
             item = dict((k, v) for k, v in entry.items() if k != "gateway")
             item["configured"] = bool(url)
             item["streaming"] = (entry.get("gateway") or {}).get("stream") is not False

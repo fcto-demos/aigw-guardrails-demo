@@ -41,6 +41,9 @@ services:
       - path: ../secrets/idp.env
         required: false
         format: raw
+      - path: ../secrets/content-safety.env
+        required: false
+        format: raw
     # Named explicitly, not the whole secrets/api-keys.env as an env_file:
     # that file also holds the LLM provider keys, which this container has
     # no use for. Both resolved per-call (resolve_analytics() /
@@ -88,6 +91,9 @@ services:
         required: false
         format: raw
       - path: ../secrets/idp.env
+        required: false
+        format: raw
+      - path: ../secrets/content-safety.env
         required: false
         format: raw
     # Same reasoning as gateway-controller above. APIP_GW_ANALYTICS_ENABLED
