@@ -12,7 +12,7 @@
     "blockedBy": [],
     "policies": [
       "semantic-model-routing v0.9.0",
-      "llm-cost v1.1.0"
+      "llm-cost v1.2.0"
     ],
     "emphasis": [
       "model",
@@ -68,7 +68,7 @@
     "blockedBy": [],
     "policies": [
       "time-based-model-routing v0.9.1",
-      "llm-cost v1.1.0"
+      "llm-cost v1.2.0"
     ],
     "emphasis": [
       "model",
@@ -122,7 +122,7 @@
     "blockedBy": [],
     "policies": [
       "cost-based-model-routing v0.9.0",
-      "llm-cost v1.1.0"
+      "llm-cost v1.2.0"
     ],
     "gateway": {
       "stream": false
@@ -295,7 +295,7 @@
     "blockedBy": [],
     "policies": [
       "model-round-robin v1.1.1",
-      "llm-cost v1.1.0"
+      "llm-cost v1.2.0"
     ],
     "emphasis": [
       "model",
@@ -367,12 +367,12 @@
     "contextSuffix": "cache",
     "title": "Semantic caching",
     "tagline": "A reworded question is answered from cache — no model call, no tokens.",
-    "capability": "semantic-cache v1.2.0",
+    "capability": "semantic-cache v1.2.1",
     "status": "ready",
     "blockedBy": [],
     "policies": [
-      "semantic-cache v1.2.0",
-      "llm-cost v1.1.0"
+      "semantic-cache v1.2.1",
+      "llm-cost v1.2.0"
     ],
     "gateway": {
       "stream": false
@@ -443,19 +443,19 @@
         "notes": "The negative control. Similarity to step 1 is 0.799, far below the cut-off — the cache matches meaning, not spelling."
       }
     ],
-    "notes": "semantic-cache v1.2.0, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set — provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses — a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config — flush Redis or wait between rehearsals, or step 1 reports a hit."
+    "notes": "semantic-cache v1.2.1, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set — provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses — a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config — flush Redis or wait between rehearsals, or step 1 reports a hit."
   },
   {
     "id": "prompt-injection",
     "contextSuffix": "guardrail",
     "title": "Prompt injection guardrail",
     "tagline": "The request is refused before any model is called.",
-    "capability": "regex-guardrail v1.0.1",
+    "capability": "regex-guardrail v1.0.3",
     "status": "ready",
     "blockedBy": [],
     "policies": [
-      "regex-guardrail v1.0.1",
-      "llm-cost v1.1.0"
+      "regex-guardrail v1.0.3",
+      "llm-cost v1.2.0"
     ],
     "gateway": {
       "blockStatus": 422
@@ -516,7 +516,7 @@
     "blockedBy": [],
     "policies": [
       "pii-masking-regex v1.0.6",
-      "llm-cost v1.1.0"
+      "llm-cost v1.2.0"
     ],
     "gateway": {
       "stream": false
@@ -572,12 +572,12 @@
     ],
     "title": "LLM spend limit",
     "tagline": "The cost budget refuses traffic once the money is gone.",
-    "capability": "llm-cost v1.1.0 + llm-cost-based-ratelimit v1.1.1",
+    "capability": "llm-cost v1.2.0 + llm-cost-based-ratelimit v1.1.2",
     "status": "ready",
     "blockedBy": [],
     "policies": [
-      "llm-cost v1.1.0",
-      "llm-cost-based-ratelimit v1.1.1"
+      "llm-cost v1.2.0",
+      "llm-cost-based-ratelimit v1.1.2"
     ],
     "gateway": {
       "stream": false
@@ -641,8 +641,8 @@
     "status": "ready",
     "blockedBy": [],
     "policies": [
-      "llm-cost v1.1.0",
-      "llm-cost-based-ratelimit v1.1.1"
+      "llm-cost v1.2.0",
+      "llm-cost-based-ratelimit v1.1.2"
     ],
     "emphasis": [
       "model",
