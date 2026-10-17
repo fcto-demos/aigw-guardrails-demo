@@ -211,16 +211,33 @@ body {
   flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  display: flex;
+  flex-direction: column;
 }
 
 .transcript {
+  flex: 1 0 auto;
   padding: 28px 20px 8px;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.intro { padding: 24px 4px 8px; }
+/* An empty conversation greets from the middle of the space; once a refusal
+   shows under it, the greeting goes back to the top. */
+.transcript:has(> .intro:only-child) { justify-content: center; }
+.scroll:has(> .alert:not([hidden])) > .transcript { flex-grow: 0; }
+
+.intro { padding: 24px 4px 8px; text-align: center; }
+
+.intro-avatar {
+  display: inline-grid; place-items: center;
+  width: 60px; height: 60px; margin-bottom: 16px;
+  border-radius: 18px;
+  background: var(--text-strong); color: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.intro-avatar svg { width: 30px; height: 30px; }
 
 .intro h1 {
   margin: 0 0 8px;
@@ -230,9 +247,9 @@ body {
   color: var(--text-strong);
 }
 
-.intro p { margin: 0 0 22px; color: var(--text-muted); max-width: 46ch; }
+.intro p { margin: 0 auto 22px; color: var(--text-muted); max-width: 46ch; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 
 .chip {
   font: inherit; font-size: 14px; font-weight: 500;
@@ -976,7 +993,7 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 .rail {
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  background: var(--surface);
+  background: var(--bg);
   border-left: 1px solid color-mix(in srgb, var(--line-base) 9%, transparent);
   padding: 0 0 32px;
 }
@@ -990,7 +1007,22 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 }
 .rail-head h2 {
   margin: 0; font-size: 13px; font-weight: 700;
-  letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted);
+  letter-spacing: .05em; text-transform: uppercase; color: var(--text-strong);
+}
+/* Steps finished out of the total, with a bar along the bottom of the head. */
+.rail-progress {
+  margin-left: auto;
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.rail-bar {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+  background: var(--soft);
+}
+.rail-bar i {
+  display: block; height: 100%; width: 0;
+  background: var(--accent);
+  transition: width .3s ease;
 }
 .rail-close {
   display: none;
@@ -1023,13 +1055,28 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   white-space: nowrap;
 }
 
-.steps { list-style: none; margin: 0; padding: 14px 18px 0; }
+.steps { list-style: none; margin: 0; padding: 14px 14px 0; }
 
+/* Each step a card; the one to play next is outlined in the accent colour,
+   the finished ones step back. */
 .step {
-  border-top: 1px solid color-mix(in srgb, var(--line-base) 8%, transparent);
-  padding: 14px 0;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--line-base) 10%, transparent);
+  border-radius: 14px;
+  padding: 13px 14px 14px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--line-base) 6%, transparent);
+  transition: border-color .2s, box-shadow .2s, opacity .2s;
 }
-.step:first-child { border-top: 0; padding-top: 4px; }
+.step + .step { margin-top: 12px; }
+.step[data-current="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.step:not([data-current="true"]):is([data-state="passed"], [data-state="done"], [data-state="failed"]) { opacity: .8; }
+.step[data-current="true"][data-state="pending"] .step-verdict {
+  color: var(--accent-deep); background: color-mix(in srgb, var(--accent) 14%, transparent);
+  text-transform: uppercase; letter-spacing: .04em;
+}
 
 .step-head { display: flex; align-items: center; gap: 9px; }
 
@@ -1064,14 +1111,22 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 .step[data-state="failed"]  .step-verdict { color: var(--white); background: var(--error); }
 .step[data-state="done"]    .step-verdict { color: var(--text-muted); background: var(--surface-2); }
 
+/* What the presenter does, as opposed to what they ask: amber, tagged "Do". */
 .step-op {
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  background: var(--soft);
-  border-radius: 10px;
-  font-size: 12.5px;
+  margin: 12px 0 0;
+  padding: 9px 12px 10px;
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  border-left: 3px solid var(--warn);
+  border-radius: 8px;
+  font-size: 13px;
 }
-.step-op p { margin: 0 0 8px; color: var(--text-strong); }
+.op-tag {
+  display: inline-block; margin-bottom: 3px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--warn-ink);
+}
+.step-op p { margin: 0; color: var(--text); }
+.step-op pre { margin-top: 8px; }
 .step-op pre {
   margin: 0 0 8px;
   padding: 8px 10px;
@@ -1084,36 +1139,42 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 .step-op code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .copy-btn, .paste-btn {
-  font: inherit; font-size: 12px; font-weight: 600;
+  font: inherit; font-size: 12px; font-weight: 700;
   border-radius: 999px; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--line-base) 18%, transparent);
   background: var(--surface); color: var(--text-strong);
   padding: 4px 12px;
-  transition: border-color .15s ease, color .15s ease;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
 }
-.copy-btn:hover, .paste-btn:hover { border-color: var(--accent); color: var(--accent); }
-.paste-btn { margin-left: 6px; }
+.copy-btn:hover { border-color: var(--accent); color: var(--accent-deep); }
+/* Paste is the usual move: the question lands in the message box, ready to
+   send. Neither button is ever disabled while a turn is running. */
+.paste-btn { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--accent-text); }
+.paste-btn:hover { background: var(--accent-deep-hi); border-color: var(--accent-deep-hi); }
 
-/* The rail hands the prompt over rather than sending it, so the presenter
-   pastes it into the composer themselves. Copying is harmless mid-turn, so
-   unlike the old Send button this is never disabled while a turn is running. */
-.step-copy { margin-top: 2px; }
-
-.step-send { margin-top: 10px; }
+.step-send { margin-top: 12px; }
+/* The question to ask, as a bubble with its two buttons inside. */
 .step-q {
-  margin: 0 0 7px;
-  font-size: 14px;
-  color: var(--text);
-  background: var(--surface-2);
-  border-radius: 10px;
-  padding: 8px 11px;
+  background: var(--soft);
+  border-radius: 12px 12px 12px 4px;
+  padding: 10px 12px;
 }
-.step-result { margin: 7px 0 0; font-size: 12.5px; color: var(--text-muted); }
-.step-send[data-state="passed"] .step-result { color: var(--success-ink); }
-.step-send[data-state="failed"] .step-result { color: var(--error); font-weight: 600; }
+.step-q-text { margin: 0; font-size: 14px; color: var(--text); }
+.step-q-actions { display: flex; gap: 6px; margin-top: 9px; }
 
 .step-expect { margin: 9px 0 0; font-size: 13px; color: var(--text-muted); }
-.step-expect b { color: var(--text-strong); }
+.step-expect span {
+  display: block; margin-bottom: 1px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.step-result { margin: 7px 0 0; font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+.step-result:empty { display: none; }
+.step-send[data-state="passed"] .step-result { color: var(--success-ink); }
+.step-send[data-state="passed"] .step-result::before { content: '\2713  '; }
+.step-send[data-state="failed"] .step-result { color: var(--error); }
+.step-send[data-state="failed"] .step-result::before { content: '\2715  '; }
 
 .step-check { margin-top: 8px; font-size: 12.5px; }
 .step-check summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }

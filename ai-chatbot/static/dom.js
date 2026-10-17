@@ -61,6 +61,8 @@ export const alertMetrics = document.getElementById('alert-metrics');
 /* -- step rail ----------------------------------------------------------- */
 export const rail        = document.getElementById('rail');
 export const railTitle   = document.getElementById('rail-title');
+export const railProgress = document.getElementById('rail-progress');
+export const railBar     = document.getElementById('rail-bar');
 export const railPrereq  = document.getElementById('rail-prereq');
 export const stepsList   = document.getElementById('steps');
 export const headersBox  = document.getElementById('gw-headers');

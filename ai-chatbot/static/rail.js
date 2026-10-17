@@ -7,7 +7,9 @@
 'use strict';
 
 import { escapeHtml } from './markdown.js';
-import { rail, railTitle, railPrereq, stepsList, headersBox, input } from './dom.js';
+import {
+  rail, railTitle, railPrereq, stepsList, headersBox, input, railProgress, railBar,
+} from './dom.js';
 import { modelMatches } from './models.js';
 import { cacheState, headersHtml, turns } from './metrics.js';
 import { modelForRole } from './screens.js';
@@ -42,7 +44,7 @@ export function buildRail(showcase) {
   headersBox.querySelector('.gw-headers-body').innerHTML = '';
 
   document.body.dataset.rail = steps.length ? '' : 'none';
-  railTitle.textContent = steps.length ? 'Demo steps' : '';
+  railTitle.textContent = steps.length ? 'Demo script' : '';
 
   railPrereq.innerHTML = prereqHtml(showcase);
   stepsList.innerHTML = steps.map(stepHtml).join('');
@@ -53,6 +55,7 @@ export function buildRail(showcase) {
       sends: (step.sends || []).map(() => ({ state: 'pending', verdict: '', turn: null })),
     });
   }
+  updateProgress();
 }
 
 /* Before you start, as a callout the presenter can fold once read. Each item
@@ -78,24 +81,30 @@ function commandHtml(command) {
 }
 
 function stepHtml(step) {
+  /* What the presenter does (sign in, switch a setting) reads differently
+   * from what they ask, so the two are never confused on stage. */
   const op = step.operator
-    ? '<div class="step-op"><p>' + escapeHtml(step.operator.text || '') + '</p>'
+    ? '<div class="step-op"><span class="op-tag">Do</span><p>' + escapeHtml(step.operator.text || '') + '</p>'
       + (step.operator.command ? commandHtml(step.operator.command) : '')
       + '</div>'
     : '';
 
-  const sends = (step.sends || []).map((send, i) =>
-    '<div class="step-send" data-send="' + i + '" data-state="pending">'
-    + '<p class="step-q">' + escapeHtml(send.ask || '') + '</p>'
-    + '<button type="button" class="copy-btn step-copy" data-copy="'
-    + escapeHtml(send.ask || '') + '">Copy prompt</button>'
-    + '<button type="button" class="paste-btn step-copy" data-paste="'
-    + escapeHtml(send.ask || '') + '">Paste prompt</button>'
-    + (send.expect && send.expect.text
-        ? '<p class="step-expect"><b>Expect</b> ' + escapeHtml(send.expect.text) + '</p>'
-        : '')
-    + '<p class="step-result"></p>'
-    + '</div>').join('');
+  const sends = (step.sends || []).map((send, i) => {
+    const ask = escapeHtml(send.ask || '');
+    return '<div class="step-send" data-send="' + i + '" data-state="pending">'
+      + '<div class="step-q"><p class="step-q-text">' + ask + '</p>'
+      + '<div class="step-q-actions">'
+      + '<button type="button" class="paste-btn" data-paste="' + ask
+      + '" title="Put this question in the message box">Paste</button>'
+      + '<button type="button" class="copy-btn" data-copy="' + ask
+      + '" title="Copy this question">Copy</button>'
+      + '</div></div>'
+      + (send.expect && send.expect.text
+          ? '<p class="step-expect"><span>Expected</span>' + escapeHtml(send.expect.text) + '</p>'
+          : '')
+      + '<p class="step-result"></p>'
+      + '</div>';
+  }).join('');
 
   const contains = step.contains
     ? '<details class="step-check"><summary>Correct answer contains</summary><p>'
@@ -201,6 +210,25 @@ function renderStep(n) {
     row.dataset.state = slot.state;
     row.querySelector('.step-result').textContent = slot.verdict || '';
   });
+  updateProgress();
+}
+
+/* How far the script has got, and which step to play next: the first one
+ * not finished, marked "next" until it starts. */
+const FINISHED = ['passed', 'failed', 'done'];
+
+function updateProgress() {
+  const done = steps.filter((s) => FINISHED.includes(stepState.get(s.n).state)).length;
+  railProgress.textContent = steps.length ? done + ' / ' + steps.length : '';
+  railBar.style.width = steps.length ? (100 * done / steps.length) + '%' : '0';
+  const next = steps.find((s) => !FINISHED.includes(stepState.get(s.n).state));
+  for (const li of stepsList.querySelectorAll('.step')) {
+    const current = Boolean(next) && li.dataset.step === String(next.n);
+    li.dataset.current = current ? 'true' : '';
+    if (li.dataset.state === 'pending') {
+      li.querySelector('.step-verdict').textContent = current ? 'next' : '';
+    }
+  }
 }
 
 /* ---------- expectations ----------
@@ -405,8 +433,8 @@ function copyPrompt(button) {
   };
 
   const selectInstead = () => {
-    const q = button.parentNode.querySelector('.step-q')
-           || button.parentNode.querySelector('pre');
+    const box = button.closest('.step-send, .step-op, .prereq-item');
+    const q = box && box.querySelector('.step-q-text, pre');
     if (!q) { settle('Copy failed'); return; }
     const range = document.createRange();
     range.selectNodeContents(q);
