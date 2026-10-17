@@ -1466,8 +1466,7 @@
               "text": "change_plan(plan: Plus) goes through: Plus is one of the plans this channel may switch to."
             }
           }
-        ],
-        "notes": "Run ./scripts/reset-mcp.sh before the demo, so the account starts on Everyday."
+        ]
       },
       {
         "n": 2,
@@ -1601,6 +1600,102 @@
     }
   },
   {
+    "id": "mcp-tool-rewrite",
+    "group": "Tool governance",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp-rewrite",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": [
+        {
+          "name": "mcp-rewrite",
+          "version": "v1",
+          "params": {
+            "tools": [
+              {
+                "name": "browse_plans",
+                "target": "list_plans",
+                "description": "The plans a customer can switch to, with their data allowance and monthly price.",
+                "inputSchema": "{\"type\":\"object\",\"properties\":{}}"
+              },
+              {
+                "name": "my_subscription",
+                "target": "get_account_details",
+                "description": "The customer's current plan, data used this month and renewal date.",
+                "inputSchema": "{\"type\":\"object\",\"properties\":{}}"
+              },
+              {
+                "name": "switch_plan",
+                "target": "change_plan",
+                "description": "Move the customer to another plan. Takes effect immediately.",
+                "inputSchema": "{\"type\":\"object\",\"properties\":{\"plan\":{\"type\":\"string\",\"enum\":[\"Lite\",\"Everyday\",\"Plus\",\"Max\",\"Unlimited\"],\"description\":\"The plan to switch to.\"}},\"required\":[\"plan\"]}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "title": "Tool renaming",
+    "tagline": "The agent sees the tool names the gateway publishes, not the server's.",
+    "capability": "mcp-rewrite v1.1.0",
+    "policies": [
+      "mcp-rewrite v1.1.0"
+    ],
+    "intro": {
+      "chips": [
+        {
+          "label": "What plan am I on, and how much data have I used this month?",
+          "ask": "What plan am I on, and how much data have I used this month?"
+        },
+        {
+          "label": "Switch me to the Max plan.",
+          "ask": "Switch me to the Max plan."
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "The gateway's names",
+        "sends": [
+          {
+            "ask": "What plan am I on, and how much data have I used this month?",
+            "expect": {
+              "text": "The gateway offers browse_plans, my_subscription and switch_plan. The agent calls my_subscription, which the gateway forwards to the server's get_account_details."
+            }
+          }
+        ],
+        "notes": "Same MCP server as Agent with MCP tools, where the same tools are called list_plans, get_account_details and change_plan."
+      },
+      {
+        "n": 2,
+        "title": "A change, under the new name",
+        "sends": [
+          {
+            "ask": "Switch me to the Max plan.",
+            "expect": {
+              "text": "switch_plan(plan: Max) goes through: the server receives change_plan and makes the change."
+            }
+          }
+        ],
+        "notes": "If the server renames a tool, only the target in this policy changes: agents keep the names they know."
+      }
+    ],
+    "notes": "mcp-rewrite v1.1.0: each listed tool has the name and description the agent sees, its input schema, and a target, the server's own name. tools/list returns only these entries and tools/call is forwarded under the target name; a tool left out of the list is refused, as on Tool access control.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    }
+  },
+  {
     "id": "mcp-tools",
     "group": "Baseline",
     "mcp": {
@@ -1654,7 +1749,7 @@
         "notes": "The baseline for the next two cards: same server, same tools, no rule on the way."
       }
     ],
-    "notes": "One MCP proxy (/acme-mcp) in front of Acme's MCP server (mcp-servers/acme-mobile/server.py), no policy. The agent's model is the mcp.provider's plain-chat lane, in the OpenAI format; the app runs the tool loop itself (tools/list, then tools/call for each call the model asks for). The demo account starts on Everyday and keeps every change, across every MCP card, until the server restarts: run ./scripts/reset-mcp.sh before a demo.",
+    "notes": "One MCP proxy (/acme-mcp) in front of Acme's MCP server (mcp-servers/acme-mobile/server.py), no policy. The agent's model is the mcp.provider's plain-chat lane, in the OpenAI format; the app runs the tool loop itself (tools/list, then tools/call for each call the model asks for). Each chat opens its own MCP session, and the demo account starts on Everyday in each one.",
     "status": "ready",
     "blockedBy": [],
     "gateway": {

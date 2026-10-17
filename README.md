@@ -76,15 +76,14 @@ reply, with what the gateway did.
 | Agent with MCP tools | The agent reads and changes the account; no rule applied |
 | Tool access control | The gateway hides `change_plan`: the agent can't call what it can't see |
 | Tool argument check | The gateway checks each `change_plan` call's arguments: switching to Plus goes through, to Unlimited is refused before the server sees it |
-| Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per conversation; the 4th gets 429 |
+| Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per MCP session; the 4th gets 429 |
+| Tool renaming | The gateway publishes its own names for the tools (`switch_plan` for `change_plan`) and translates them on the way to the server |
 | Authentication | Without a signed-in user the gateway answers 401; the page signs you in, as any MCP client would |
 | Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
 
 The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
 Server or any other): see [.docs/mcp-identity-provider.md](.docs/mcp-identity-provider.md).
 
-Before a demo, `./scripts/reset-mcp.sh` puts the account back on the Everyday
-plan.
 
 ## Prerequisites
 
@@ -156,7 +155,6 @@ First run takes a few minutes.
 ./scripts/run-local.sh      # start again — keeps existing data
 ./scripts/stop-local.sh     # stop everything
 ./scripts/logs-local.sh     # tail every component's logs together
-./scripts/reset-mcp.sh      # MCP demo account back on the Everyday plan
 
 # Content safety, once secrets/content-safety.env is filled in after the first run
 ./scripts/python/provision_showcases.py content-safety mistral-content-safety gemini-content-safety
