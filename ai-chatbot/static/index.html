@@ -68,6 +68,12 @@
         <span class="route" id="route" data-idle="true"
               title="The model that actually served the last reply, read back from the gateway's message_start event. The gateway's routing policies choose it; this page does not.">no reply yet</span>
 
+        <label class="tier" id="tier" hidden
+               title="Stands in for the customer's tier, which in production the gateway reads from the signed-in customer's token.">
+          <span class="control-label">Customer tier</span>
+          <select id="tier-select"></select>
+        </label>
+
         <span class="signin" id="signin" hidden
               title="This card's MCP proxy runs mcp-auth: tools are only reachable with a signed-in user's token. Signing in goes to the identity provider the proxy's metadata names.">
           <span class="signin-who" id="signin-who"></span>

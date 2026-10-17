@@ -11,7 +11,7 @@ import { renderMarkdown, escapeHtml } from './markdown.js';
 import {
   transcript, intro, form, input, sendBtn, clearBtn,
   alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, toolCallHtml, setBusy,
-  showError, showRefusal, clearError, showRoute, showBudget,
+  showError, showRefusal, clearError, showRoute, showBudget, tierBox, tierSelect,
   markBudgetExhausted, showSpendMeter, scrollDown, resetRoute, signinBox,
 } from './dom.js';
 import { activeId, activeShowcase, activeProvider, onSessionReset } from './screens.js';
@@ -73,7 +73,8 @@ export async function ask(question, origin) {
       headers: { 'content-type': 'application/json' },
       /* A showcase *id*, never a URL. The server owns the id-to-provider
        * mapping; see the comment at the lookup in server.py. */
-      body: JSON.stringify({ messages, showcase: activeId, provider: activeProvider, conversation }),
+      body: JSON.stringify({ messages, showcase: activeId, provider: activeProvider, conversation,
+                             tier: tierBox.hidden ? undefined : tierSelect.value }),
       signal: inFlight.signal,
     });
 

@@ -18,6 +18,8 @@ export const llmSelect   = document.getElementById('llm-provider');
 
 /* -- control strip ------------------------------------------------------- */
 export const routeEl     = document.getElementById('route');
+export const tierBox     = document.getElementById('tier');
+export const tierSelect  = document.getElementById('tier-select');
 export const signinBox   = document.getElementById('signin');
 export const signinWho   = document.getElementById('signin-who');
 export const signinLink  = document.getElementById('signin-link');

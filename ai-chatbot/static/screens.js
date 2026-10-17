@@ -16,7 +16,7 @@ import {
   brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
   intro, introHead, introBody, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
-  showSpendMeter, signinBox, signinWho, signinLink,
+  showSpendMeter, signinBox, signinWho, signinLink, tierBox, tierSelect,
 } from './dom.js';
 import { buildRail, closeRail, showHeaders } from './rail.js';
 import { setEmphasis, resetTurns } from './metrics.js';
@@ -273,6 +273,12 @@ function mountShowcase(showcase) {
   setIdleStatus(showcase.gatewayContext ? 'via ' + showcase.gatewayContext : 'no provider wired');
 
   refreshSignin(showcase);
+
+  /* Cards that route on the customer's tier get a selector for it. */
+  const tiers = (showcase.route && showcase.route.tiers) || [];
+  tierBox.hidden = !tiers.length;
+  tierSelect.innerHTML = tiers.map((t) => '<option value="' + escapeHtml(t) + '">'
+    + escapeHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</option>').join('');
 
   const notice = noticeFor(showcase);
   noticeBox.hidden = !notice;

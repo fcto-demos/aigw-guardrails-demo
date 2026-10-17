@@ -754,6 +754,19 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 }
 
 
+/* ---------- customer tier (Customer tier routing) ---------- */
+
+.tier { display: flex; align-items: center; gap: 8px; }
+.tier[hidden] { display: none; }
+.tier select {
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--navy); background: var(--white);
+  border: 1px solid rgba(13, 17, 103, .22); border-radius: 999px;
+  padding: 4px 10px; cursor: pointer;
+}
+.tier select:hover { border-color: var(--magenta); }
+
+
 /* ---------- MCP sign-in (cards behind mcp-auth) ---------- */
 
 .signin { display: flex; align-items: center; gap: 10px; margin-left: auto; }

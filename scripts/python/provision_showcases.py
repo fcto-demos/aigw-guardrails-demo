@@ -481,57 +481,89 @@ PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
 # gateway's transformers only go openai-to-<other>, and one is attached when
 # routedProvider speaks something else.
 #
+# tier-routing: llm-header-router reads the customer's tier from a request
+# header and switches upstream: "standard" to defaultProvider's small model,
+# "premium" to routedProvider's large one. The client names no model: each
+# provider's transformer, attached after the router, supplies it. They are
+# attached as policies rather than declared on additionalProviders, whose
+# transformer params (the model) gateway 1.2.0 does not apply.
+#
 # Both providers are referenced only (existingProviders): the per-provider
 # loop owns them.
 # =============================================================================
-def cross_provider_lanes() -> dict:
-    route = showcase("intelligent-routing").get("route") or {}
+def _route_providers(card_id: str):
+    """(defaultProvider, routedProvider) of a card's route block, or Nones
+    when either is disabled in providers.json."""
+    route = showcase(card_id).get("route") or {}
     default = PROVIDER_BY_ID.get(route.get("defaultProvider"))
     routed = PROVIDER_BY_ID.get(route.get("routedProvider"))
-    if default is None or routed is None:   # disabled in providers.json
-        return {}
-    if default["wire"] != "openai":
-        sys.exit(f"showcases.json: intelligent-routing's defaultProvider must speak the OpenAI "
+    if default and default["wire"] != "openai":
+        sys.exit(f"showcases.json: {card_id}'s defaultProvider must speak the OpenAI "
                  f"format, {default['id']!r} speaks {default['wire']!r}")
-    additional = {"id": routed["providerId"], "as": routed["id"]}
-    if routed["wire"] != default["wire"]:
-        additional["transformer"] = {"type": f"openai-to-{routed['wire']}", "version": "v0", "params": {}}
+    return default, routed
+
+
+def _cross_lane(card_id: str, display_name: str, default: dict, routed: dict,
+                additional: list, policies: list) -> dict:
+    """What every cross-provider lane shares. policies is [(name, params)],
+    in order, OPERATION scoped like the other routers: requestModel is only
+    injected from the provider template for operation-scoped attachments."""
     path = default["messagesSuffix"]
     return {
-        "intelligent-routing": {
-            "id": "intelligent-routing", "base_id": "intelligent-routing",
-            "providerId": None,  # cross-provider: not part of any per-provider loop
-            "context": route["context"], "messagesSuffix": path,
-            "displayName": "Intelligent Routing",
-            "displayPrefix": f"{routed['displayName']} + {default['displayName']}",
-            "providerRef": default["providerId"],
-            "existingProviders": [default["providerId"], routed["providerId"]],
-            "appId": routed["appId"],
-            "additionalProviders": [additional],
-            "globalPolicies": [],
-            # OPERATION scope, like the other routers: requestModel is only
-            # injected from the provider template for operation-scoped
-            # attachments.
-            "operationPolicies": [{"name": "intelligent-model-routing", "version": "v0", "paths": [{
-                "path": path, "methods": ["POST"], "params": {
-                    "contentPath": "$.messages[-1].content",
-                    "routingRules": [
-                        {"name": "Complex plan analysis",
-                         "context": ("Questions about mobile plans, tariffs or roaming that need reasoning across "
-                                     "several facts: comparing plans, working out total cost over months or a year, "
-                                     "combining data usage, travel and add-ons, or choosing between contract lengths."),
-                         "provider": routed["id"], "model": routed["models"]["large"]},
-                        {"name": "Simple product question",
-                         "context": ("Short single-fact questions about the operator's products and services: whether "
-                                     "a feature is supported (eSIM, 5G, wifi calling), what a term means (PAC code, PUK, "
-                                     "rollover), one plan's price or allowance, or basic account and billing help."),
-                         "provider": routed["id"], "model": routed["models"]["small"]},
-                    ],
-                    "defaultModel": default["models"]["small"],
-                }}]}],
-            "config": {"api_key_var": env_key("intelligent-routing", "API_KEY", DEFAULT_PROVIDER_ID)},
-        },
+        "id": card_id, "base_id": card_id,
+        "providerId": None,  # cross-provider: not part of any per-provider loop
+        "context": showcase(card_id)["route"]["context"], "messagesSuffix": path,
+        "displayName": display_name,
+        "displayPrefix": f"{routed['displayName']} + {default['displayName']}",
+        "providerRef": default["providerId"],
+        "existingProviders": [default["providerId"], routed["providerId"]],
+        "appId": routed["appId"],
+        "additionalProviders": additional,
+        "globalPolicies": [],
+        "operationPolicies": [{"name": name, "version": "v0", "paths": [{
+            "path": path, "methods": ["POST"], "params": params}]} for name, params in policies],
+        "config": {"api_key_var": env_key(card_id, "API_KEY", DEFAULT_PROVIDER_ID)},
     }
+
+
+def cross_provider_lanes() -> dict:
+    lanes = {}
+    default, routed = _route_providers("intelligent-routing")
+    if default and routed:
+        additional = {"id": routed["providerId"], "as": routed["id"]}
+        if routed["wire"] != default["wire"]:
+            additional["transformer"] = {"type": f"openai-to-{routed['wire']}", "version": "v0", "params": {}}
+        lanes["intelligent-routing"] = _cross_lane(
+            "intelligent-routing", "Intelligent Routing", default, routed, [additional],
+            [("intelligent-model-routing", {
+                "contentPath": "$.messages[-1].content",
+                "routingRules": [
+                    {"name": "Complex plan analysis",
+                     "context": ("Questions about mobile plans, tariffs or roaming that need reasoning across "
+                                 "several facts: comparing plans, working out total cost over months or a year, "
+                                 "combining data usage, travel and add-ons, or choosing between contract lengths."),
+                     "provider": routed["id"], "model": routed["models"]["large"]},
+                    {"name": "Simple product question",
+                     "context": ("Short single-fact questions about the operator's products and services: whether "
+                                 "a feature is supported (eSIM, 5G, wifi calling), what a term means (PAC code, PUK, "
+                                 "rollover), one plan's price or allowance, or basic account and billing help."),
+                     "provider": routed["id"], "model": routed["models"]["small"]},
+                ],
+                "defaultModel": default["models"]["small"],
+            })])
+
+    default, routed = _route_providers("tier-routing")
+    if default and routed:
+        tiers = {"standard": (default, "small"), "premium": (routed, "large")}
+        lanes["tier-routing"] = _cross_lane(
+            "tier-routing", "Customer Tier Routing", default, routed,
+            [{"id": prov["providerId"], "as": tier} for tier, (prov, _) in tiers.items()],
+            [("llm-header-router", {
+                "headerName": showcase("tier-routing")["route"]["header"], "defaultProvider": "standard",
+                "mappings": [{"headerValue": tier, "provider": tier} for tier in tiers]})]
+            + [(f"openai-to-{prov['id']}-transformer", {"providerId": tier, "model": prov["models"][size]})
+               for tier, (prov, size) in tiers.items()])
+    return lanes
 
 
 ALL_LANES = {}

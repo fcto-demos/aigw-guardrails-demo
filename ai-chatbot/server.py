@@ -103,6 +103,8 @@ def _build_upstream_openai(showcase, messages, prompt):
     wire_messages = ([{"role": "system", "content": prompt}] if prompt else []) + messages
     upstream = {"model": showcase["model"], "max_tokens": showcase["maxTokens"],
                 "stream": showcase["stream"], "messages": wire_messages}
+    if showcase["model"] is None:   # the gateway picks it (Customer tier routing)
+        del upstream["model"]
     if showcase["stream"]:
         # Otherwise usage only ever comes back on the whole-response path --
         # OpenAI-compatible APIs omit it from stream chunks unless asked.
@@ -611,6 +613,7 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     own_key = _sc_conf(showcase_id, "API_KEY", conf_provider)
     # MCP proxies take no key (the platform issues keys for LLM resources only).
     fallback_key = CONF["GATEWAY_API_KEY"] if conf_provider == DEFAULT_PROVIDER_ID and not mcp else ""
+    tiers = (entry.get("route") or {}).get("tiers") or []
     return {
         "id": showcase_id,
         "title": entry.get("title") or showcase_id,
@@ -624,7 +627,11 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         # the operation are both part of the path) builds the real request
         # URL from. None when there's no context at all (unwired).
         "baseUrl": (gateway_base() + context) if context else None,
-        "model": str(model),
+        # A card with tiers names no model: the gateway picks the provider and
+        # the model from the tier header.
+        "model": None if tiers else str(model),
+        "tiers": tiers,
+        "tierHeader": (entry.get("route") or {}).get("header"),
         "stream": bool(stream),
         "maxTokens": _clamp_tokens(tokens, CONF["MAX_TOKENS"]),
         "systemPrompt": system_prompt(prompt),
@@ -1162,6 +1169,12 @@ class Handler(BaseHTTPRequestHandler):
         # that. This is the gateway-side api-key-auth credential, per lane.
         if showcase["apiKey"]:
             headers[CONF["GATEWAY_API_KEY_HEADER"]] = showcase["apiKey"]
+        # The tier selector stands in for a claim of the signed-in customer's
+        # token. Only the card's own tiers reach the gateway; anything else is
+        # the first one.
+        if showcase["tiers"]:
+            tier = payload.get("tier")
+            headers[showcase["tierHeader"]] = tier if tier in showcase["tiers"] else showcase["tiers"][0]
 
         request = urllib.request.Request(
             url, data=json.dumps(upstream).encode(),
