@@ -220,8 +220,13 @@ MCP_PROMPT = ("You are talking to a signed-in customer. The only actions you can
               "their account are these tools: %s. You have no other way to change anything. "
               "Never say you have changed something unless one of these tools returned a "
               "successful result for that change. If none of them can do what the customer "
-              "asks, or a call is refused, say plainly that you can't do it from here and "
-              "suggest the app instead.")
+              "asks, say plainly that you can't do it from here and suggest the app instead. "
+              "A tool result that starts with \"Refused\" means the company's rules do not "
+              "allow that action through this assistant: it is a decision, not a fault. Your "
+              "reply must then start by saying clearly that you can't make this change here, "
+              "and point them to the app or an advisor. Never say something went wrong, never "
+              "suggest trying again, never call the same tool again for it, and do not offer "
+              "other changes you have not checked.")
 
 # Sign-ins in flight for the MCP cards that need one, by OAuth state: the
 # PKCE verifier and where to return. Lost on restart, like any login page.
@@ -1467,7 +1472,10 @@ class Handler(BaseHTTPRequestHandler):
         elif status == 200:
             text, outcome = "The tool failed: %s" % error, "tool_error"
         else:
-            text = "Refused (HTTP %s): %s" % (status, error or "no detail")
+            # Worded as a decision: a small model reads "failed" as a fault and
+            # tells the customer to try again.
+            text = ("Refused by the gateway: a rule, not a fault. Do not retry. "
+                    "(HTTP %s: %s)" % (status, error or "no detail"))
             outcome = "rate_limited" if status == 429 else "refused" if status in (400, 401, 403) else "error"
         return {"name": name, "arguments": args, "gatewayStatus": status,
                 "outcome": outcome, "result": text[:4000]}

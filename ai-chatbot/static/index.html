@@ -68,9 +68,6 @@
         <span class="route" id="route" data-idle="true"
               title="The model that actually served the last reply, read back from the gateway's message_start event. The gateway's routing policies choose it; this page does not.">no reply yet</span>
 
-        <span class="provider-tag" id="provider" hidden
-              title="The LLM provider on the gateway this showcase talks to. Each showcase has its own, with its policy already attached."></span>
-
         <span class="signin" id="signin" hidden
               title="This card's MCP proxy runs mcp-auth: tools are only reachable with a signed-in user's token. Signing in goes to the identity provider the proxy's metadata names.">
           <span class="signin-who" id="signin-who"></span>
@@ -120,7 +117,7 @@
             </div>
             <p id="alert-body"></p>
             <div class="metrics" id="alert-metrics" hidden></div>
-            <pre id="alert-detail" hidden></pre>
+            <div class="alert-detail" id="alert-detail" hidden></div>
           </div>
 
         </div>

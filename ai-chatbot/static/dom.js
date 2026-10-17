@@ -18,7 +18,6 @@ export const llmSelect   = document.getElementById('llm-provider');
 
 /* -- control strip ------------------------------------------------------- */
 export const routeEl     = document.getElementById('route');
-export const providerTag = document.getElementById('provider');
 export const signinBox   = document.getElementById('signin');
 export const signinWho   = document.getElementById('signin-who');
 export const signinLink  = document.getElementById('signin-link');
@@ -129,13 +128,15 @@ const TOOL_OUTCOMES = {
   error:        ['!', 'failed'],
 };
 
-export function toolCallHtml(call) {
+export function toolCallHtml(call, policy) {
   const [icon, label] = TOOL_OUTCOMES[call.outcome] || TOOL_OUTCOMES.error;
+  // "refused by the gateway" names the policy when the card tells us which.
+  const said = policy ? label.replace('the gateway', '<b>' + escapeHtml(policy) + '</b>') : label;
   return '<details class="tool-call is-' + escapeHtml(call.outcome || 'error') + '">'
     + '<summary><span class="tool-icon" aria-hidden="true">' + icon + '</span>'
     + '<code>' + escapeHtml(call.name || '?') + '(' + escapeHtml(JSON.stringify(call.arguments || {}))
     + ')</code><span class="tool-status">HTTP ' + escapeHtml(String(call.gatewayStatus))
-    + ' · ' + label + '</span></summary>'
+    + ' · ' + said + '</span></summary>'
     + '<pre>' + escapeHtml(call.result || '') + '</pre></details>';
 }
 
@@ -171,17 +172,34 @@ function railIsOpen() {
 export function showError(title, body, detail) {
   alertTitle.textContent = title;
   alertBody.textContent = body;
-  if (detail) {
-    alertDetail.textContent = detail;
-    alertDetail.hidden = false;
-  } else {
-    alertDetail.hidden = true;
-  }
+  alertDetail.innerHTML = detail ? detailHtml(detail) : '';
+  alertDetail.hidden = !detail;
   alertBox.hidden = false;
   alertBox.classList.remove('is-refusal');
   statusEl.classList.add('is-error');
   statusText.textContent = 'gateway error';
   scrollDown(true);
+}
+
+/* The gateway's own words, readable from the back of the room. A guardrail
+ * answers with a JSON body; its reason and assessment are pulled out as plain
+ * lines, and the raw body stays one click away. Anything else is shown as is. */
+function detailHtml(detail) {
+  let body = null;
+  try { body = JSON.parse(detail); } catch (e) { /* not JSON */ }
+  const message = body && typeof body.message === 'object' ? body.message : null;
+  const rows = [];
+  if (message && message.actionReason) rows.push(['Reason', message.actionReason]);
+  if (message && message.assessments) {
+    rows.push(['Detail', typeof message.assessments === 'string'
+      ? message.assessments : JSON.stringify(message.assessments)]);
+  }
+  if (!rows.length && body && typeof body.message === 'string') rows.push(['Reason', body.message]);
+  const raw = '<pre>' + escapeHtml(detail) + '</pre>';
+  if (!rows.length) return raw;
+  return '<dl class="verdict">'
+    + rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + escapeHtml(v) + '</dd>').join('')
+    + '</dl><details class="raw"><summary>Raw gateway response</summary>' + raw + '</details>';
 }
 
 /* A policy refusing on purpose is not a fault, and must not be painted like

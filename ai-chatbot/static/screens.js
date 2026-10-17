@@ -13,7 +13,7 @@
 
 import { escapeHtml } from './markdown.js';
 import {
-  brandProduct, cardsBox, providerTag, noticeBox, noticeTitle, noticeBody,
+  brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
   intro, introHead, introBody, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
   showSpendMeter, signinBox, signinWho, signinLink,
@@ -34,7 +34,8 @@ const INTRO_BODY = 'Ask me about plans, data, top-ups or roaming. Every answer '
 
 export const showcases = new Map();
 
-const PROVIDER_TAG_TITLE = providerTag.title;
+const STATUS_TITLE = 'The LLM provider on the gateway this showcase talks to. '
+  + 'Each showcase has its own, with its policy already attached.';
 
 export let activeId = null;
 export let activeShowcase = null;
@@ -183,12 +184,17 @@ function cardHtml(showcase) {
     needs.push(showcase.unwiredReason || 'no provider configured');
   }
 
+  /* One chip per policy, so a long pair never breaks in the middle of a name. */
+  const caps = (showcase.capability || '').split(' + ').filter(Boolean);
+
   return '<a class="card" href="#/' + encodeURIComponent(showcase.id) + '">'
     + badge(showcase)
-    + '<h2>' + escapeHtml(showcase.title || showcase.id) + '</h2>'
+    + '<h3>' + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
-    + (showcase.capability
-        ? '<p class="card-cap">' + escapeHtml(showcase.capability) + '</p>' : '')
+    + (caps.length
+        ? '<p class="card-cap">' + caps.map((c) => '<span>' + escapeHtml(c) + '</span>').join('')
+          + '</p>'
+        : '')
     + (needs.length
         ? '<ul class="card-needs">'
           + needs.map((n) => '<li>' + escapeHtml(n) + '</li>').join('')
@@ -197,14 +203,25 @@ function cardHtml(showcase) {
     + '</a>';
 }
 
+/* Cards are grouped by theme, groups in the order they first appear in
+ * showcases.json, so the page reads as a story rather than a flat list. */
 function renderCards() {
   const items = [...showcases.values()].filter((s) => pageOf(s) === activePage);
+  const groups = new Map();
+  for (const item of items) {
+    const name = item.group || '';
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(item);
+  }
   cardsBox.innerHTML =
     (registryError
       ? '<div class="notice"><strong>The registry did not load cleanly</strong>'
         + '<p>' + escapeHtml(registryError) + '</p></div>'
       : '')
-    + items.map(cardHtml).join('');
+    + [...groups].map(([name, cards]) => '<section class="card-group">'
+        + (name ? '<h2 class="group-title">' + escapeHtml(name) + '</h2>' : '')
+        + '<div class="card-grid">' + cards.map(cardHtml).join('') + '</div>'
+        + '</section>').join('');
 }
 
 /* ---------- mounting a showcase ---------- */
@@ -247,19 +264,12 @@ function mountShowcase(showcase) {
   brandProduct.textContent = showcase.title || 'AI Assistant';
   document.title = (showcase.title || 'AI Assistant') + ' · AI Gateway showcase';
 
-  providerTag.title = showcase.mcp
+  /* The status line names the provider, so the reminder that these cards are
+   * different providers, not different prompts, is always on screen. */
+  statusEl.title = showcase.mcp
     ? 'The MCP proxy on the gateway this card\'s tool calls go through, with its policy attached.'
-    : PROVIDER_TAG_TITLE;
-  if (showcase.gatewayContext) {
-    providerTag.textContent = showcase.gatewayContext;
-    providerTag.hidden = false;
-    /* The status line names the provider, so the reminder that these cards are
-     * different providers -- not different prompts -- is always on screen. */
-    setIdleStatus('via ' + showcase.gatewayContext);
-  } else {
-    providerTag.hidden = true;
-    setIdleStatus('no provider wired');
-  }
+    : STATUS_TITLE;
+  setIdleStatus(showcase.gatewayContext ? 'via ' + showcase.gatewayContext : 'no provider wired');
 
   refreshSignin(showcase);
 
@@ -330,6 +340,7 @@ function mountHome(page) {
   setPage(page);
   renderCards();
   setIdleStatus();
+  statusEl.title = '';
   activeId = null;
   activeShowcase = null;
   document.body.dataset.screen = 'home';

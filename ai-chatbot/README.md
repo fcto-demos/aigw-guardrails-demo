@@ -56,6 +56,7 @@ ai-chatbot/
 │   ├── chat.js          one turn: POST, SSE reader, failure handling
 │   ├── rail.js          the step rail and its expectations
 │   ├── metrics.js       per-turn measurements and their chips
+│   ├── pipeline.js      what the gateway did with each turn, policy by policy
 │   ├── spend.js         the estimated deep-model budget, for cost-based routing
 │   ├── models.js        model-id matching, shared by the rail and the meter
 │   ├── dom.js           element handles and DOM helpers

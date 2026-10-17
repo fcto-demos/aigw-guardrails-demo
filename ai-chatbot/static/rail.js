@@ -28,8 +28,8 @@ let steps = [];
 const VERDICT = {
   pending: '',
   running: 'running…',
-  passed: 'passed',
-  failed: 'failed',
+  passed: '✓ passed',
+  failed: '✕ failed',
   done: 'ran',
 };
 
@@ -361,7 +361,7 @@ rail.addEventListener('click', (e) => {
 function pastePrompt(button) {
   input.value = button.dataset.paste || '';
   input.dispatchEvent(new Event('input'));
-  if (window.matchMedia('(max-width: 1023px)').matches) closeRail();
+  if (railIsOverlay()) closeRail();
   if (!input.disabled) {
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);

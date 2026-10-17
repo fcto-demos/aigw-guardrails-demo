@@ -9,7 +9,7 @@
   --link:         #242EE0;
   --mint:         #1EE98A;
   --ink:          #303042;
-  --muted:        #7C7C9C;
+  --muted:        #5F5F82;   /* 6:1 on white, 5:1 on lavender */
   --grey:         #F0F1F4;
   --white:        #FFFFFF;
   --error:        #C4003F;
@@ -266,7 +266,9 @@ body {
 .tool-call summary::-webkit-details-marker { display: none; }
 .tool-call code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--navy); }
 .tool-call .tool-status { margin-left: auto; color: var(--muted); }
-.tool-call pre {
+.tool-call .tool-status b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.msg .tool-call pre {
+  background: none; border-radius: 0;
   margin: 0; padding: 4px 10px 8px;
   font-size: 11.5px; white-space: pre-wrap; word-break: break-word; color: var(--ink);
 }
@@ -397,6 +399,18 @@ body {
 }
 .alert.is-refusal .alert-head strong,
 .alert.is-refusal .alert-close { color: var(--navy); }
+
+.alert-detail { margin-top: 10px; }
+
+.verdict {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 14px;
+  margin: 0; font-size: 14px;
+}
+.verdict dt { font-weight: 700; color: var(--navy); }
+.verdict dd { margin: 0; color: var(--ink); word-break: break-word; }
+
+.alert .raw { margin-top: 8px; font-size: 12px; }
+.alert .raw summary { cursor: pointer; color: var(--muted); }
 
 .alert pre {
   margin: 10px 0 0;
@@ -633,11 +647,21 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 
 .home-head p { margin: 0 0 4px; color: var(--muted); }
 
-.cards {
+.cards { padding: 22px 20px 40px; }
+
+.card-group + .card-group { margin-top: 30px; }
+
+.group-title {
+  margin: 0 0 12px;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+.card-grid {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-  padding: 22px 20px 40px;
 }
 
 .card {
@@ -660,7 +684,7 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   box-shadow: 0 2px 4px rgba(13,17,103,.07), 0 14px 32px rgba(13,17,103,.10);
 }
 
-.card h2 {
+.card h3 {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
@@ -670,10 +694,18 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 
 .card p { margin: 0; font-size: 14px; color: var(--muted); }
 
+/* One chip per policy, so a long pair wraps between names, never inside one. */
 .card-cap {
+  display: flex; flex-wrap: wrap; gap: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   color: var(--muted);
+}
+.card-cap span {
+  white-space: nowrap;
+  background: var(--grey);
+  border-radius: 6px;
+  padding: 1px 7px;
 }
 
 .card-needs {
@@ -734,31 +766,6 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 }
 .signin-btn:hover { background: var(--lavender); border-color: var(--magenta); color: var(--magenta); }
 .signin.is-attention .signin-btn { background: var(--magenta); border-color: var(--magenta); color: var(--white); }
-
-/* ---------- provider tag ---------- */
-
-.provider-tag {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  color: var(--muted);
-  background: var(--grey);
-  border-radius: 999px;
-  padding: 4px 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
-}
-.provider-tag[hidden] { display: none; }
-
-/* Below the shell's full width the strip also carries the Steps toggle, and
-   the cost meter's numbers were losing to this tag. The topbar names the
-   provider in full one row above, so this is the item that can afford to give
-   way. Measured: 120px keeps the meter's figures inside the ellipsis at
-   1024px, which is the width a presenter mirroring to a projector gets. */
-@media (max-width: 1100px) {
-  .provider-tag { max-width: 120px; }
-}
 
 /* Lives in the white control strip, not the navy topbar, so it cannot inherit
    .ghost-btn's white-on-transparent -- that renders as white on white. */
@@ -901,16 +908,22 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   margin: 0; font-size: 14px; font-weight: 700; color: var(--navy);
   letter-spacing: -.01em;
 }
-.step-verdict { margin-left: auto; font-size: 11px; font-weight: 600; }
+.step-verdict {
+  margin-left: auto;
+  font-size: 11.5px; font-weight: 700; white-space: nowrap;
+  border-radius: 999px; padding: 2px 9px;
+}
+.step-verdict:empty { display: none; }
 
 .step[data-state="running"] .step-n { background: var(--navy); color: var(--white); }
 .step[data-state="passed"]  .step-n { background: var(--mint); color: var(--navy-deep); }
 .step[data-state="failed"]  .step-n { background: var(--error); color: var(--white); }
 .step[data-state="done"]    .step-n { background: var(--lavender); color: var(--navy); }
 
-.step[data-state="passed"] .step-verdict { color: #0A6B41; }
-.step[data-state="failed"] .step-verdict { color: var(--error); }
-.step[data-state="done"]   .step-verdict { color: var(--muted); }
+.step[data-state="running"] .step-verdict { color: var(--navy); background: var(--lavender); }
+.step[data-state="passed"]  .step-verdict { color: #0A6B41; background: rgba(30, 233, 138, .2); }
+.step[data-state="failed"]  .step-verdict { color: var(--white); background: var(--error); }
+.step[data-state="done"]    .step-verdict { color: var(--muted); background: var(--grey); }
 
 .step-op {
   margin: 10px 0 0;
@@ -950,17 +963,17 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 .step-send { margin-top: 10px; }
 .step-q {
   margin: 0 0 7px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
   background: var(--grey);
   border-radius: 10px;
   padding: 8px 11px;
 }
-.step-result { margin: 7px 0 0; font-size: 12px; color: var(--muted); }
+.step-result { margin: 7px 0 0; font-size: 12.5px; color: var(--muted); }
 .step-send[data-state="passed"] .step-result { color: #0A6B41; }
 .step-send[data-state="failed"] .step-result { color: var(--error); font-weight: 600; }
 
-.step-expect { margin: 9px 0 0; font-size: 12.5px; color: var(--muted); }
+.step-expect { margin: 9px 0 0; font-size: 13px; color: var(--muted); }
 .step-expect b { color: var(--navy); }
 
 .step-check { margin-top: 8px; font-size: 12.5px; }
@@ -979,6 +992,47 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   word-break: break-all;
 }
 .gw-headers-body b { color: var(--navy); font-weight: 600; }
+
+
+/* ---------- what the gateway did ----------
+   One row per turn: each policy on the lane, then the model. Navy is the
+   gateway acting on purpose, as on the refusal strip; dashed is a step the
+   request never reached. */
+
+.pipeline {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 4px;
+  margin-top: 9px; padding-top: 9px;
+  border-top: 1px dashed rgba(13, 17, 103, .14);
+  font-size: 11.5px;
+}
+.metrics > .pipeline, #alert-metrics > .pipeline { flex-basis: 100%; }
+.pipe-label {
+  margin-right: 4px;
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted);
+}
+.pipe-step {
+  display: inline-flex; align-items: center; gap: 5px;
+  white-space: nowrap;
+  border: 1px solid transparent; border-radius: 999px;
+  padding: 2px 9px;
+  color: var(--ink);
+}
+.pipe-step i { font-style: normal; font-weight: 700; }
+.pipe-step b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600; color: var(--navy);
+}
+.pipe-step.is-ok      { background: rgba(30, 233, 138, .13); }
+.pipe-step.is-ok i    { color: #0A6B41; }
+.pipe-step.is-acted   { background: var(--lavender); border-color: rgba(13, 17, 103, .16); }
+.pipe-step.is-acted i { color: var(--magenta); }
+.pipe-step.is-blocked,
+.pipe-step.is-blocked b { background: var(--navy); color: var(--white); }
+.pipe-step.is-skipped { border: 1px dashed rgba(13, 17, 103, .25); color: var(--muted); }
+.pipe-step.is-skipped b { color: var(--muted); }
+.pipe-arrow { color: var(--muted); }
 
 
 /* ---------- focus, scrollbar, motion, small screens ---------- */
@@ -1042,7 +1096,8 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   .budget-bar { width: 64px; }
   .transcript { padding: 20px 14px 8px; }
   .home-head { padding: 24px 14px 4px; }
-  .cards { padding: 18px 14px 32px; gap: 12px; }
+  .cards { padding: 18px 14px 32px; }
+  .card-grid { gap: 12px; }
   .notice { margin: 14px 14px 0; }
   .composer-wrap { padding: 10px 14px 8px; }
   .msg { max-width: 92%; }
