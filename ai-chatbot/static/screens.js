@@ -17,6 +17,7 @@ import {
   intro, introHead, introBody, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
   showSpendMeter, signinBox, signinWho, signinLink, tierBox, tierSelect,
+  screenHome, scrollHint,
 } from './dom.js';
 import { buildRail, closeRail, showHeaders } from './rail.js';
 import { setEmphasis, resetTurns } from './metrics.js';
@@ -34,8 +35,8 @@ const INTRO_BODY = 'Ask me about plans, data, top-ups or roaming. Every answer '
 
 export const showcases = new Map();
 
-const STATUS_TITLE = 'The LLM provider on the gateway this showcase talks to. '
-  + 'Each showcase has its own, with its policy already attached.';
+const STATUS_TITLE = 'The LLM proxy on the gateway this showcase talks to: each '
+  + 'showcase has its own, with its policy attached, on a shared LLM provider.';
 
 export let activeId = null;
 export let activeShowcase = null;
@@ -204,6 +205,45 @@ function cardHtml(showcase) {
     + '</a>';
 }
 
+/* Each group's icon and, in one line, what it brings. */
+const GROUPS = {
+  'Routing and resilience': ['route', 'The gateway picks the provider and the model for each request, and keeps answering when one fails.'],
+  'Cost and performance': ['gauge', 'Fewer tokens and a capped bill: answers from cache, and a budget the gateway enforces.'],
+  'Safety': ['shield', 'What reaches the model, and what comes back, is checked at the gateway.'],
+  'Identity': ['user', 'Who is calling, and what they may do: tokens from your identity provider, checked at the gateway.'],
+  'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
+  'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
+};
+const ICONS = {
+  route: '<path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+  gauge: '<path d="M12 14l4-4M3.3 18a9 9 0 1 1 17.4 0"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-2.4z"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+};
+
+function groupHeadHtml(name, count) {
+  const [icon, text] = GROUPS[name] || ['chat', ''];
+  return '<header class="group-head">'
+    + '<span class="group-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + '</svg></span>'
+    + '<div><h2 class="group-title">' + escapeHtml(name) + '</h2>'
+    + (text ? '<p class="group-desc">' + escapeHtml(text) + '</p>' : '') + '</div>'
+    + '<span class="group-count">' + count + (count === 1 ? ' card' : ' cards') + '</span>'
+    + '</header>';
+}
+
+/* "More below" shows while the home page has more to scroll. */
+function updateScrollHint() {
+  const left = screenHome.scrollHeight - screenHome.scrollTop - screenHome.clientHeight;
+  scrollHint.classList.toggle('is-done', left < 24);
+}
+screenHome.addEventListener('scroll', updateScrollHint);
+window.addEventListener('resize', updateScrollHint);
+scrollHint.addEventListener('click', () =>
+  screenHome.scrollBy({ top: screenHome.clientHeight * 0.8, behavior: 'smooth' }));
+
 /* Cards are grouped by theme, groups in the order they first appear in
  * showcases.json, so the page reads as a story rather than a flat list. */
 function renderCards() {
@@ -220,9 +260,10 @@ function renderCards() {
         + '<p>' + escapeHtml(registryError) + '</p></div>'
       : '')
     + [...groups].map(([name, cards]) => '<section class="card-group">'
-        + (name ? '<h2 class="group-title">' + escapeHtml(name) + '</h2>' : '')
+        + (name ? groupHeadHtml(name, cards.length) : '')
         + '<div class="card-grid">' + cards.map(cardHtml).join('') + '</div>'
         + '</section>').join('');
+  requestAnimationFrame(updateScrollHint);
 }
 
 /* ---------- mounting a showcase ---------- */
@@ -348,6 +389,8 @@ export function resetSession() {
 }
 
 function mountHome(page) {
+  /* Each page starts at its top, not where the other one was left. */
+  if (page !== activePage) screenHome.scrollTop = 0;
   setPage(page);
   renderCards();
   setIdleStatus();

@@ -36,6 +36,7 @@ export const railToggle  = document.getElementById('rail-toggle');
 export const screenHome  = document.getElementById('screen-home');
 export const screenChat  = document.getElementById('screen-chat');
 export const cardsBox    = document.getElementById('cards');
+export const scrollHint  = document.getElementById('scroll-hint');
 export const noticeBox   = document.getElementById('notice');
 export const noticeTitle = document.getElementById('notice-title');
 export const noticeBody  = document.getElementById('notice-body');

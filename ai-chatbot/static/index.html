@@ -19,9 +19,11 @@
       <span class="brand-product" id="brand-product">AI Assistant</span>
     </div>
     <div class="topbar-right">
-      <select class="ghost-btn" id="llm-provider"
-              title="Which LLM provider the gateway routes every showcase to. Each has its own LlmProvider, LlmProxy per lane, and GenAI Application on the gateway.">
-      </select>
+      <label class="provider"
+             title="Which LLM provider the gateway routes every showcase to. Each has its own LlmProvider, LlmProxy per lane, and GenAI Application on the gateway.">
+        <span class="provider-label">Provider</span>
+        <select id="llm-provider"></select>
+      </label>
       <p class="status" id="status">
         <span class="dot" aria-hidden="true"></span>
         <span id="status-text">via AI Gateway</span>
@@ -40,10 +42,11 @@
   <div class="shell">
     <div class="col-main home-head" data-page-only="llm">
       <h1>Which capability are you showing?</h1>
-      <p>Every card below talks to its <strong>own pre-configured LLM
-         provider</strong> on the WSO2 AI Gateway, with that policy already
-         attached. This app never configures the gateway: it only picks
-         which provider answers.</p>
+      <p>Every card below talks to its <strong>own LLM proxy</strong> on the
+         WSO2 AI Gateway, with that card's policy attached. The proxies share
+         one <strong>LLM provider</strong> per vendor, so the cards stay isolated from each
+         other. This app never configures the gateway: it only picks which
+         proxy answers.</p>
     </div>
     <div class="col-main home-head" data-page-only="mcp">
       <h1>Which MCP capability are you showing?</h1>
@@ -54,6 +57,7 @@
     </div>
     <div class="col-main cards" id="cards"></div>
   </div>
+  <button type="button" class="scroll-hint" id="scroll-hint">More below</button>
 </section>
 
 
