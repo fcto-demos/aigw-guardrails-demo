@@ -14,7 +14,7 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <span class="wordmark" id="wordmark">ACME MOBILE</span>
+      <a class="wordmark" id="wordmark" href="#/" title="Back to all the showcases">ACME MOBILE</a>
       <span class="brand-divider" aria-hidden="true"></span>
       <span class="brand-product" id="brand-product">AI Assistant</span>
     </div>
@@ -32,6 +32,18 @@
         <a class="ghost-btn" id="nav-llm" href="#/llm">LLM Gateway</a>
         <a class="ghost-btn" id="nav-mcp" href="#/mcp">MCP Gateway</a>
       </nav>
+      <div class="launcher" id="launcher" hidden>
+        <button type="button" class="launcher-btn" id="launcher-btn" aria-haspopup="true"
+                aria-expanded="false" aria-controls="launcher-menu" aria-label="Other consoles"
+                title="Open the other consoles of the demo">
+          <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true" fill="currentColor">
+            <circle cx="3" cy="3" r="1.8"/><circle cx="9" cy="3" r="1.8"/><circle cx="15" cy="3" r="1.8"/>
+            <circle cx="3" cy="9" r="1.8"/><circle cx="9" cy="9" r="1.8"/><circle cx="15" cy="9" r="1.8"/>
+            <circle cx="3" cy="15" r="1.8"/><circle cx="9" cy="15" r="1.8"/><circle cx="15" cy="15" r="1.8"/>
+          </svg>
+        </button>
+        <div class="launcher-menu" id="launcher-menu" hidden></div>
+      </div>
     </div>
   </div>
 </header>

@@ -563,6 +563,38 @@ def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
     return path.split(suffix)[0] or "/"
 
 
+def launcher_links():
+    """The demo's other web consoles for the launcher menu, grouped. The
+    observability ones follow ANALYTICS_MODE, as run-local.sh does. A console
+    that is not set up yet has no url and says how to set it up. Same host
+    and ports as demo.env, so the links work locally and on the VM."""
+    host = CONF.get("DEMO_HOSTNAME") or "localhost"
+    groups = [{"name": "Platform", "links": [
+        {"name": "AI Workspace", "note": "Proxies, providers and their policies",
+         "url": "https://%s:%s/ai-workspace/" % (host, CONF.get("AI_WORKSPACE_PORT", "9643"))},
+        {"name": "API Portal", "note": "The developer portal",
+         "url": "https://%s:%s/api-portal/" % (host, CONF.get("API_PORTAL_PORT", "9543"))}]}]
+    if CONF.get("ANALYTICS_MODE", "moesif") == "local":
+        observe = [{"name": name, "note": note, "url": "http://%s:%s/" % (host, port)}
+                   for name, note, port in (("Grafana", "Metrics dashboards", 3000),
+                                            ("Jaeger", "Traces of each request", 16686),
+                                            ("OpenSearch Dashboards", "Gateway logs", 5601),
+                                            ("Prometheus", "Raw metrics", 9092))]
+    else:
+        keys = {}
+        _merge_env_file(keys, os.path.join(HERE, "..", "secrets", "api-keys.env"))
+        observe = [{"name": "Moesif", "note": "API analytics for every gateway call",
+                    "url": "https://www.moesif.com/wrap"
+                    if keys.get("APIP_GW_ANALYTICS_PUBLISHERS_MOESIF_APPLICATION_ID") else None,
+                    "setup": "Add the Moesif application id to secrets/api-keys.env"}]
+    groups.append({"name": "Observability", "links": observe})
+    groups.append({"name": "Identity", "links": [
+        {"name": "Identity provider", "note": "Users, roles and the sign-in app",
+         "url": CONF.get("IDP_CONSOLE_URL") or None,
+         "setup": "Set IDP_CONSOLE_URL in secrets/idp.env"}]})
+    return groups
+
+
 def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     """Everything one request needs, with global config as the floor.
 
@@ -929,7 +961,8 @@ class Handler(BaseHTTPRequestHandler):
             # page reads that decision back off the response instead.
             return self._json(200, {
                 "defaultModel": default_model(provider_id),
-                "brand": CONF["BRAND_NAME"]})
+                "brand": CONF["BRAND_NAME"],
+                "launcher": launcher_links()})
         return self._serve_static(path)
 
     def _cookie(self, name):

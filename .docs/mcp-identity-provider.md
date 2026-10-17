@@ -24,6 +24,7 @@ for Asgardeo and WSO2 Identity Server, which share the same console.
    IDP_ISSUER=<issuer>          # Asgardeo: https://api.asgardeo.io/t/<org>/oauth2/token
    IDP_JWKS_URI=<jwks_uri>      # Asgardeo: https://api.asgardeo.io/t/<org>/oauth2/jwks
    IDP_CLIENT_ID=<client ID>
+   IDP_CONSOLE_URL=<console>    # optional, for the launcher. Asgardeo: https://console.asgardeo.io
    ```
 
    Both URLs are in the provider's `<issuer>/.well-known/openid-configuration`.

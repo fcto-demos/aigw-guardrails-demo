@@ -13,7 +13,7 @@
 
 import { escapeHtml } from './markdown.js';
 import {
-  brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
+  wordmark, brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
   intro, introHead, introBody, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
   showSpendMeter, signinBox, signinWho, signinLink, tierBox, tierSelect,
@@ -433,5 +433,6 @@ for (const page of PAGES) {
     if (location.hash === '#/' + page) mountHome(page);
   });
 }
+wordmark.addEventListener('click', () => { if (location.hash === '#/') mountHome('llm'); });
 
 export function defaultShowcaseId() { return defaultId; }

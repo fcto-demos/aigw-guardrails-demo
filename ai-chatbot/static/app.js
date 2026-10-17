@@ -18,6 +18,7 @@
 
 import { wordmark } from './dom.js';
 import { loadProviders, loadRegistry, applyHash } from './screens.js';
+import { renderLauncher } from './launcher.js';
 import './chat.js';
 
 fetch('/api/config')
@@ -26,6 +27,7 @@ fetch('/api/config')
     if (c.brand) {
       wordmark.textContent = c.brand.toUpperCase();
     }
+    renderLauncher(c.launcher);
   })
   .catch(() => { /* cosmetic only */ });
 
