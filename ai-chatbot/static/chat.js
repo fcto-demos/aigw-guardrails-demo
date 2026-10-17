@@ -20,19 +20,6 @@ import {
 } from './metrics.js';
 import { markRunning, recordTurn, showHeaders, findOrigin } from './rail.js';
 import { recordSpend } from './spend.js';
-import { pipelineHtml } from './pipeline.js';
-
-/* Which of the card's MCP policies refused a tool call, from the status each
- * of them answers with. Named only when that policy is on the card. */
-const MCP_REFUSALS = {
-  400: 'mcp-tool-schema-validator', 401: 'mcp-auth', 403: 'mcp-authz', 429: 'mcp-ratelimit',
-};
-
-function refusingPolicy(call) {
-  const name = MCP_REFUSALS[call.gatewayStatus];
-  const policies = (activeShowcase.mcp && activeShowcase.mcp.policies) || [];
-  return name && policies.some((p) => p.name === name) ? name : '';
-}
 
 /* The conversation. Text only: thinking blocks and their signatures are never
  * stored and never sent back, which is what keeps multi-turn safe here. */
@@ -132,7 +119,6 @@ export async function ask(question, origin) {
         let guard = '';
         try { guard = JSON.parse(payload.gatewayBody).message.interveningGuardrail || ''; }
         catch (e) { /* not a guardrail body */ }
-        turn.guard = guard;
         showRefusal('Blocked by a gateway policy' + (guard ? ': ' + guard : ''),
                     (payload.error || 'The request was refused.') + status,
                     payload.gatewayBody || '');
@@ -193,7 +179,7 @@ export async function ask(question, origin) {
           continue;
         }
         if (name === 'tool_call') {
-          tools += toolCallHtml(event, refusingPolicy(event));
+          tools += toolCallHtml(event);
           bubble.innerHTML = tools + typingHtml();
           continue;
         }
@@ -275,8 +261,7 @@ export async function ask(question, origin) {
        * the card exists to show. A no-op on every other showcase. */
       showSpendMeter(recordSpend(turn));
       bubble.innerHTML = tools + bubbleHtml(answer, servedModel, false)
-                       + metricsHtml(finishSnapshot(turn))
-                       + pipelineHtml(turn, activeShowcase);
+                       + metricsHtml(finishSnapshot(turn));
       messages.push({ role: 'assistant', content: answer });
     } else if (!failed) {
       /* Verified against this gateway: given a small max_tokens, a reasoning
@@ -311,7 +296,7 @@ export async function ask(question, origin) {
      * so the evidence goes into the error strip instead. On the guardrail card
      * that strip is the entire payload. */
     if (!alertBox.hidden) {
-      const html = metricsHtml(turn) + pipelineHtml(turn, activeShowcase);
+      const html = metricsHtml(turn);
       alertMetrics.innerHTML = html;
       alertMetrics.hidden = !html;
     }

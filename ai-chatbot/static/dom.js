@@ -128,15 +128,13 @@ const TOOL_OUTCOMES = {
   error:        ['!', 'failed'],
 };
 
-export function toolCallHtml(call, policy) {
+export function toolCallHtml(call) {
   const [icon, label] = TOOL_OUTCOMES[call.outcome] || TOOL_OUTCOMES.error;
-  // "refused by the gateway" names the policy when the card tells us which.
-  const said = policy ? label.replace('the gateway', '<b>' + escapeHtml(policy) + '</b>') : label;
   return '<details class="tool-call is-' + escapeHtml(call.outcome || 'error') + '">'
     + '<summary><span class="tool-icon" aria-hidden="true">' + icon + '</span>'
     + '<code>' + escapeHtml(call.name || '?') + '(' + escapeHtml(JSON.stringify(call.arguments || {}))
     + ')</code><span class="tool-status">HTTP ' + escapeHtml(String(call.gatewayStatus))
-    + ' · ' + said + '</span></summary>'
+    + ' · ' + label + '</span></summary>'
     + '<pre>' + escapeHtml(call.result || '') + '</pre></details>';
 }
 
@@ -183,7 +181,7 @@ export function showError(title, body, detail) {
 
 /* The gateway's own words, readable from the back of the room. A guardrail
  * answers with a JSON body; its reason and assessment are pulled out as plain
- * lines, and the raw body stays one click away. Anything else is shown as is. */
+ * lines, with the raw body shown open below them. Anything else is shown as is. */
 function detailHtml(detail) {
   let body = null;
   try { body = JSON.parse(detail); } catch (e) { /* not JSON */ }
@@ -199,7 +197,7 @@ function detailHtml(detail) {
   if (!rows.length) return raw;
   return '<dl class="verdict">'
     + rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + escapeHtml(v) + '</dd>').join('')
-    + '</dl><details class="raw"><summary>Raw gateway response</summary>' + raw + '</details>';
+    + '</dl><details class="raw" open><summary>Raw gateway response</summary>' + raw + '</details>';
 }
 
 /* A policy refusing on purpose is not a fault, and must not be painted like

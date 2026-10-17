@@ -266,7 +266,6 @@ body {
 .tool-call summary::-webkit-details-marker { display: none; }
 .tool-call code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--navy); }
 .tool-call .tool-status { margin-left: auto; color: var(--muted); }
-.tool-call .tool-status b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .msg .tool-call pre {
   background: none; border-radius: 0;
   margin: 0; padding: 4px 10px 8px;
@@ -992,47 +991,6 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   word-break: break-all;
 }
 .gw-headers-body b { color: var(--navy); font-weight: 600; }
-
-
-/* ---------- what the gateway did ----------
-   One row per turn: each policy on the lane, then the model. Navy is the
-   gateway acting on purpose, as on the refusal strip; dashed is a step the
-   request never reached. */
-
-.pipeline {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 4px;
-  margin-top: 9px; padding-top: 9px;
-  border-top: 1px dashed rgba(13, 17, 103, .14);
-  font-size: 11.5px;
-}
-.metrics > .pipeline, #alert-metrics > .pipeline { flex-basis: 100%; }
-.pipe-label {
-  margin-right: 4px;
-  font-size: 10.5px; font-weight: 700;
-  letter-spacing: .05em; text-transform: uppercase;
-  color: var(--muted);
-}
-.pipe-step {
-  display: inline-flex; align-items: center; gap: 5px;
-  white-space: nowrap;
-  border: 1px solid transparent; border-radius: 999px;
-  padding: 2px 9px;
-  color: var(--ink);
-}
-.pipe-step i { font-style: normal; font-weight: 700; }
-.pipe-step b {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-weight: 600; color: var(--navy);
-}
-.pipe-step.is-ok      { background: rgba(30, 233, 138, .13); }
-.pipe-step.is-ok i    { color: #0A6B41; }
-.pipe-step.is-acted   { background: var(--lavender); border-color: rgba(13, 17, 103, .16); }
-.pipe-step.is-acted i { color: var(--magenta); }
-.pipe-step.is-blocked,
-.pipe-step.is-blocked b { background: var(--navy); color: var(--white); }
-.pipe-step.is-skipped { border: 1px dashed rgba(13, 17, 103, .25); color: var(--muted); }
-.pipe-step.is-skipped b { color: var(--muted); }
-.pipe-arrow { color: var(--muted); }
 
 
 /* ---------- focus, scrollbar, motion, small screens ---------- */
