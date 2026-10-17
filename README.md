@@ -56,6 +56,7 @@ wso2-api-platform-ai-demo/
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Semantic caching | A reworded question is answered from cache — no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
+| Topic guardrail | The assistant only answers about mobile plans: an essay or a piece of code is refused before the model is called |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
