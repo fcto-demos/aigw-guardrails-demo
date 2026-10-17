@@ -30,7 +30,7 @@
             "ask": "Do you support eSIM?",
             "expect": {
               "modelRole": "small",
-              "text": "The fast model — a single-fact lookup, answerable from one line of the catalogue."
+              "text": "The fast model: a single-fact lookup, answerable from one line of the catalogue."
             }
           }
         ],
@@ -45,12 +45,12 @@
             "ask": "I use about 12 GB a month, travel to Spain twice a year and to the US in December. Which plan and add-ons work out cheapest over 12 months, and should I go 30-day or annual?",
             "expect": {
               "modelRole": "large",
-              "text": "The deep model — a comparison needing arithmetic across four parts of the catalogue."
+              "text": "The deep model: a comparison needing arithmetic across four parts of the catalogue."
             }
           }
         ],
         "contains": "A comparison of Everyday (15 GB) against Plus (30 GB); the 12-month tariff being £2/month cheaper; Spain as Zone A and included in the plan allowance; the US as Zone B, not included, needing a Roaming Pass at £6/day.",
-        "notes": "The model changed. Nothing in the client did — same endpoint, same session, same request format. That is semantic routing."
+        "notes": "The model changed. Nothing in the client did: same endpoint, same session, same request format. That is semantic routing."
       }
     ],
     "notes": "WORKING on the hosted gateway as of 2026-09-09. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. Embeddings come from mistral-embed via [policy_configurations.semantic_model_routing_v1] in the gateway host config.toml -- a DIFFERENT namespace from the top-level embedding_* keys that semantic-cache reads, despite near-identical key names; having one does nothing for the other. scorethreshold is 0.75 on both routes, not the schema default 0.90, which measurement showed is far too strict. The policy takes the best match across all routes and uses the threshold only to decide whether to accept it, so because defaultModel is the fast model too, a threshold set too high costs deep routing but never breaks a request. Verified across 10 probes: exact utterances, paraphrases of both route sets, two unseen complex questions, and an unrelated question all landed on the intended model. The two deep questions are built to require the tariff table, the 12-month pricing, the rollover rules and the Zone A/B/C charges, plus arithmetic across them. A single-fact model answering these will visibly miss something, which is what justifies the deep route existing at all. Gemini is in unsupportedProviders above: its gateway route addresses the model via the URL path (GET /llm-provider-templates/gemini: requestModel.location is \"pathParam\"), and semantic-model-routing hard-rejects any requestModel.location other than \"payload\" at policy-chain-build time -- not fixable from config, needs the policy Go source changed to support path rewriting. time-based-model-routing and cost-based-model-routing DO support pathParam, which is why Gemini still has those two routing lanes."
@@ -86,11 +86,11 @@
             "ask": "Do you support eSIM?",
             "expect": {
               "modelRole": "large",
-              "text": "The fallback (deep) model — outside the peak window this is what serves."
+              "text": "The fallback (deep) model: outside the peak window, this is what serves."
             }
           }
         ],
-        "notes": "Note what the page sent: claude-haiku-4-5. The gateway overrode it. That override is the whole capability — the client's model is a default now, not a choice."
+        "notes": "Note what the page sent: claude-haiku-4-5. The gateway overrode it. That override is the whole capability: the client's model is a default now, not a choice."
       },
       {
         "n": 2,
@@ -100,11 +100,11 @@
             "ask": "Do you support eSIM?",
             "expect": {
               "modelRole": "small",
-              "text": "The fast model — between 18:00 and 22:00 Europe/London the peak window forces it. Same question, same client, different model."
+              "text": "The fast model: between 18:00 and 22:00 Europe/London the peak window forces it. Same question, same client, different model."
             }
           }
         ],
-        "notes": "Same question, same client, different model — decided purely by the gateway clock. Verified 2026-09-08: opus-4-6 at 13:53 off-peak, haiku-4-5 with the window moved to 13:00-14:00. Moving the window is an operator action on the provider, deliberately not scripted here."
+        "notes": "Same question, same client, different model, decided purely by the gateway clock. Verified 2026-09-08: opus-4-6 at 13:53 off-peak, haiku-4-5 with the window moved to 13:00-14:00. Moving the window is an operator action on the provider, deliberately not scripted here."
       }
     ],
     "notes": "WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. Peak is 18:00-22:00 Europe/London, from inclusive and to exclusive. The fallback model is named explicitly so off-peak does not depend on whatever model the client happened to send. Excluded on gemini: this demo's Gemini account has exactly one usable model without billing (gemini-3.8-flash) -- every other variant (pro tier, lite, dated/preview versions) is either quota:0 or decommissioned for this account, confirmed by direct calls against the real API, not just this gateway. A route with small==large can't show a switch, so there's nothing honest to demo here for this provider."
@@ -220,7 +220,7 @@
       "routedProvider": "anthropic"
     },
     "title": "Intelligent routing across providers",
-    "tagline": "An LLM reads each question and picks the provider and model — Anthropic first, Mistral as the backup.",
+    "tagline": "An LLM reads each question and picks the provider and model: Anthropic first, Mistral as the backup.",
     "capability": "intelligent-model-routing v0.9.0",
     "status": "ready",
     "blockedBy": [],
@@ -259,7 +259,7 @@
             "ask": "I use about 12 GB a month, travel to Spain twice a year and to the US in December. Which plan and add-ons work out cheapest over 12 months, and should I go 30-day or annual?",
             "expect": {
               "model": "claude-opus-4-6",
-              "text": "Anthropic's deep model — “Complex plan analysis”: arithmetic across plans, roaming zones and contract lengths."
+              "text": "Anthropic's deep model, rule “Complex plan analysis”: arithmetic across plans, roaming zones and contract lengths."
             }
           }
         ],
@@ -273,14 +273,14 @@
             "ask": "Write a haiku about autumn.",
             "expect": {
               "model": "ministral-8b",
-              "text": "The backup: no rule matches, the classifier answers NONE, and the default route — the proxy's own provider, Mistral — answers instead."
+              "text": "The backup: no rule matches, the classifier answers NONE, and the default route (the proxy's own provider, Mistral) answers instead."
             }
           }
         ],
         "notes": "The same fallback catches a classifier that fails or times out, so the card keeps answering even if the classification call breaks. It is not failover: an error from Anthropic itself is returned, not retried on Mistral."
       }
     ],
-    "notes": "intelligent-model-routing v0.9.0. One LlmProxy (/intelligent-routing) whose own provider is the mistral LlmProvider, with Anthropic in additionalProviders. A classifier LLM — Mistral's OpenAI-compatible chat API, set in the gateway's config.toml [policy_configurations.intelligent_model_routing_v1] — reads $.messages[-1].content and picks a routing rule; a rule naming provider anthropic switches the upstream. The client must speak OpenAI chat-completions: the proxy's primary provider is OpenAI-native (Mistral), and the openai-to-anthropic transformer rewrites requests to Anthropic Messages format and Anthropic's responses back to OpenAI format, only when Anthropic is selected. This card therefore ignores the provider dropdown (its \"route\" block fixes the wire and endpoint). Backup triggers: classifier answers NONE, classifier call fails, or the question can't be extracted. NOT failover — an upstream error from Anthropic is not retried on Mistral. Every request pays one extra classifier call (latency + a small Mistral cost). Streaming works on both routes (verified 2026-10-11): the transformer converts Anthropic's SSE into OpenAI chunks ending in [DONE]."
+    "notes": "intelligent-model-routing v0.9.0. One LlmProxy (/intelligent-routing) whose own provider is the mistral LlmProvider, with Anthropic in additionalProviders. A classifier LLM (Mistral's OpenAI-compatible chat API, set in the gateway's config.toml [policy_configurations.intelligent_model_routing_v1]) reads $.messages[-1].content and picks a routing rule; a rule naming provider anthropic switches the upstream. The client must speak OpenAI chat-completions: the proxy's primary provider is OpenAI-native (Mistral), and the openai-to-anthropic transformer rewrites requests to Anthropic Messages format and Anthropic's responses back to OpenAI format, only when Anthropic is selected. This card therefore ignores the provider dropdown (its \"route\" block fixes the wire and endpoint). Backup triggers: classifier answers NONE, classifier call fails, or the question can't be extracted. NOT failover: an upstream error from Anthropic is not retried on Mistral. Every request pays one extra classifier call (latency + a small Mistral cost). Streaming works on both routes (verified 2026-10-11): the transformer converts Anthropic's SSE into OpenAI chunks ending in [DONE]."
   },
   {
     "id": "model-failover",
@@ -320,7 +320,7 @@
             "ask": "Do you support eSIM?",
             "expect": {
               "modelRole": "large",
-              "text": "Answered by the OTHER model. The app sent the same model name both times — the gateway is alternating, strictly, one request each."
+              "text": "Answered by the OTHER model. The app sent the same model name both times: the gateway is alternating, strictly, one request each."
             }
           }
         ],
@@ -333,18 +333,18 @@
           {
             "ask": "How much data does the Everyday plan include?",
             "expect": {
-              "text": "Run `./scripts/failover_demo.sh break` first (it resolves the active provider's own large model automatically). Keep asking: the request that lands on the large model fails once. The app's error strip shows HTTP 502 with gatewayStatus 503 and gatewayOutcome upstream_error, and the gatewayBody carries a realistic error for that provider. That failure is real — see the notes."
+              "text": "Run `./scripts/failover_demo.sh break` first (it resolves the active provider's own large model automatically). Keep asking: the request that lands on the large model fails once. The app's error strip shows HTTP 502 with gatewayStatus 503 and gatewayOutcome upstream_error, and the gatewayBody carries a realistic error for that provider. That failure is real, see the notes."
             }
           },
           {
             "ask": "And the Plus plan?",
             "expect": {
               "modelRole": "small",
-              "text": "The small model answers — and keeps answering every question after it. The large model has been suspended and taken out of the rotation, so the switch holds without anyone touching the gateway."
+              "text": "The small model answers, and keeps answering every question after it. The large model has been suspended and taken out of the rotation, so the switch holds without anyone touching the gateway."
             }
           }
         ],
-        "notes": "STATE THIS PLAINLY: the one request that hits the failing model is NOT retried — the visitor sees an error (the app reports 502, gatewayStatus 503). Everything after it is served by the healthy model until the suspension expires. That is the actual behaviour of model-round-robin, and claiming seamless failover would be contradicted by the screen. If seamlessness is wanted, the client has to retry once; a retry lands on a different model by construction."
+        "notes": "STATE THIS PLAINLY: the one request that hits the failing model is NOT retried: the visitor sees an error (the app reports 502, gatewayStatus 503). Everything after it is served by the healthy model until the suspension expires. That is the actual behaviour of model-round-robin, and claiming seamless failover would be contradicted by the screen. If seamlessness is wanted, the client has to retry once; a retry lands on a different model by construction."
       },
       {
         "n": 3,
@@ -353,20 +353,20 @@
           {
             "ask": "What happens to my number if I switch?",
             "expect": {
-              "text": "Run `./scripts/failover_demo.sh heal`, then wait out suspendDuration (30s on this lane). The next questions alternate between the two models again — no redeploy, no restart, no operator action."
+              "text": "Run `./scripts/failover_demo.sh heal`, then wait out suspendDuration (30s on this lane). The next questions alternate between the two models again: no redeploy, no restart, no operator action."
             }
           }
         ],
         "notes": "Recovery is automatic but not instant: the model stays suspended for the full suspendDuration even after it is healthy again, so expect up to 30s of Haiku-only answers before the rotation resumes. Do not keep clicking and conclude it is broken."
       }
     ],
-    "notes": "model-round-robin v1.1.1 is the only shipped failover construct — there is no policy called fallback or failover. It is attached at OPERATION scope on POST /v1/messages; at global scope the gateway never injects requestModel and every request 500s (GATEWAY-POLICY-FINDINGS.md finding 1, where this policy was the probe). No `provider` key on any target, so this is a MODEL switch on one provider — naming a provider would require an LlmProxy and drag in the OpenAI dialect. TWO THINGS TO BE HONEST ABOUT. First, the failing request is not retried: whoever sends it gets the error. A dead model therefore costs one visible failure per suspendDuration, forever, not a single blip. Second, only 5xx and 429 count as a failure — a 404, which is what Anthropic returns for a decommissioned or misspelled model id, is ignored completely, so that model stays in rotation and one request in N keeps failing. Both measured; see finding 8. THE OUTAGE IS INJECTED. This lane shares the Anthropic LlmProvider with every other showcase, so the fault is injected at the PROVIDER level: scripts/failover_demo.sh inject points that provider's upstream at scripts/python/mocks/llm_fault_proxy.py (one instance per provider, started with --provider), a pass-through proxy that forwards everything to the real API and returns 503 for one named model on demand — because the real providers will not produce a 5xx to order and a bogus model id just gives a 404, which the policy ignores. Answers are real model answers. Drive it with scripts/failover_demo.sh (inject/break/heal/restore) and scripts/python/mocks/llm_fault_proxy.py. unsupportedProviders covers gemini only: requestModel.location is pathParam there, and model-round-robin was tested directly against the gateway and confirmed NOT to rewrite it -- the chain builds with no error, but four calls in a row all stayed on the same model (gemini-2.5-flash) until the free-tier quota tripped. Mistral works the same way Anthropic does (payload location), with its own mock instance on a separate port -- see scripts/failover_demo.sh. The rotation itself is shared across every caller of this lane, same as spend-limit's budget: it is not per-visitor or per-session. Testing it concurrently from two places (a script running break/heal/restore while a browser tab is also asking questions, say) consumes the same rotation turns, so two questions that look adjacent in one tab can land on the same model twice in a row if something else called the lane in between -- not a broken alternation, just two callers sharing one counter."
+    "notes": "model-round-robin v1.1.1 is the only shipped failover construct: there is no policy called fallback or failover. It is attached at OPERATION scope on POST /v1/messages; at global scope the gateway never injects requestModel and every request 500s (GATEWAY-POLICY-FINDINGS.md finding 1, where this policy was the probe). No `provider` key on any target, so this is a MODEL switch on one provider; naming a provider would require an LlmProxy and drag in the OpenAI dialect. TWO THINGS TO BE HONEST ABOUT. First, the failing request is not retried: whoever sends it gets the error. A dead model therefore costs one visible failure per suspendDuration, forever, not a single blip. Second, only 5xx and 429 count as a failure: a 404, which is what Anthropic returns for a decommissioned or misspelled model id, is ignored completely, so that model stays in rotation and one request in N keeps failing. Both measured; see finding 8. THE OUTAGE IS INJECTED. This lane shares the Anthropic LlmProvider with every other showcase, so the fault is injected at the PROVIDER level: scripts/failover_demo.sh inject points that provider's upstream at scripts/python/mocks/llm_fault_proxy.py (one instance per provider, started with --provider), a pass-through proxy that forwards everything to the real API and returns 503 for one named model on demand, because the real providers will not produce a 5xx to order and a bogus model id just gives a 404, which the policy ignores. Answers are real model answers. Drive it with scripts/failover_demo.sh (inject/break/heal/restore) and scripts/python/mocks/llm_fault_proxy.py. unsupportedProviders covers gemini only: requestModel.location is pathParam there, and model-round-robin was tested directly against the gateway and confirmed NOT to rewrite it -- the chain builds with no error, but four calls in a row all stayed on the same model (gemini-2.5-flash) until the free-tier quota tripped. Mistral works the same way Anthropic does (payload location), with its own mock instance on a separate port -- see scripts/failover_demo.sh. The rotation itself is shared across every caller of this lane, same as spend-limit's budget: it is not per-visitor or per-session. Testing it concurrently from two places (a script running break/heal/restore while a browser tab is also asking questions, say) consumes the same rotation turns, so two questions that look adjacent in one tab can land on the same model twice in a row if something else called the lane in between -- not a broken alternation, just two callers sharing one counter."
   },
   {
     "id": "semantic-caching",
     "contextSuffix": "cache",
     "title": "Semantic caching",
-    "tagline": "A reworded question is answered from cache — no model call, no tokens.",
+    "tagline": "A reworded question is answered from cache: no model call, no tokens.",
     "capability": "semantic-cache v1.2.1",
     "status": "ready",
     "blockedBy": [],
@@ -398,7 +398,7 @@
             }
           }
         ],
-        "notes": "Nothing to see yet — note the latency, because the next step is about to be a fraction of it."
+        "notes": "Nothing to see yet. Note the latency, because the next step is about to be a fraction of it."
       },
       {
         "n": 2,
@@ -408,7 +408,7 @@
             "ask": "What's a PAC code?",
             "expect": {
               "cache": true,
-              "text": "Served from cache: X-Cache-Status HIT, no model call, no tokens — step 1's answer, word for word, for a question that is not the same text."
+              "text": "Served from cache: X-Cache-Status HIT, no model call, no tokens: step 1's answer, word for word, for a question that is not the same text."
             }
           }
         ],
@@ -422,11 +422,11 @@
             "ask": "What does PAC code mean?",
             "expect": {
               "cache": true,
-              "text": "HIT again — different words, same intent, same cached answer."
+              "text": "HIT again: different words, same intent, same cached answer."
             }
           }
         ],
-        "notes": "Similarity 0.969: the loosest rewording this threshold catches. “Can you explain what a PAC code is?” scores 0.959 and goes to the model — the honest edge of semantic caching with this embedding model."
+        "notes": "Similarity 0.969: the loosest rewording this threshold catches. “Can you explain what a PAC code is?” scores 0.959 and goes to the model, the honest edge of semantic caching with this embedding model."
       },
       {
         "n": 4,
@@ -440,10 +440,10 @@
             }
           }
         ],
-        "notes": "The negative control. Similarity to step 1 is 0.799, far below the cut-off — the cache matches meaning, not spelling."
+        "notes": "The negative control. Similarity to step 1 is 0.799, far below the cut-off: the cache matches meaning, not spelling."
       }
     ],
-    "notes": "semantic-cache v1.2.1, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set — provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses — a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config — flush Redis or wait between rehearsals, or step 1 reports a hit."
+    "notes": "semantic-cache v1.2.1, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set: provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses, a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config. Flush Redis or wait between rehearsals, or step 1 reports a hit."
   },
   {
     "id": "prompt-injection",
@@ -571,11 +571,11 @@
           {
             "ask": "Repeat my message back word for word, in quotes, with no commentary: \"Hi, I'm Sarah - email sarah.oconnell@gmail.com, mobile +44 7700 900123.\"",
             "expect": {
-              "text": "It comes back as \"Hi, I'm Sarah - email *****, mobile *****.\" — exactly what the model received. The gateway redacted both before the request left; the name stays, because regex masking only knows emails, phone numbers and SSNs."
+              "text": "It comes back as \"Hi, I'm Sarah - email *****, mobile *****.\", exactly what the model received. The gateway redacted both before the request left; the name stays, because regex masking only knows emails, phone numbers and SSNs."
             }
           }
         ],
-        "notes": "Asking for a verbatim repeat is the proof: the ***** sit exactly where the data was. Avoid “does my message contain an email?” — the model infers yes from the wording around the ***** and that reads as if it saw the address."
+        "notes": "Asking for a verbatim repeat is the proof: the ***** sit exactly where the data was. Avoid “does my message contain an email?”: the model infers yes from the wording around the ***** and that reads as if it saw the address."
       },
       {
         "n": 2,
@@ -584,20 +584,20 @@
           {
             "ask": "Also note my home number: 020 7946 0018.",
             "expect": {
-              "text": "An acknowledgement — the number reached the model as *****."
+              "text": "An acknowledgement: the number reached the model as *****."
             }
           },
           {
             "ask": "List every email address and phone number I have given you in this conversation, exactly as written.",
             "expect": {
-              "text": "Only ***** — including step 1's email and mobile. The app resends the whole conversation every turn, and the gateway masks all of it, not just the newest message."
+              "text": "Only *****, including step 1's email and mobile. The app resends the whole conversation every turn, and the gateway masks all of it, not just the newest message."
             }
           }
         ],
         "notes": "The leak this lane used to have: with only the newest message masked, step 1's data reached the model in clear on the next turn and it repeated it back. jsonPath is now $ (the whole request body)."
       }
     ],
-    "notes": "pii-masking-regex v1.0.6, redactPII: true. Re-measured 2026-10-11. (1) REQUEST ONLY. Personal data is redacted to ***** before the request leaves the gateway; the response is never scanned. redactPII: true makes the response phase a no-op; redactPII: false masks with reversible placeholders ([EMAIL_0000]) and the response phase only swaps those back to the real values — which would hide the effect on stage, so this card stays on redact. (2) jsonPath is $ — the whole request body. With $.messages[-1].content only the newest message was masked, and since the app replays history, data typed one turn earlier reached the model in clear. Run over a real body with no personal data, none of the patterns matched the system prompt, catalogue or JSON. (3) The built-in phone pattern is US-only (+1 / 3-3-4 digits): +44 7700 900123, 07700 900123 and +33 6 12 34 56 78 were never masked. Two customPIIEntities fill the gap: PHONE_INTL (any +<country code> number, incl. “+33 (0)6 …”) and PHONE_UK (0-prefixed mobiles and 020 / 0161 / 01632-style landlines). Names and postal addresses are not detected — regex masking covers emails, phone numbers and SSNs only. (4) The built-in ssn pattern is OFF, replaced by SSN_US (dashed 123-45-6789 only). The policy applies its patterns in random (Go map) order per request, and the built-in SSN regex also matches \"700 900123\" — so \"+44 7700 900123\" sometimes came back as \"+44 7*****\". Every ordering of the five patterns now masks each tested number completely. (5) Streaming stays off (gateway.stream false): a placeholder split across SSE deltas never matches in reversible mode."
+    "notes": "pii-masking-regex v1.0.6, redactPII: true. Re-measured 2026-10-11. (1) REQUEST ONLY. Personal data is redacted to ***** before the request leaves the gateway; the response is never scanned. redactPII: true makes the response phase a no-op; redactPII: false masks with reversible placeholders ([EMAIL_0000]) and the response phase only swaps those back to the real values, which would hide the effect on stage, so this card stays on redact. (2) jsonPath is $, the whole request body. With $.messages[-1].content only the newest message was masked, and since the app replays history, data typed one turn earlier reached the model in clear. Run over a real body with no personal data, none of the patterns matched the system prompt, catalogue or JSON. (3) The built-in phone pattern is US-only (+1 / 3-3-4 digits): +44 7700 900123, 07700 900123 and +33 6 12 34 56 78 were never masked. Two customPIIEntities fill the gap: PHONE_INTL (any +<country code> number, incl. “+33 (0)6 …”) and PHONE_UK (0-prefixed mobiles and 020 / 0161 / 01632-style landlines). Names and postal addresses are not detected: regex masking covers emails, phone numbers and SSNs only. (4) The built-in ssn pattern is OFF, replaced by SSN_US (dashed 123-45-6789 only). The policy applies its patterns in random (Go map) order per request, and the built-in SSN regex also matches \"700 900123\", so \"+44 7700 900123\" sometimes came back as \"+44 7*****\". Every ordering of the five patterns now masks each tested number completely. (5) Streaming stays off (gateway.stream false): a placeholder split across SSE deltas never matches in reversible mode."
   },
   {
     "id": "spend-limit",
@@ -638,13 +638,13 @@
           {
             "ask": "What is the cheapest plan you offer?",
             "expect": {
-              "text": "Succeeds — Lite at £6 for 5 GB."
+              "text": "Succeeds: Lite at £6 for 5 GB."
             }
           },
           {
-            "ask": "And what is the largest? Then compare it side by side with every other plan you offer — data, monthly price, contract length, international minutes, roaming allowance and data rollover — and say who each plan suits.",
+            "ask": "And what is the largest? Then compare it side by side with every other plan you offer (data, monthly price, contract length, international minutes, roaming allowance and data rollover) and say who each plan suits.",
             "expect": {
-              "text": "Succeeds — Unlimited at £25, then a full comparison of every plan. Deliberately long: a few hundred output tokens on opus-4-6 spend the rest of the budget, so the next question hits the wall. Watch the budget bar."
+              "text": "Succeeds: Unlimited at £25, then a full comparison of every plan. Deliberately long: a few hundred output tokens on opus-4-6 spend the rest of the budget, so the next question hits the wall. Watch the budget bar."
             }
           }
         ],

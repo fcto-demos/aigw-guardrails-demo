@@ -7,7 +7,7 @@
 'use strict';
 
 import { escapeHtml } from './markdown.js';
-import { rail, railTitle, railPrereq, stepsList, headersBox } from './dom.js';
+import { rail, railTitle, railPrereq, stepsList, headersBox, input } from './dom.js';
 import { modelMatches } from './models.js';
 import { cacheState, headersHtml, turns } from './metrics.js';
 import { modelForRole } from './screens.js';
@@ -82,6 +82,8 @@ function stepHtml(step) {
     + '<p class="step-q">' + escapeHtml(send.ask || '') + '</p>'
     + '<button type="button" class="copy-btn step-copy" data-copy="'
     + escapeHtml(send.ask || '') + '">Copy prompt</button>'
+    + '<button type="button" class="paste-btn step-copy" data-paste="'
+    + escapeHtml(send.ask || '') + '">Paste prompt</button>'
     + (send.expect && send.expect.text
         ? '<p class="step-expect"><b>Expect</b> ' + escapeHtml(send.expect.text) + '</p>'
         : '')
@@ -203,8 +205,8 @@ function renderStep(n) {
  * be believed.
  */
 const OUTCOME_TEXT = {
-  blocked: 'blocked by a gateway policy — the model was never called',
-  refused: 'refused — the cost budget is exhausted',
+  blocked: 'blocked by a gateway policy: the model was never called',
+  refused: 'refused: the cost budget is exhausted',
   error: 'the gateway returned an error',
   transport: 'could not reach the chatbot server',
   empty: 'the gateway returned no text',
@@ -230,7 +232,7 @@ export function evaluateExpect(expect, turn) {
   if (expect.blocked) {
     return turn.outcome === 'blocked' && !turn.outputTokens
       ? { ok: true, text: 'blocked at the gateway · 0 tokens · the model was never called' }
-      : { ok: false, text: 'not blocked — outcome was ' + turn.outcome };
+      : { ok: false, text: 'not blocked, outcome was ' + turn.outcome };
   }
 
   if (expect.gatewayStatus) {
@@ -258,7 +260,7 @@ export function evaluateExpect(expect, turn) {
     const other = turnOf(expect.differsFrom.step, expect.differsFrom.send || 0);
     if (!other) return { ok: null, text: 'nothing to compare against yet' };
     return other.answer.trim() === turn.answer.trim()
-      ? { ok: false, text: 'identical to the previous answer — the similarity '
+      ? { ok: false, text: 'identical to the previous answer: the similarity '
                          + 'threshold is too loose; raise it and redeploy' }
       : { ok: true, text: 'a different answer, as it should be' };
   }
@@ -271,7 +273,7 @@ export function evaluateExpect(expect, turn) {
       ? { ok: true, text: factor.toFixed(1) + '× faster than step '
                         + expect.fasterThan.step }
       : { ok: false, text: 'only ' + factor.toFixed(1) + '× faster than step '
-                         + expect.fasterThan.step + ' — that is not a cache hit' };
+                         + expect.fasterThan.step + ', that is not a cache hit' };
   }
 
   /* X-Cache-Status makes this a real measurement, so it grades in both
@@ -293,13 +295,13 @@ export function evaluateExpect(expect, turn) {
     if (hit === Boolean(expect.cache)) {
       return { ok: true, text: hit
         ? 'served from cache · the model was never called'
-        : 'cache miss, as expected — the model answered and filled the cache' };
+        : 'cache miss, as expected: the model answered and filled the cache' };
     }
     return hit
-      ? { ok: false, text: 'already cached — this should have been a miss. The '
+      ? { ok: false, text: 'already cached, this should have been a miss. The '
                          + 'cache is still warm from an earlier run; flush Redis '
                          + 'or wait out the hour, or the next step proves nothing' }
-      : { ok: false, text: 'cache miss — the gateway called the model. Prime it '
+      : { ok: false, text: 'cache miss: the gateway called the model. Prime it '
                          + 'with the identical wording first' };
   }
 
@@ -347,9 +349,24 @@ export function closeRail() {
 }
 
 rail.addEventListener('click', (e) => {
+  const paste = e.target.closest('.paste-btn');
+  if (paste) { pastePrompt(paste); return; }
   const copy = e.target.closest('.copy-btn');
   if (copy) copyPrompt(copy);
 });
+
+/* Puts the prompt straight into the composer, ready to send with Enter or to
+ * edit first. It never sends: the presenter stays in control of each turn.
+ * On a narrow screen the rail covers the composer, so it closes. */
+function pastePrompt(button) {
+  input.value = button.dataset.paste || '';
+  input.dispatchEvent(new Event('input'));
+  if (window.matchMedia('(max-width: 1023px)').matches) closeRail();
+  if (!input.disabled) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
 
 /* Copying is now the only way a prompt gets out of the rail, so it must not
  * have a single point of failure. navigator.clipboard needs a secure context
@@ -389,7 +406,7 @@ function copyPrompt(button) {
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-    settle('Selected — press \u2318C');
+    settle('Selected: press \u2318C');
   };
 
   if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -229,7 +229,7 @@ function noticeFor(showcase) {
      * so it gets said out loud rather than left to be inferred. */
     lines.push('<p>A provider <em>is</em> wired at <code>'
       + escapeHtml(showcase.gatewayContext || '')
-      + '</code>, so the steps will answer — but without the policy attached '
+      + '</code>, so the steps will answer, but without the policy attached '
       + 'they prove nothing. This is what the demo looks like with the '
       + 'capability off.</p>');
   }

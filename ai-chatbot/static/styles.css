@@ -631,7 +631,7 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   color: var(--navy);
 }
 
-.home-head p { margin: 0 0 4px; color: var(--muted); max-width: 62ch; }
+.home-head p { margin: 0 0 4px; color: var(--muted); }
 
 .cards {
   display: grid;
@@ -931,7 +931,7 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 }
 .step-op code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
-.copy-btn {
+.copy-btn, .paste-btn {
   font: inherit; font-size: 12px; font-weight: 600;
   border-radius: 999px; cursor: pointer;
   border: 1px solid rgba(13, 17, 103, .18);
@@ -939,7 +939,8 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   padding: 4px 12px;
   transition: border-color .15s ease, color .15s ease;
 }
-.copy-btn:hover { border-color: var(--magenta); color: var(--magenta); }
+.copy-btn:hover, .paste-btn:hover { border-color: var(--magenta); color: var(--magenta); }
+.paste-btn { margin-left: 6px; }
 
 /* The rail hands the prompt over rather than sending it, so the presenter
    pastes it into the composer themselves. Copying is harmless mid-turn, so
