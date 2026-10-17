@@ -84,6 +84,9 @@ policies:
     - name: mcp-rewrite
       version: v1.1.0
       gomodule: github.com/wso2/gateway-controllers/policies/mcp-rewrite@v1
+    - name: mcp-tool-schema-validator
+      version: v0.9.0
+      gomodule: github.com/wso2/gateway-controllers/policies/mcp-tool-schema-validator@v0
     - name: model-round-robin
       version: v1.1.1
       gomodule: github.com/wso2/gateway-controllers/policies/model-round-robin@v1
