@@ -850,6 +850,91 @@
     }
   },
   {
+    "id": "mcp-tool-arguments",
+    "mcp": {
+      "server": "Acme",
+      "context": "/acme-mcp-args",
+      "upstream": "http://mcp-acme-mobile:8000/mcp",
+      "provider": "mistral",
+      "policies": [
+        {
+          "name": "mcp-tool-schema-validator",
+          "version": "v0",
+          "params": {
+            "tools": [
+              {
+                "name": "change_plan",
+                "input": {
+                  "enabled": true,
+                  "showAssessment": true,
+                  "schema": "{\"type\":\"object\",\"properties\":{\"plan\":{\"enum\":[\"Lite\",\"Everyday\",\"Plus\"]}},\"required\":[\"plan\"],\"additionalProperties\":false}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "title": "Tool argument check",
+    "tagline": "The gateway checks what the agent asks a tool to do, not just which tool.",
+    "capability": "mcp-tool-schema-validator v0.9.0",
+    "policies": [
+      "mcp-tool-schema-validator v0.9.0"
+    ],
+    "intro": {
+      "chips": [
+        {
+          "label": "Switch me to the Plus plan.",
+          "ask": "Switch me to the Plus plan."
+        },
+        {
+          "label": "Switch me to the Unlimited plan.",
+          "ask": "Switch me to the Unlimited plan."
+        }
+      ]
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A change within the rules",
+        "sends": [
+          {
+            "ask": "Switch me to the Plus plan.",
+            "expect": {
+              "text": "change_plan(plan: Plus) goes through: Plus is one of the plans this channel may switch to."
+            }
+          }
+        ],
+        "notes": "Run ./scripts/reset-mcp.sh before the demo, so the account starts on Everyday."
+      },
+      {
+        "n": 2,
+        "title": "A change outside them",
+        "sends": [
+          {
+            "ask": "Switch me to the Unlimited plan.",
+            "expect": {
+              "text": "change_plan(plan: Unlimited) is refused by the gateway (HTTP 400, JSON-RPC -32602): the MCP server never sees the call, and the agent says it can't make that change here."
+            }
+          }
+        ],
+        "notes": "The rule: through the assistant, a customer moves between Lite, Everyday and Plus; Max and Unlimited go through an advisor. The MCP server accepts every plan, so the rule lives only in the gateway."
+      }
+    ],
+    "notes": "mcp-tool-schema-validator v0.9.0: input validation on change_plan only, a JSON Schema whose plan enum is Lite, Everyday, Plus. showAssessment lists the failing rule, never the value. The agent still sees the server's own tool schema, all five plans: the gateway does not rewrite tools/list, which is why the agent tries Unlimited at all. Compared with the other cards: Tool access control removes a whole tool, Authorization decides per user, this one decides per argument value.",
+    "status": "ready",
+    "blockedBy": [],
+    "gateway": {
+      "stream": false
+    },
+    "emphasis": [
+      "latency"
+    ],
+    "overrides": {
+      "model": "large"
+    }
+  },
+  {
     "id": "mcp-rate-limit",
     "mcp": {
       "server": "Acme",
