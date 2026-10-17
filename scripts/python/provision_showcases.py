@@ -214,6 +214,20 @@ def lane_templates(provider: dict) -> dict:
         },
         # The gateway adds an instruction to every request: here a legal line
         # each answer must end with, for every app on this lane at once.
+        # Two compressions before the model call: the system prompt with the
+        # catalogue, gently enough to keep every price and allowance (0.8), and
+        # the customer's message only when it is long (0.6 above ~200 tokens).
+        "prompt-compression": {
+            "context_suffix": "compression", "displayName": "Prompt Compression", "wired": True,
+            "globalPolicies": [
+                {"name": "prompt-compressor", "version": "v0", "params": {
+                    "jsonPath": provider["systemPath"],
+                    "rules": [{"upperTokenLimit": -1, "type": "ratio", "value": 0.8}]}},
+                {"name": "prompt-compressor", "version": "v0", "params": {
+                    "jsonPath": provider["contentPath"],
+                    "rules": [{"upperTokenLimit": 200, "type": "ratio", "value": 1.0},
+                              {"upperTokenLimit": -1, "type": "ratio", "value": 0.6}]}}],
+        },
         "prompt-decoration": {
             "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,
             "globalPolicies": [{"name": "prompt-decorator", "version": "v1", "params": {

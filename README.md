@@ -64,6 +64,7 @@ wso2-api-platform-ai-demo/
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
+| Prompt compression | The gateway compresses the system prompt, and long messages, before the model reads them: about a fifth fewer input tokens, same answers |
 
 On the **MCP Gateway** page, the assistant becomes an agent. Its tools come
 from a small Acme Mobile MCP server (`mcp-servers/acme-mobile/`): list the

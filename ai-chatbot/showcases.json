@@ -1070,6 +1070,57 @@
     "notes": "Runs on its own provider, /anthropic-cost-limit, where llm-cost and llm-cost-based-ratelimit are attached -- so exhausting the budget here refuses this card and nothing else. Unlike plain-chat, it never falls back to another provider's lane: a spend-limit card silently answering through the never-refuses /anthropic-plain lane would look like a working demo while proving the opposite. It is a provider-wide kill switch, not a per-visitor quota: consumerBased is false because per-consumer counters key on x-wso2-application-id, which only api-key-auth sets. On a genuinely public chatbot one visitor can spend the budget for everyone -- a denial-of-service-by-cost worth naming rather than discovering. The window is fixed, not rolling. Cost headers vanish on a 429, so missing values must read as unknown, never zero. Excluded on gemini: the card asks for the large model (overrides.model), and this demo's Gemini account has no free-tier quota for it (gemini-3.1-pro: limit 0), so Google refuses every call before the budget is ever spent."
   },
   {
+    "id": "prompt-compression",
+    "group": "Cost and performance",
+    "contextSuffix": "compression",
+    "title": "Prompt compression",
+    "tagline": "The gateway trims the prompt before the model reads it: fewer input tokens, same answer.",
+    "capability": "prompt-compressor v0.9.0",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "prompt-compressor v0.9.0",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [
+      "tokens",
+      "cost"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A question about the catalogue",
+        "sends": [
+          {
+            "ask": "Which plans include roaming data in Zone A, and how much on each?",
+            "expect": {
+              "text": "Every plan with its Zone A allowance, as in the catalogue, for about a sixth fewer input tokens than the same question on Plain chat (measured: 991 against 1,205 on Anthropic, 938 against 1,125 on Mistral). The gateway compressed the system prompt that carries the catalogue, without losing a figure."
+            }
+          }
+        ]
+      },
+      {
+        "n": 2,
+        "title": "A long message",
+        "sends": [
+          {
+            "ask": "Hi there, I hope you're well. I wanted to get in touch because I've been thinking about my phone plan for a while now and I'm honestly not sure whether I'm on the right one, so I thought I would just write it all down and ask you directly rather than trying to work it out on my own. At the moment I'm on the Everyday plan, which I think is the 15 GB one, and to be completely honest with you I usually end up using somewhere around 12 GB every month, sometimes a little bit more if I've been travelling or watching a lot of videos on the train on the way to work. The thing is, I also travel quite a lot for family reasons. I go to Spain twice a year, usually for about two weeks each time in the summer and then again around Easter, to see my parents, and then in December I'm planning to go to the United States for about ten days to visit my sister, who has just moved there. I've heard that roaming in the US can get really expensive, and I definitely don't want to come back to a huge bill like a friend of mine did last year. I'm also wondering whether it makes more sense for me to stay on a 30-day rolling plan or whether I should commit to one of the 12-month plans, because I've seen that they're a bit cheaper, but I don't really like the idea of being locked in if my situation changes. So, in short, what I'd really like to know is which plan and which add-ons would work out cheapest for me over the next 12 months, given all of the above, and whether you'd recommend the 30-day or the annual option. Thanks so much for your help, I really appreciate it.",
+            "expect": {
+              "text": "A recommendation that uses the 12 GB, the trips to Spain and the United States, and the 30-day or 12-month question, for about a fifth fewer input tokens than on Plain chat (1,226 against 1,564 on Anthropic, 1,171 against 1,482 on Mistral): the message is long, so the gateway compressed it too."
+            }
+          }
+        ]
+      }
+    ],
+    "notes": "prompt-compressor v0.9.0, twice: on the system prompt (with the catalogue) at ratio 0.8, and on the customer's newest message at 0.6 when it is over about 200 tokens; shorter messages pass untouched. Compression is statistical: it drops the words that carry the least information. Measured offline on this catalogue, 0.8 keeps every price and allowance while 0.7 starts losing figures, so the ratios are set where nothing the answers need is lost.",
+    "gateway": {
+      "stream": false
+    }
+  },
+  {
     "id": "plain-chat",
     "group": "Baseline",
     "contextSuffix": "plain",
