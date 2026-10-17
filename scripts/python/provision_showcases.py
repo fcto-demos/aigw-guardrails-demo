@@ -383,6 +383,17 @@ def lane_templates(provider: dict) -> dict:
                     "suspendDuration": 30,
                 }}]}],
         },
+        # A cheaper model tried on a quarter of the traffic: three requests on
+        # the current model, then one on the new one, in a loop. Same Gemini
+        # limit as model-failover above.
+        "model-canary": {
+            "context_suffix": "canary", "displayName": "Gradual Model Rollout", "wired": True,
+            "supportedRequestModelLocations": {"payload"},
+            "operationPolicies": [{"name": "model-weighted-round-robin", "version": "v1", "paths": [{
+                "path": path, "methods": ["POST"], "params": {
+                    "models": [{"model": large, "weight": 3}, {"model": small, "weight": 1}],
+                }}]}],
+        },
     }
 
 

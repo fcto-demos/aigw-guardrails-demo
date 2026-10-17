@@ -53,6 +53,7 @@ wso2-api-platform-ai-demo/
 | Time-based routing | During peak hours, even complex questions go to the fast model |
 | Cost-based routing | As spend rises, the gateway moves traffic to the cheaper model |
 | Model failover | A model goes down; the next request is answered by another one |
+| Gradual model rollout | A cheaper model gets a quarter of the traffic: three answers in four come from the current model, one from the new one |
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Semantic caching | A reworded question is answered from cache — no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
