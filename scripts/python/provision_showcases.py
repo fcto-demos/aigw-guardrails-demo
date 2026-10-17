@@ -81,7 +81,7 @@ import time
 from platform_api import (
     ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
     probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
-    budget_duration, showcase, showcases, azure_safety_missing,
+    budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
 )
 
 # =============================================================================
@@ -271,6 +271,16 @@ def lane_templates(provider: dict) -> dict:
             "globalPolicies": [{"name": "azure-content-safety-content-moderation", "version": "v1", "params": {
                 "request": {"jsonPath": provider["contentPath"], "showAssessment": True},
                 "response": {"jsonPath": provider["responseContentPath"], "showAssessment": True},
+            }}],
+        },
+        # The same check through AWS Bedrock Guardrails: the guardrail, its
+        # region and the credentials all come from the gateway configuration.
+        "content-safety-bedrock": {
+            "context_suffix": "content-safety-bedrock", "displayName": "Content Safety (AWS Bedrock)", "wired": True,
+            "requires": bedrock_safety_missing,
+            "globalPolicies": [{"name": "aws-bedrock-guardrail", "version": "v1", "params": {
+                "request": {"jsonPath": provider["contentPath"], "showAssessment": True},
+                "response": {"enabled": True, "jsonPath": provider["responseContentPath"], "showAssessment": True},
             }}],
         },
         "semantic-routing": {

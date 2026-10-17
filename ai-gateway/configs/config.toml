@@ -28,10 +28,15 @@ vector_db_provider_username = "default"
 vector_db_provider_password = "default"
 vector_db_provider_ttl = 3600
 
-# Content safety card (Azure Content Safety), set in
-# secrets/content-safety.env. Left blank, the card is not provisioned.
+# Content safety cards, set in secrets/content-safety.env. A provider left
+# blank is not provisioned. Azure Content Safety:
 azurecontentsafety_endpoint = '{{ env "AZURE_CONTENT_SAFETY_ENDPOINT" "" }}'
 azurecontentsafety_key = '{{ env "AZURE_CONTENT_SAFETY_KEY" "" }}'
+# AWS Bedrock Guardrails. The credentials are not set here: the AWS SDK reads
+# them from the same file (a Bedrock API key, or an access key pair).
+awsbedrock_guardrail_region = '{{ env "AWS_BEDROCK_REGION" "" }}'
+awsbedrock_guardrail_id = '{{ env "AWS_BEDROCK_GUARDRAIL_ID" "" }}'
+awsbedrock_guardrail_version = '{{ env "AWS_BEDROCK_GUARDRAIL_VERSION" "" }}'
 
 [analytics]
 enabled = '{{ env "APIP_GW_ANALYTICS_ENABLED" "false" }}'

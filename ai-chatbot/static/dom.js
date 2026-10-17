@@ -196,6 +196,14 @@ function detailHtml(detail) {
     rows.push(['Severity (0-7)', assessments.categories.slice()
       .sort((a, b) => b.severity - a.severity)
       .map((c) => c.category + ' ' + c.severity).join(' · ')]);
+  } else if (assessments && (assessments.contentPolicy || assessments.topicPolicy || assessments.wordPolicy)) {
+    // Bedrock lists what tripped: content filters, denied topics, blocked words.
+    const hits = [
+      ...((assessments.contentPolicy || {}).filters || []).map((f) => f.type + ' (' + f.confidence + ')'),
+      ...((assessments.topicPolicy || {}).topics || []).map((t) => 'topic ' + t.name),
+      ...((assessments.wordPolicy || {}).customWords || []).map((w) => 'word "' + w.match + '"'),
+    ];
+    rows.push(['Tripped', hits.join(' · ') || JSON.stringify(assessments)]);
   } else if (assessments) {
     rows.push(['Detail', JSON.stringify(assessments)]);
   }

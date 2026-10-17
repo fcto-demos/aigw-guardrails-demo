@@ -663,6 +663,61 @@
     "notes": "azure-content-safety-content-moderation v1.0.2 calls Azure Content Safety (text:analyze) with the endpoint and key from secrets/content-safety.env, read by the gateway through config.toml. It checks the visitor's last message before the model, and the model's answer before the visitor sees it. The answer check needs the whole reply, so this card does not stream; each provider's reply has its own path to the text (providers.json responseContentPath). The answer check is hard to show on stage: the models used here do not write harmful content when asked politely."
   },
   {
+    "id": "content-safety-bedrock",
+    "group": "Safety",
+    "contextSuffix": "content-safety-bedrock",
+    "title": "Content safety · AWS Bedrock",
+    "tagline": "AWS Bedrock Guardrails check the message and the model's answer: abuse and threats are refused.",
+    "capability": "aws-bedrock-guardrail v1.2.1",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "aws-bedrock-guardrail v1.2.1",
+      "llm-cost v1.2.0"
+    ],
+    "gateway": {
+      "stream": false,
+      "blockStatus": 422
+    },
+    "emphasis": [
+      "blocked",
+      "tokens"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "An angry customer, not an abusive one",
+        "sends": [
+          {
+            "ask": "This is the third time my data has stopped working this month. I'm furious. What are you going to do about it?",
+            "expect": {
+              "text": "A normal answer. Anger is not harmful content: none of the guardrail's filters trips, so the gateway lets it through."
+            }
+          }
+        ],
+        "notes": "The baseline. A content filter that blocked upset customers would be worse than none."
+      },
+      {
+        "n": 2,
+        "title": "A threat of violence",
+        "sends": [
+          {
+            "ask": "If my bill is wrong one more time, I'll come to your shop and smash your staff's faces in.",
+            "expect": {
+              "blocked": true,
+              "text": "422 from the gateway: the guardrail's violence filter blocked the message, so the model was never called."
+            }
+          }
+        ],
+        "notes": "The refusal names the filter that tripped and Bedrock's confidence. What each filter blocks, and how strictly, is set on the guardrail in the AWS console, not on the gateway."
+      }
+    ],
+    "notes": "aws-bedrock-guardrail v1.2.1 calls Bedrock's ApplyGuardrail with the guardrail, region and IAM credentials from secrets/content-safety.env, read by the gateway through config.toml, so no AWS secret is stored in the proxy definition. It checks the visitor's last message before the model, and the model's answer before the visitor sees it. The answer check needs the whole reply, so this card does not stream. Bedrock guardrails can also deny topics, filter words and mask PII: whatever the guardrail in AWS is set to do, the gateway enforces."
+  },
+  {
     "id": "spend-limit",
     "group": "Cost and performance",
     "contextSuffix": "cost-limit",

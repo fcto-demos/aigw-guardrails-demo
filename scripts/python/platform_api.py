@@ -247,8 +247,8 @@ def read_secret(provider: dict) -> str:
     sys.exit(f"{provider['secretVar']} not set in {SECRETS_FILE}")
 
 
-# The Content safety card's cloud service. Left blank here, the card's lanes
-# are left out, so a run without it still works.
+# The Content safety cards' cloud services. A service left blank here has its
+# card's lanes left out, so a run without either cloud account still works.
 CONTENT_SAFETY_FILE = ROOT / "secrets" / "content-safety.env"
 
 
@@ -264,6 +264,17 @@ def azure_safety_missing() -> str:
         return ""
     return "an Azure Content Safety endpoint and key in secrets/content-safety.env"
 
+
+def bedrock_safety_missing() -> str:
+    """What the AWS Bedrock card still needs; "" once it is set up."""
+    conf = _content_safety_conf()
+    guardrail = all(conf.get(k) for k in ("AWS_BEDROCK_REGION", "AWS_BEDROCK_GUARDRAIL_ID",
+                                          "AWS_BEDROCK_GUARDRAIL_VERSION"))
+    access = conf.get("AWS_BEARER_TOKEN_BEDROCK") or \
+        (conf.get("AWS_ACCESS_KEY_ID") and conf.get("AWS_SECRET_ACCESS_KEY"))
+    if guardrail and access:
+        return ""
+    return "a Bedrock guardrail and API key in secrets/content-safety.env"
 
 
 def gateway_verdict(status: int, body) -> str:
