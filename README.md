@@ -53,9 +53,12 @@ wso2-api-platform-ai-demo/
 | Time-based routing | During peak hours, even complex questions go to the fast model |
 | Cost-based routing | As spend rises, the gateway moves traffic to the cheaper model |
 | Model failover | A model goes down; the next request is answered by another one |
+| Gradual model rollout | A cheaper model gets a quarter of the traffic: three answers in four come from the current model, one from the new one |
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Semantic caching | A reworded question is answered from cache — no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
+| Topic guardrail | The assistant only answers about mobile plans: an essay or a piece of code is refused before the model is called |
+| Prompt decoration | The gateway adds an instruction to every request: each answer ends with a legal line the app never asked for |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
