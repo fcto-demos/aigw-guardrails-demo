@@ -217,6 +217,14 @@ run on default ports. It holds:
 When `demo.env.example` gains a setting, the scripts tell you which ones your
 `demo.env` lacks.
 
+`providers.json` lists the LLM providers. Each one has two models you can
+edit there, `small` and `large`: the routing cards move traffic between them,
+and the other cards use one of the two. They must differ, and the spend limit
+and cost-based routing need a model priced in
+`ai-gateway/configs/llm-pricing/model_prices.json`. After a change, run
+`./scripts/run-local.sh` then `./scripts/python/provision_showcases.py`.
+`"enabled": false` leaves out a provider you have no key for.
+
 **Updating a copy cloned before `demo.env` left git**: `git pull` would delete
 your `demo.env`, or refuse to run if you changed it. Keep it aside around the
 pull:

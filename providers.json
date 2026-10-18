@@ -5,8 +5,14 @@
     "enabled": true,
     "wire": "anthropic",
     "messagesSuffix": "/v1/messages",
-    "models": { "small": "claude-haiku-4-5", "large": "claude-opus-4-6" },
-    "requestModel": { "location": "payload", "identifier": "$.model" },
+    "models": {
+      "small": "claude-haiku-4-5",
+      "large": "claude-opus-4-6"
+    },
+    "requestModel": {
+      "location": "payload",
+      "identifier": "$.model"
+    },
     "contentPath": "$.messages[-1].content",
     "systemPath": "$.system",
     "responseContentPath": "$.content[0].text",
@@ -23,8 +29,14 @@
     "enabled": true,
     "wire": "openai",
     "messagesSuffix": "/v1/chat/completions",
-    "models": { "small": "ministral-8b-latest", "large": "ministral-14b-latest" },
-    "requestModel": { "location": "payload", "identifier": "$.model" },
+    "models": {
+      "small": "ministral-8b-latest",
+      "large": "ministral-14b-latest"
+    },
+    "requestModel": {
+      "location": "payload",
+      "identifier": "$.model"
+    },
     "contentPath": "$.messages[-1].content",
     "systemPath": "$.messages[0].content",
     "responseContentPath": "$.choices[0].message.content",
@@ -41,8 +53,14 @@
     "enabled": true,
     "wire": "gemini",
     "messagesSuffix": "/v1beta/models/gemini-2.5-flash:generateContent",
-    "models": { "small": "gemini-2.5-flash", "large": "gemini-3.1-pro-preview" },
-    "requestModel": { "location": "pathParam", "identifier": "models/([A-Za-z0-9.-]+)" },
+    "models": {
+      "small": "gemini-2.5-flash",
+      "large": "gemini-3.1-pro-preview"
+    },
+    "requestModel": {
+      "location": "pathParam",
+      "identifier": "models/([A-Za-z0-9.-]+)"
+    },
     "contentPath": "$.contents[-1].parts[0].text",
     "systemPath": "$.systemInstruction.parts[0].text",
     "responseContentPath": "$.candidates[0].content.parts[0].text",
