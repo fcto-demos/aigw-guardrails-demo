@@ -439,8 +439,8 @@ def lane_templates(provider: dict) -> dict:
             "supportedRequestModelLocations": {"payload", "header", "queryParam", "pathParam"},
             "operationPolicies": [{"name": "time-based-model-routing", "version": "v0", "paths": [{
                 "path": path, "methods": ["POST"], "params": {
-                    "timezone": "Europe/London",
-                    "schedules": [{"from": "18:00", "to": "22:00", "model": {"modelName": small}}],
+                    "timezone": "Europe/Madrid",
+                    "schedules": [{"from": "13:30", "to": "18:00", "model": {"modelName": small}}],
                     "fallback": {"modelName": large},
                     "requestModel": request_model,
                 }}]}],

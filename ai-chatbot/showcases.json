@@ -102,7 +102,7 @@
             "ask": "Do you support eSIM?",
             "expect": {
               "modelRole": "small",
-              "text": "The fast model: between 18:00 and 22:00 Europe/London the peak window forces it. Same question, same client, different model."
+              "text": "The fast model — between 13:30 and 18:00 Europe/Paris the peak window forces it. Same question, same client, different model."
             }
           }
         ],
