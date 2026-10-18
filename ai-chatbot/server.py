@@ -201,7 +201,8 @@ DEFAULTS = {
         "consumer brands, and never cite an external website. Refer to the operator "
         "only as {brand}."
     ),
-    "PORT": "8600",
+    # The port the app listens on, from demo.env like every other port.
+    "AI_CHATBOT_PORT": "8600",
     "TLS_VERIFY": "false",
     # Marker names/strings that identify a deliberate policy refusal. Empty by
     # default: nobody knows what the unreleased guardrail policies set yet, and
@@ -1068,7 +1069,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(502, {"error": "cannot discover the authorization server",
                                     "detail": str(getattr(exc, "reason", exc))})
         verifier, state = secrets.token_urlsafe(48), secrets.token_urlsafe(16)
-        redirect_uri = "http://%s/oauth/callback" % (self.headers.get("host") or "localhost:%s" % CONF["PORT"])
+        redirect_uri = "http://%s/oauth/callback" % (self.headers.get("host") or "localhost:%s" % CONF["AI_CHATBOT_PORT"])
         if len(_PENDING_LOGINS) >= MAX_PENDING_LOGINS:
             _PENDING_LOGINS.clear()
         _PENDING_LOGINS[state] = {"verifier": verifier, "card": card, "redirect_uri": redirect_uri,
@@ -1751,7 +1752,7 @@ def main():
 
     verify = _truthy(CONF["TLS_VERIFY"])
     SSL_CONTEXT = build_ssl_context(verify)
-    port = args.port or int(CONF["PORT"])
+    port = args.port or int(CONF["AI_CHATBOT_PORT"])
 
     registry = load_showcases()
 

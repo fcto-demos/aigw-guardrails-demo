@@ -55,6 +55,11 @@ services:
       - path: ../demo.env
         required: false
         format: raw
+    # Its public addresses, from demo.env's hostname and ports, so they follow
+    # any change there. These win over the same names in api-platform.env.
+    environment:
+      - APIP_AIW_DOMAIN=${DEMO_HOSTNAME:-localhost}:${AI_WORKSPACE_PORT:-9643}
+      - APIP_AIW_GATEWAY_CONTROLPLANE_HOST=${DEMO_HOSTNAME:-localhost}:${PLATFORM_API_PORT:-9243}
     volumes:
       - ./configs/config.toml:/etc/ai-workspace/config.toml:ro
       - ./resources/role-to-scope-mapping.yaml:/etc/ai-workspace/role-to-scope-mapping.yaml:ro
@@ -82,6 +87,9 @@ services:
       - path: ../demo.env
         required: false
         format: raw
+    # Its public address, from demo.env's hostname and port.
+    environment:
+      - APIP_AP_SERVER_BASE_URL=https://${DEMO_HOSTNAME:-localhost}:${API_PORTAL_PORT:-9543}
     volumes:
       - ./configs/config.toml:/app/configs/config.toml:ro
       - api-portal-data:/app/data
