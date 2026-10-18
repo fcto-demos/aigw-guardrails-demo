@@ -1,20 +1,20 @@
-# WSO2 AI Platform — Demo
+# WSO2 AI Platform - Demo
 
 A self-contained, local demo of the WSO2 AI Platform's gateway: LLM
 showcases, each driving a real policy (routing, caching, guardrails, spend
 limits, failover...) against Anthropic, Mistral and Gemini, and MCP showcases
 where an agent uses tools through the gateway. Everything runs on
-your machine with Docker Compose — nothing to deploy, nothing shared.
+your machine with Docker Compose: nothing to deploy, nothing shared.
 
 ## Overview
 
 Three components, wired together:
 
-- **ai-chatbot** — the demo UI. A small chat app with one card per showcase,
+- **ai-chatbot**: the demo UI. A small chat app with one card per showcase,
   on two pages: **LLM Gateway** and **MCP Gateway**.
-- **ai-gateway** — the WSO2 AI Gateway. Every request is policy-enforced
+- **ai-gateway**: the WSO2 AI Gateway. Every request is policy-enforced
   before it reaches an LLM provider or an MCP server.
-- **ai-workspace** — the control plane. Registers the gateway and configures
+- **ai-workspace**: the control plane. Registers the gateway and configures
   its providers and policies.
 
 ## Preview
@@ -27,18 +27,18 @@ Three components, wired together:
 
 Every showcase is its own lane: one gateway proxy per (showcase, provider),
 each with the policy it demonstrates already attached. `ai-chatbot` never
-configures the gateway at request time — it only picks which lane to call.
+configures the gateway at request time: it only picks which lane to call.
 
 ## Project structure
 
 ```
 wso2-api-platform-ai-demo/
 ├── ai-chatbot/       demo UI + every showcase (showcases.json)
-├── ai-gateway/       WSO2 AI Gateway — policies, custom image, compose stack
+├── ai-gateway/       WSO2 AI Gateway: policies, custom image, compose stack
 ├── ai-workspace/     AI Workspace: AI control plane
-├── mcp-servers/      MCP servers behind the MCP showcases — own compose stack
+├── mcp-servers/      MCP servers behind the MCP showcases, own compose stack
 ├── scripts/          setup, run, stop, logs, certificate generation
-├── secrets/          API keys
+├── secrets/          API keys and credentials (only the examples are in git)
 ├── .docs/            architecture diagram and other reference docs
 ├── demo.env.example  template for demo.env: identity, versions, ports, analytics mode
 └── providers.json    the LLM providers wired into every showcase
@@ -56,7 +56,7 @@ wso2-api-platform-ai-demo/
 | Gradual model rollout | A cheaper model gets a quarter of the traffic: three answers in four come from the current model, one from the new one |
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Customer tier routing | Premium customers are served by Anthropic, the others by Mistral, from a tier header the gateway would read from the user's token (a selector in the demo) |
-| Semantic caching | A reworded question is answered from cache — no model call, no tokens |
+| Semantic caching | A reworded question is answered from cache: no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
 | Topic guardrail | The assistant only answers about mobile plans: an essay or a piece of code is refused before the model is called |
 | Prompt decoration | The gateway adds an instruction to every request: each answer ends with a legal line the app never asked for |
@@ -86,19 +86,18 @@ reply, with what the gateway did.
 The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
 Server or any other): see [.docs/mcp-identity-provider.md](.docs/mcp-identity-provider.md).
 
-
 ## Prerequisites
 
 - **Docker**, with Compose v2 (`docker compose version`)
 - **Python 3**
 - **openssl**, **curl**, **unzip**, **htpasswd**
 - At least one LLM provider API key: **Anthropic**, **Mistral** or **Gemini**
-- Semantic caching needs a **Mistral** key specifically for embeddings —
-  it's the only embeddings provider supported today. The same key you use
-  for Mistral chat works fine for this too.
+- A **Mistral** key for the gateway itself (`EMBEDDINGS_PROVIDER_API_KEY`):
+  the semantic cards (caching, routing, prompt and topic guards) and
+  Intelligent routing use it. It can be the same key as for Mistral chat.
 
 This demo has been tested most thoroughly with **Anthropic** and
-**Mistral** — that's the combination we recommend. **Gemini**'s free tier
+**Mistral**, the combination we recommend. **Gemini**'s free tier
 is more restrictive: some models aren't available on a newly created key,
 and you're more likely to hit rate limits.
 
@@ -123,52 +122,56 @@ set up):
 
 `./scripts/reset-and-setup.sh` must be the first thing you run. It installs
 the `ap` CLI, builds the custom gateway image, generates local certificates,
-starts every container, and provisions every showcase — nothing else
-here creates any of that.
+starts every container, and provisions every showcase. Nothing else here
+creates any of that.
 
 ```bash
 cp secrets/api-keys.env.example secrets/api-keys.env
-# edit secrets/api-keys.env — paste in at least one provider key
+# (Needed) edit secrets/api-keys.env: paste in at least one provider key
 
 cp secrets/idp.env.example secrets/idp.env
-# edit secrets/idp.env — to configure the AuthN / AuthZ use cases (MCP)
+# (Optional) edit secrets/idp.env: to configure the AuthN / AuthZ use cases (MCP)
 
 cp secrets/content-safety.env.example secrets/content-safety.env
-# edit secrets/content-safety.env — Azure Content Safety and/or AWS Bedrock Guardrails (optional, Content safety cards)
+# (Optional) edit secrets/content-safety.env: Azure Content Safety and/or AWS Bedrock Guardrails, for the Content safety cards
 
 ./scripts/reset-and-setup.sh
 ```
 
 The setup creates the rest from the examples: `demo.env` and the two
-`api-platform.env` files, which need no editing for a local run. It fills in
-the admin password hash and the gateway's registration with AI Workspace
-itself. If another program already uses the gateway's ports (8080, 8443...),
-create `demo.env` first (`cp demo.env.example demo.env`) and set
+`api-platform.env` files, which need no editing for a local run. It also
+registers the gateway with AI Workspace.
+
+It asks you to choose a password for AI Workspace's `admin` user. For a local
+demo, `admin` is the simplest: the provisioning logs in with it unless
+`ADMIN_PASSWORD` is set. To use another one, pass it up front instead:
+`ADMIN_PASSWORD='...' ./scripts/reset-and-setup.sh`.
+
+If another program already uses the gateway's ports (8080, 8443...), create
+`demo.env` first (`cp demo.env.example demo.env`) and set
 `GATEWAY_PORT_OFFSET=1` in it.
 
-First run takes a few minutes.
+First run takes a few minutes and ends with the chatbot's address.
 
 ### After that
 
 ```bash
-./scripts/run-local.sh      # start again — keeps existing data
+./scripts/run-local.sh      # start again, keeps existing data
 ./scripts/stop-local.sh     # stop everything
 ./scripts/logs-local.sh     # tail every component's logs together
-
-# Content safety, once secrets/content-safety.env is filled in after the first run
-./scripts/python/provision_showcases.py content-safety mistral-content-safety gemini-content-safety
-./scripts/python/provision_showcases.py content-safety-bedrock mistral-content-safety-bedrock gemini-content-safety-bedrock
 ```
 
 Only reach for `reset-and-setup.sh` again if you actually want a clean
-slate — it wipes every database (providers, gateway registrations, cached
+slate: it wipes every database (providers, gateway registrations, cached
 responses) and provisions from scratch.
 
 ### Try it out
 
-Connect to the ai-chatbot URL and try the different showcases.
+Open the chatbot at http://localhost:8600 and try the showcases. Its launcher
+menu links to the other consoles.
 
-After that, connect to AI Workspace to see how it's all modeled in the platform:
+Then open AI Workspace (https://localhost:9643, user `admin`) to see how it's
+all modeled in the platform:
 
 The gateway, registered and active:
 ![Gateway](.docs/preview-ai-workspace-ai-gateway.png)
@@ -185,51 +188,69 @@ One MCP proxy per showcase:
 One Application per provider (for analytics purposes):
 ![Apps](.docs/preview-ai-workspace-apps.png)
 
+With Moesif analytics on (see `ANALYTICS_MODE` below), you can also consult
+the Analytics view:
+![Analytics](.docs/preview-ai-analytics.png)
+
 ## Configuration
 
-`demo.env`, at the repo root, is the single source of truth shared by every
-component. The scripts create it from `demo.env.example` on the first run, and
-git ignores it, so what you change there stays on your machine. It holds the demo's name, its hostname (for a VM deployment — local dev
-never reads it), component versions, every port except ai-gateway's own
-(set directly in `ai-gateway/.env`), and `ANALYTICS_MODE` (`moesif` or
-`local` — see the architecture diagram above).
+Each machine's settings live in `demo.env`, at the repo root. The scripts
+create it from `demo.env.example` on the first run, and git ignores it, so
+what you change there stays on your machine. Nothing needs editing for a first
+run on default ports. It holds:
 
-The local dev scripts source it automatically; nothing needs editing for a
-first run on default ports. If `demo.env.example` later gains a setting,
-`run-local.sh` tells you which ones your `demo.env` lacks.
+- `DEMO_NAME`: the demo's name, also the prefix of the custom gateway image.
+- `DEMO_HOSTNAME`: the public hostname on a VM. Leave it blank locally.
+- The component versions. The gateway's must match `ai-gateway/build.yaml`.
+- The ports, except the gateway's own, which are in `ai-gateway/.env`.
+- `GATEWAY_PORT_OFFSET`: moves all the gateway's ports up, like the port
+  offset of WSO2 products. With 1, the gateway answers on 8444 instead of
+  8443. The chatbot and the provisioning follow.
+- `ANALYTICS_MODE`: `moesif` (needs your Moesif application id in
+  `secrets/api-keys.env`) or `local` (Jaeger, OpenSearch, Prometheus and
+  Grafana on your machine).
 
-`GATEWAY_PORT_OFFSET` moves all the gateway's ports up, like the port offset of
-WSO2 products: with 1, the gateway answers on 8444 instead of 8443. Use it when
-another program already uses those ports; the chatbot and the provisioning
-follow.
+When `demo.env.example` gains a setting, the scripts tell you which ones your
+`demo.env` lacks.
 
-Updating an older copy of this repo, where `demo.env` was still tracked by git,
-deletes your `demo.env` on `git pull`. Save it first: `cp demo.env
-/tmp/demo.env.keep`, pull, then `cp /tmp/demo.env.keep demo.env`.
+**Updating a copy cloned before `demo.env` left git**: `git pull` would delete
+your `demo.env`, or refuse to run if you changed it. Keep it aside around the
+pull:
 
-To provision the showcases onto an **already-running** AI Workspace and
-gateway instead of this repo's own stack, set `AIW_URL`, `GATEWAY_ID`,
-`GATEWAY_ENDPOINT`, `ADMIN_USERNAME`/`ADMIN_PASSWORD` (and optionally
-`DEMO_PROJECT_ID`), then run `scripts/python/provision_showcases.py --check`
-(read-only: lists what would be created or overwritten) before
-`--existing-gateway`. Set `GATEWAY_BASE` to that gateway in `demo.env`, and in `providers.json` disable any provider whose id already
-exists there.
+```bash
+cp demo.env ~/demo.env.keep && git checkout demo.env
+git pull
+cp ~/demo.env.keep demo.env
+```
+
+### Provisioning onto an existing AI Workspace and gateway
+
+To load the showcases onto an AI Workspace and gateway that are already
+running, instead of this repo's own stack:
+
+1. Export `AIW_URL`, `GATEWAY_ID`, `GATEWAY_ENDPOINT`, `ADMIN_USERNAME` and
+   `ADMIN_PASSWORD`, and optionally `DEMO_PROJECT_ID` to keep the demo in its
+   own project (created if missing).
+2. In `providers.json`, disable any provider whose id already exists there.
+3. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
+   and lists what would be created or overwritten.
+4. Run `./scripts/python/provision_showcases.py --existing-gateway`.
+5. Point the chatbot at that gateway: `GATEWAY_BASE=https://host:port` in
+   `demo.env`.
 
 ## Troubleshooting
 
-- **"docker is not running"** — start Docker Desktop (or Colima) first.
-- **"missing secrets/api-keys.env"** — `reset-and-setup.sh` refuses to
+- **"docker is not running"**: start Docker Desktop (or Colima) first.
+- **"missing secrets/api-keys.env"**: `reset-and-setup.sh` refuses to
   continue without it; the error message shows the exact copy-paste fix.
-- **A showcase's card loads but refuses to chat** — that provider has no key
+- **"login failed" while provisioning**: the AI Workspace admin password is
+  not `admin`. Run it again with `ADMIN_PASSWORD='...'` in front.
+- **The gateway doesn't start, "port is already allocated"**: another program
+  uses its ports. Set `GATEWAY_PORT_OFFSET=1` in `demo.env`.
+- **A showcase's card loads but refuses to chat**: that provider has no key
   set for that lane. Expected for any provider you left blank; check
   `secrets/api-keys.env` for the one you expected to work.
-- **Intelligent routing fails to deploy after a `git pull`** — the custom
-  gateway image is only built when missing. Remove it
-  (`docker image rm ghcr.io/wso2/api-platform/ai-demo-gateway-runtime:1.2.0`)
-  and re-run `reset-and-setup.sh` so it picks up the new policy.
-- **A fresh restart briefly 502s** — recreating `gateway-controller` and
-  `gateway-runtime` together causes a short xDS reconnect race. It is
-  benign and clears up within 10–20 seconds.
-- **Nothing else works** — `./scripts/stop-local.sh` then
+- **The gateway answers 502 just after a restart**: its two containers are
+  reconnecting to each other. It clears up within 10 to 20 seconds.
+- **Nothing else works**: `./scripts/stop-local.sh` then
   `./scripts/reset-and-setup.sh` gets you back to a known-good state.
-
