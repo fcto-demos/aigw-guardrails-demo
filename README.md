@@ -91,13 +91,16 @@ Server or any other): see [.docs/mcp-identity-provider.md](.docs/mcp-identity-pr
 - **Docker**, with Compose v2 (`docker compose version`)
 - **Python 3**
 - **openssl**, **curl**, **unzip**, **htpasswd**
-- At least one LLM provider API key: **Anthropic**, **Mistral** or **Gemini**
+- At least one LLM provider API key:
+  - **Anthropic**: [create a key](https://platform.claude.com/settings/keys)
+  - **Mistral**: [create a key](https://console.mistral.ai/api-keys)
+  - **Gemini**: [create a key](https://aistudio.google.com/apikey)
 - A **Mistral** key for the gateway itself (`EMBEDDINGS_PROVIDER_API_KEY`):
   the semantic cards (caching, routing, prompt and topic guards) and
   Intelligent routing use it. It can be the same key as for Mistral chat.
 
-This demo has been tested most thoroughly with **Anthropic** and
-**Mistral**, the combination we recommend. **Gemini**'s free tier
+This demo has been tested with paid **Anthropic** credit and a free
+**Mistral** API key, the combination we recommend. **Gemini**'s free tier
 is more restrictive: some models aren't available on a newly created key,
 and you're more likely to hit rate limits.
 
@@ -206,9 +209,10 @@ run on default ports. It holds:
 - `GATEWAY_PORT_OFFSET`: moves all the gateway's ports up, like the port
   offset of WSO2 products. With 1, the gateway answers on 8444 instead of
   8443. The chatbot and the provisioning follow.
-- `ANALYTICS_MODE`: `moesif` (needs your Moesif application id in
-  `secrets/api-keys.env`) or `local` (Jaeger, OpenSearch, Prometheus and
-  Grafana on your machine).
+- `ANALYTICS_MODE`: `moesif` (needs your [Moesif](https://www.moesif.com/)
+  application id in `secrets/api-keys.env`, found in Moesif under Settings,
+  API Keys) or `local` (Jaeger, OpenSearch, Prometheus and Grafana on your
+  machine).
 
 When `demo.env.example` gains a setting, the scripts tell you which ones your
 `demo.env` lacks.
