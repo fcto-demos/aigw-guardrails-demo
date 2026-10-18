@@ -84,17 +84,18 @@ reply, with what the gateway did.
 | Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
 
 The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
-Server or any other): see [.docs/mcp-identity-provider.md](.docs/mcp-identity-provider.md).
+Server or any other): see the [IDP Setup](.docs/mcp-identity-provider.md).
 
 ## Prerequisites
 
 - **Docker**, with Compose v2 (`docker compose version`)
 - **Python 3**
 - **openssl**, **curl**, **unzip**, **htpasswd**
-- At least one LLM provider API key:
-  - **Anthropic**: [create a key](https://platform.claude.com/settings/keys)
-  - **Mistral**: [create a key](https://console.mistral.ai/api-keys)
-  - **Gemini**: [create a key](https://aistudio.google.com/apikey)
+- An API key from at least one LLM provider:
+  [Anthropic](https://platform.claude.com/settings/keys),
+  [Mistral](https://console.mistral.ai/api-keys) or
+  [Gemini](https://aistudio.google.com/apikey) (each link opens the page where
+  you create one)
 - A **Mistral** key for the gateway itself (`EMBEDDINGS_PROVIDER_API_KEY`):
   the semantic cards (caching, routing, prompt and topic guards) and
   Intelligent routing use it. It can be the same key as for Mistral chat.
@@ -117,7 +118,7 @@ set up):
   and a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html), in `secrets/content-safety.env`
 - **MCP Authentication and Authorization**: an OpenID Connect identity provider,
   for example [Asgardeo](https://asgardeo.io/signup), in `secrets/idp.env`
-  (setup: [.docs/mcp-identity-provider.md](.docs/mcp-identity-provider.md))
+  (see the [IDP Setup](.docs/mcp-identity-provider.md))
 
 ## Installation
 
