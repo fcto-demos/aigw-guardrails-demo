@@ -40,7 +40,7 @@ wso2-api-platform-ai-demo/
 ├── scripts/          setup, run, stop, logs, certificate generation
 ├── secrets/          API keys
 ├── .docs/            architecture diagram and other reference docs
-├── demo.env          single source of truth: identity, versions, ports, analytics mode
+├── demo.env.example  template for demo.env: identity, versions, ports, analytics mode
 └── providers.json    the LLM providers wired into every showcase
 ```
 
@@ -191,21 +191,31 @@ One Application per provider (for analytics purposes):
 ## Configuration
 
 `demo.env`, at the repo root, is the single source of truth shared by every
-component: the demo's name, its hostname (for a VM deployment — local dev
+component. The scripts create it from `demo.env.example` on the first run, and
+git ignores it, so what you change there stays on your machine. It holds the demo's name, its hostname (for a VM deployment — local dev
 never reads it), component versions, every port except ai-gateway's own
 (set directly in `ai-gateway/.env`), and `ANALYTICS_MODE` (`moesif` or
 `local` — see the architecture diagram above).
 
 The local dev scripts source it automatically; nothing needs editing for a
-first run on default ports.
+first run on default ports. If `demo.env.example` later gains a setting,
+`run-local.sh` tells you which ones your `demo.env` lacks.
+
+`GATEWAY_PORT_OFFSET` moves all the gateway's ports up, like the port offset of
+WSO2 products: with 1, the gateway answers on 8444 instead of 8443. Use it when
+another program already uses those ports; the chatbot and the provisioning
+follow.
+
+Updating an older copy of this repo, where `demo.env` was still tracked by git,
+deletes your `demo.env` on `git pull`. Save it first: `cp demo.env
+/tmp/demo.env.keep`, pull, then `cp /tmp/demo.env.keep demo.env`.
 
 To provision the showcases onto an **already-running** AI Workspace and
 gateway instead of this repo's own stack, set `AIW_URL`, `GATEWAY_ID`,
 `GATEWAY_ENDPOINT`, `ADMIN_USERNAME`/`ADMIN_PASSWORD` (and optionally
 `DEMO_PROJECT_ID`), then run `scripts/python/provision_showcases.py --check`
 (read-only: lists what would be created or overwritten) before
-`--existing-gateway`. Point `ai-chatbot/config.env`'s `GATEWAY_BASE` at that
-gateway, and in `providers.json` disable any provider whose id already
+`--existing-gateway`. Set `GATEWAY_BASE` to that gateway in `demo.env`, and in `providers.json` disable any provider whose id already
 exists there.
 
 ## Troubleshooting

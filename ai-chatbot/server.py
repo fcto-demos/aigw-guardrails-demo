@@ -173,7 +173,8 @@ MODEL_OVERRIDE = None
 DEFAULTS = {
     # scheme://host:port that every showcase's computed context path
     # (/<providerId>-<contextSuffix>, see resolve_gateway()) hangs off.
-    "GATEWAY_BASE": "https://changeme.example.com:8443",
+    # Blank: worked out from demo.env in load_config().
+    "GATEWAY_BASE": "",
     # The operator this assistant belongs to. Deliberately a placeholder: set
     # BRAND_NAME once and it flows into the wordmark, the page title and the
     # system prompt. Nothing else hard-codes a brand.
@@ -285,6 +286,13 @@ def load_config(path, secrets_path=None):
     for key, value in os.environ.items():
         if value and SHOWCASE_ENV_RE.match(key):
             conf[key] = value
+    # Unless set, the gateway is on this machine's hostname (localhost by
+    # default), on its HTTPS port plus the port offset from demo.env.
+    if not conf.get("GATEWAY_BASE"):
+        ports = {}
+        _merge_env_file(ports, os.path.join(HERE, "..", "ai-gateway", ".env"))
+        port = int(ports.get("GATEWAY_HTTPS_PORT") or 8443) + int(conf.get("GATEWAY_PORT_OFFSET") or 0)
+        conf["GATEWAY_BASE"] = "https://%s:%d" % (conf.get("DEMO_HOSTNAME") or "localhost", port)
     return conf
 
 

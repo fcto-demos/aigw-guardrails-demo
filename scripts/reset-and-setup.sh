@@ -31,8 +31,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-set -a; source "$ROOT/demo.env"; set +a
 source "$ROOT/scripts/tools.sh"
+load_demo_env "$ROOT"
 
 LOGS="$ROOT/.logs"
 

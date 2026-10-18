@@ -4,7 +4,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-set -a; source "$ROOT/demo.env"; set +a
+source "$ROOT/scripts/tools.sh"
+load_demo_env "$ROOT"
 
 echo "### ai-gateway"
 # Forces every profile: unlike up, down only tears down what the resolved

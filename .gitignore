@@ -12,6 +12,9 @@ keys.env
 configs/keys.env
 secrets/*
 !secrets/*.example
+
+# --- this machine's settings, copied from demo.env.example on the first run
+demo.env
 !api-platform.env.example
 
 # --- ai-chatbot/config.env IS tracked and holds no secrets -- every

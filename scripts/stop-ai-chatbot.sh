@@ -8,7 +8,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-set -a; source "$ROOT/demo.env"; set +a
+source "$ROOT/scripts/tools.sh"
+load_demo_env "$ROOT"
 
 BASE="http://127.0.0.1:${AI_CHATBOT_PORT}"
 

@@ -11,19 +11,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-set -a; source "$ROOT/demo.env"; set +a
 source "$ROOT/scripts/tools.sh"
+load_demo_env "$ROOT"   # this machine's settings, created on the first run (see tools.sh)
 resolve_python   # sets $PYTHON -- python3, or a confirmed-Python-3 `python` (see tools.sh)
 resolve_analytics "$ROOT"   # sets $ANALYTICS_* from ANALYTICS_MODE (see tools.sh)
 resolve_embedding_key "$ROOT"   # sets $EMBEDDING_PROVIDER_API_KEY from EMBEDDINGS_PROVIDER_API_KEY (see tools.sh)
 
 LOGS="$ROOT/.logs"
 
-# Plain `source`, deliberately not `set -a`: ai-gateway/.env also carries its
-# own COMPOSE_PROJECT_NAME, and exporting that would leak into the
-# ai-workspace docker compose call below, which needs ITS OWN value. Only
-# read here for the final echo's own $GATEWAY_HTTPS_PORT.
-source "$ROOT/ai-gateway/.env"
+# The gateway's ports, moved up by the port offset from demo.env (see tools.sh).
+export_gateway_ports "$ROOT"
 
 require_env "$ROOT/ai-workspace/api-platform.env"
 require_env "$ROOT/ai-gateway/api-platform.env"

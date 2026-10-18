@@ -37,15 +37,16 @@ def _read_env_file(path: Path) -> dict:
 
 
 def _read_demo_env() -> dict:
-    """../demo.env, the single source of truth for identity, hostname and
-    the ports shared across components. Component-specific ports (e.g.
-    ai-gateway's own) live in that component's own .env instead -- see
-    GATEWAY_ENDPOINT below."""
-    path = ROOT / "demo.env"
+    """This machine's settings from demo.env: the demo's name, hostname,
+    versions and ports. On the first run, demo.env is created from
+    demo.env.example, as the shell scripts do."""
+    path, example = ROOT / "demo.env", ROOT / "demo.env.example"
     if not path.exists():
-        sys.exit(f"missing {path} -- the single source of truth for this demo's identity/hostname, "
-                  "read by every script and provisioning step. Did you mean to run this from a "
-                  "checkout of the repo, not a subdirectory copy?")
+        if not example.exists():
+            sys.exit(f"missing {example} -- did you mean to run this from a checkout of the repo, "
+                     "not a subdirectory copy?")
+        path.write_text(example.read_text())
+        print(f"  created {path.name} from {example.name} -- adapt it to this machine if needed")
     return _read_env_file(path)
 
 
@@ -61,10 +62,17 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")  # seeded by scripts/generate-local-certs.sh
 
 GATEWAY_ID = os.environ.get("GATEWAY_ID") or "local-gateway"  # immutable resource id, not the display name
-# ai-gateway's own port, hand-set in its own .env (same value locally and on
-# the VM, no local-dev offset) -- not demo.env, see that file's own comment.
-GATEWAY_ENDPOINT = (os.environ.get("GATEWAY_ENDPOINT")
-                    or f"localhost:{_read_env_file(ROOT / 'ai-gateway' / '.env')['GATEWAY_HTTPS_PORT']}")
+
+
+def gateway_ports() -> dict:
+    """The gateway's ports, each moved up by the port offset from demo.env."""
+    offset = int(DEMO_ENV.get("GATEWAY_PORT_OFFSET") or 0)
+    return {key: str(int(value) + offset)
+            for key, value in _read_env_file(ROOT / "ai-gateway" / ".env").items()
+            if key.startswith("GATEWAY_") and key.endswith("_PORT") and value.isdigit()}
+
+
+GATEWAY_ENDPOINT = os.environ.get("GATEWAY_ENDPOINT") or f"localhost:{gateway_ports()['GATEWAY_HTTPS_PORT']}"
 
 # One entry per upstream LLM, loaded from providers.json at the repo root --
 # not defined here, because ai-chatbot/server.py needs the exact same

@@ -24,6 +24,33 @@ resolve_python() {
   fi
 }
 
+# Loads this machine's settings from demo.env. On the first run, demo.env is
+# created from demo.env.example; later, any setting the example has gained is
+# pointed out, so it can be added.
+load_demo_env() {
+  local root="$1" key
+  if [[ ! -f "$root/demo.env" ]]; then
+    cp "$root/demo.env.example" "$root/demo.env"
+    echo "  created demo.env from demo.env.example -- adapt it to this machine if needed"
+  fi
+  for key in $(grep -oE '^[A-Z_]+=' "$root/demo.env.example" | tr -d '='); do
+    grep -q "^$key=" "$root/demo.env" \
+      || echo "  demo.env has no $key: add it from demo.env.example ($(grep "^$key=" "$root/demo.env.example"))" >&2
+  done
+  set -a
+  source "$root/demo.env"
+  set +a
+}
+
+# Moves every gateway port up by the port offset from demo.env (1 turns 8443
+# into 8444) and hands the result to Docker Compose.
+export_gateway_ports() {
+  local root="$1" offset="${GATEWAY_PORT_OFFSET:-0}" name base
+  while IFS='=' read -r name base; do
+    export "$name=$((base + offset))"
+  done < <(grep -E '^GATEWAY_[A-Z_]+_PORT=[0-9]+$' "$root/ai-gateway/.env")
+}
+
 # Turns demo.env's ANALYTICS_MODE plus secrets/api-keys.env's Moesif id into
 # $ANALYTICS_ENABLED / $ANALYTICS_MOESIF_ID / $ANALYTICS_COMPOSE_PROFILES.
 # Pass these as a command-scoped prefix on the one docker compose call that

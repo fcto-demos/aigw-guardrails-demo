@@ -79,7 +79,7 @@ import sys
 import time
 
 from platform_api import (
-    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
+    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID, gateway_ports,
     probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
 )
@@ -663,6 +663,7 @@ def restart_gateway_controller():
     subprocess.run(
         ["docker", "compose", "up", "-d", "--force-recreate", "gateway-controller"],
         cwd=str(gw_dir), check=True,
+        env={**os.environ, **gateway_ports()},  # the same ports as run-local.sh, offset included
     )
 
 
