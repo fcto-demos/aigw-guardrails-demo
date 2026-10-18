@@ -16,7 +16,8 @@
 #      + model-round-robin need it — the stock image doesn't carry them) if
 #      it isn't already in the local Docker image store.
 #   5. Wipes ai-workspace + ai-gateway state (containers + volumes).
-#   6. Generates local certs/keys (idempotent).
+#   6. Creates the two api-platform.env files from their examples, then
+#      generates local certs/keys (both idempotent).
 #   7. Brings the stack up and provisions every lane through
 #      scripts/python/provision_showcases.py.
 #
@@ -105,6 +106,10 @@ echo "### wiping ai-workspace + ai-gateway state (containers + volumes)"
 # see stop-local.sh's own identical comment on why.
 (cd ai-gateway && COMPOSE_PROFILES=moesif,tracing,logging,metrics docker compose down -v) >"$LOGS/ai-gateway-down.log" 2>&1
 (cd mcp-servers && docker compose down) >"$LOGS/mcp-servers-down.log" 2>&1
+
+echo "### api-platform.env files (local values, nothing to edit for a local run)"
+copy_example_if_missing "$ROOT" ai-workspace/api-platform.env
+copy_example_if_missing "$ROOT" ai-gateway/api-platform.env
 
 echo "### certs and keys (idempotent — fills in only what's missing)"
 ./scripts/generate-local-certs.sh

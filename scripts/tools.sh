@@ -24,15 +24,22 @@ resolve_python() {
   fi
 }
 
+# Creates a file from the .example next to it when it is missing, and says so.
+# Usage: copy_example_if_missing <repo root> <path inside the repo>
+copy_example_if_missing() {
+  local root="$1" file="$2"
+  if [[ ! -f "$root/$file" ]]; then
+    cp "$root/$file.example" "$root/$file"
+    echo "  created $file from $file.example"
+  fi
+}
+
 # Loads this machine's settings from demo.env. On the first run, demo.env is
 # created from demo.env.example; later, any setting the example has gained is
 # pointed out, so it can be added.
 load_demo_env() {
   local root="$1" key
-  if [[ ! -f "$root/demo.env" ]]; then
-    cp "$root/demo.env.example" "$root/demo.env"
-    echo "  created demo.env from demo.env.example -- adapt it to this machine if needed"
-  fi
+  copy_example_if_missing "$root" demo.env
   for key in $(grep -oE '^[A-Z_]+=' "$root/demo.env.example" | tr -d '='); do
     grep -q "^$key=" "$root/demo.env" \
       || echo "  demo.env has no $key: add it from demo.env.example ($(grep "^$key=" "$root/demo.env.example"))" >&2

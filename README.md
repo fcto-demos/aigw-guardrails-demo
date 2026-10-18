@@ -136,18 +136,15 @@ cp secrets/idp.env.example secrets/idp.env
 cp secrets/content-safety.env.example secrets/content-safety.env
 # edit secrets/content-safety.env — Azure Content Safety and/or AWS Bedrock Guardrails (optional, Content safety cards)
 
-cp ai-workspace/api-platform.env.example ai-workspace/api-platform.env
-cp ai-gateway/api-platform.env.example ai-gateway/api-platform.env
-
 ./scripts/reset-and-setup.sh
 ```
 
-The two `api-platform.env` files above need no editing for a local run —
-every value in them is either already correct as shipped, or filled in
-automatically on first run: the admin password hash (by
-`generate-local-certs.sh`) and the gateway's control-plane registration
-token (by `provision_showcases.py`). Setting these up by hand, without
-`reset-and-setup.sh`, isn't documented here.
+The setup creates the rest from the examples: `demo.env` and the two
+`api-platform.env` files, which need no editing for a local run. It fills in
+the admin password hash and the gateway's registration with AI Workspace
+itself. If another program already uses the gateway's ports (8080, 8443...),
+create `demo.env` first (`cp demo.env.example demo.env`) and set
+`GATEWAY_PORT_OFFSET=1` in it.
 
 First run takes a few minutes.
 
