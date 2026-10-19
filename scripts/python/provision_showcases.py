@@ -51,6 +51,10 @@ optionally DEMO_PROJECT_ID (default "default"; created if missing),
                         non-zero on either. Needs no provider keys.
     --existing-gateway  use GATEWAY_ID as-is -- no registration, no token,
                         no rename, no container restart.
+    --skip-existing     create only what is missing: a provider, application,
+                        lane or MCP proxy whose id already exists is left as
+                        is (not updated, not redeployed, its key not rotated).
+                        With --check, lists those as "keep", not OVERWRITE.
 
 model-failover's live fault-injection toggles (inject/break/heal/restore) are
 a separate concern from provisioning -- see scripts/python/failover_control.py and
@@ -79,9 +83,11 @@ import sys
 import time
 
 from platform_api import (
-    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
+    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, MCP_GATEWAY_ID, MCP_GATEWAY_ENDPOINT,
+    PROVIDERS, DEFAULT_PROVIDER_ID,
     probe, gateway_mgmt, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
+    idp_missing,
 )
 
 # =============================================================================
@@ -92,7 +98,7 @@ from platform_api import (
 GATEWAY_DISPLAY_NAME = "ai-gateway"
 # DEMO_PROJECT_ID puts every demo resource in its own project on a shared
 # control plane; created if missing. Unset, the local-dev "default".
-PROJECT_ID = os.environ.get("DEMO_PROJECT_ID") or "default"
+PROJECT_ID = os.environ.get("DEMO_PROJECT_ID") or DEMO_ENV.get("DEMO_PROJECT_ID") or "default"
 
 # Gateway-issued per-lane API keys (api-key-auth), as opposed to the upstream
 # provider credentials (platform_api.py's SECRETS_FILE) — a different secret,
@@ -695,7 +701,17 @@ DEFAULT_LANE_IDS = [lid for lid, l in ALL_LANES.items() if l["config"] is not No
 # MCP proxies: one per showcases.json card with an "mcp" block, which holds
 # its context, upstream MCP server and policies. No key is issued: the
 # platform's API keys cover LLM resources only, so these proxies are open.
-MCP_PROXIES = {s["id"]: s for s in showcases() if s.get("mcp")}
+# They deploy to MCP_GATEWAY_ID, the LLM gateway unless set apart. A card
+# signing users in (mcp-auth) is left out until an identity provider is set.
+MCP_PROXIES = {}
+for _s in showcases():
+    if not _s.get("mcp"):
+        continue
+    _missing = idp_missing() if any(p["name"] == "mcp-auth" for p in _s["mcp"].get("policies", [])) else ""
+    if _missing:
+        SKIPPED_LANES[_s["id"]] = _missing
+    else:
+        MCP_PROXIES[_s["id"]] = _s
 
 
 # =============================================================================
@@ -812,11 +828,13 @@ def ensure_project(project_id: str, display_name: str):
         sys.exit(f"  failed to create project {project_id}: {status} {resp}")
 
 
-def ensure_app(app_id: str, display_name: str, description: str):
+def ensure_app(app_id: str, display_name: str, description: str, keep_existing: bool = False):
     ensure_project(PROJECT_ID, "Default" if PROJECT_ID == "default" else PROJECT_ID)
     status, _ = api("GET", f"/applications/{app_id}")
     payload = {"id": app_id, "displayName": display_name, "description": description,
                "projectId": PROJECT_ID, "type": "genai"}
+    if status == 200 and keep_existing:
+        return
     if status == 200:
         status, resp = api("PUT", f"/applications/{app_id}", payload)
     else:
@@ -867,6 +885,10 @@ def ensure_app_api_key(app_id: str, entity_id: str, kind: str, key_id: str):
 #    Schemas confirmed against
 #    docs/rest-apis/platform-api/{llm-providers,llm-proxies}.md.
 # =============================================================================
+def _exists(resource: str, rid: str) -> bool:
+    return api("GET", f"/{resource}/{rid}")[0] == 200
+
+
 def _upsert(resource: str, payload: dict, label: str):
     """PUT over an existing id, POST a new one."""
     status, _ = api("GET", f"/{resource}/{payload['id']}")
@@ -1139,9 +1161,14 @@ def _existing(resource: str, project_ids: list) -> dict:
     return found
 
 
-def check(providers: list, requested: list, mcp_requested: list) -> bool:
+def check(providers: list, requested: list, mcp_requested: list, skip_existing: bool = False) -> bool:
     print("### pre-flight check (read-only)")
     require_existing_gateway(GATEWAY_ID)
+    if mcp_requested and MCP_GATEWAY_ID != GATEWAY_ID:
+        print(f"  MCP proxies go to {MCP_GATEWAY_ID!r} ({MCP_GATEWAY_ENDPOINT})")
+        require_existing_gateway(MCP_GATEWAY_ID)
+    for sid, reason in SKIPPED_LANES.items():
+        print(f"  skipped    {sid:<47} needs {reason}")
 
     planned = [("llm-providers", p["providerId"], p["providerContext"]) for p in providers]
     planned += [("llm-proxies", lid, ALL_LANES[lid]["context"]) for lid in requested]
@@ -1168,8 +1195,12 @@ def check(providers: list, requested: list, mcp_requested: list) -> bool:
     for resource, rid, context in planned:
         current = existing[resource].get(rid)
         if current:
-            print(f"  OVERWRITE  {resource:<14} {rid:<32} (exists: {current.get('displayName')!r}"
-                  f"{', project ' + repr(current['_project']) if current.get('_project') else ''})")
+            where = (f"(exists: {current.get('displayName')!r}"
+                     f"{', project ' + repr(current['_project']) if current.get('_project') else ''})")
+            if skip_existing:
+                print(f"  keep       {resource:<14} {rid:<32} {where}")
+                continue
+            print(f"  OVERWRITE  {resource:<14} {rid:<32} {where}")
             problems += 1
         else:
             print(f"  create     {resource:<14} {rid:<32} {context or ''}")
@@ -1234,10 +1265,12 @@ def report_existing_provider(pid: str) -> int:
 def main():
     args = sys.argv[1:]
     flags = {a for a in args if a.startswith("--")}
-    unknown_flags = flags - {"--existing-gateway", "--check"}
+    known_flags = {"--existing-gateway", "--check", "--skip-existing"}
+    unknown_flags = flags - known_flags
     if unknown_flags:
-        sys.exit(f"unknown flag(s): {sorted(unknown_flags)}. Known: --existing-gateway, --check")
+        sys.exit(f"unknown flag(s): {sorted(unknown_flags)}. Known: {', '.join(sorted(known_flags))}")
     existing_gateway = "--existing-gateway" in flags or "--check" in flags
+    skip_existing = "--skip-existing" in flags
 
     requested = [a for a in args if not a.startswith("--")] or DEFAULT_LANE_IDS + list(MCP_PROXIES)
     unknown = [r for r in requested if r not in ALL_LANES and r not in MCP_PROXIES]
@@ -1256,17 +1289,21 @@ def main():
 
     if "--check" in flags:
         login()
-        sys.exit(0 if check(providers, requested, mcp_requested) else 1)
-
-    # Every key read up front: a missing one must stop the run before any
-    # lane's key is rotated.
-    secrets = {p["providerId"]: read_secret(p) for p in providers}
+        sys.exit(0 if check(providers, requested, mcp_requested, skip_existing) else 1)
 
     login()
+
+    # Every key read up front: a missing one must stop the run before any
+    # lane's key is rotated. A provider kept as is (--skip-existing) needs none.
+    kept_providers = {p["providerId"] for p in providers
+                      if skip_existing and _exists("llm-providers", p["providerId"])}
+    secrets = {p["providerId"]: read_secret(p) for p in providers if p["providerId"] not in kept_providers}
 
     print("### gateway registration")
     if existing_gateway:
         require_existing_gateway(GATEWAY_ID)
+        if mcp_requested and MCP_GATEWAY_ID != GATEWAY_ID:
+            require_existing_gateway(MCP_GATEWAY_ID)
     else:
         if ensure_gateway_registered(GATEWAY_ID, GATEWAY_DISPLAY_NAME):
             print("  new token issued — recreating gateway-controller")
@@ -1286,16 +1323,23 @@ def main():
         for provider in providers:
             pid = provider["id"]
             print(f"### {provider['displayName']} application + provider")
-            ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"])
+            ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"],
+                       keep_existing=skip_existing)
 
-            upsert_shared_provider(provider, secrets[provider["providerId"]])
-            deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"],
-                   resource="llm-providers")
-            ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
+            if provider["providerId"] in kept_providers:
+                print(f"  {provider['providerId']} provider exists, kept as is")
+            else:
+                upsert_shared_provider(provider, secrets[provider["providerId"]])
+                deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"],
+                       resource="llm-providers")
+                ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
 
             for lane_id in requested:
                 lane = ALL_LANES[lane_id]
                 if lane["providerId"] != pid:
+                    continue
+                if skip_existing and _exists("llm-proxies", lane_id):
+                    print(f"### {lane_id} ({lane['context']}) exists, kept as is")
                     continue
                 print(f"### {lane_id} ({lane['context']})")
                 provision_lane(lane, provider["providerId"], provider["displayName"],
@@ -1306,6 +1350,9 @@ def main():
         for lane_id in requested:
             lane = ALL_LANES[lane_id]
             if lane["providerId"] is not None:
+                continue
+            if skip_existing and _exists("llm-proxies", lane_id):
+                print(f"### {lane_id} ({lane['context']}, cross-provider) exists, kept as is")
                 continue
             print(f"### {lane_id} ({lane['context']}, cross-provider)")
             for ref in lane["existingProviders"]:
@@ -1318,9 +1365,13 @@ def main():
 
         for sid in mcp_requested:
             card = MCP_PROXIES[sid]
+            if skip_existing and _exists("mcp-proxies", sid):
+                print(f"### {sid} ({card['mcp']['context']}, MCP proxy) exists, kept as is")
+                continue
             print(f"### {sid} ({card['mcp']['context']}, MCP proxy)")
             upsert_mcp_proxy(card)
-            deploy(sid, card["mcp"]["context"], "/mcp", resource="mcp-proxies")
+            deploy(sid, card["mcp"]["context"], "/mcp", resource="mcp-proxies",
+                   gateway_id=MCP_GATEWAY_ID, endpoint=MCP_GATEWAY_ENDPOINT)
     finally:
         if state["keys_changed"]:
             if sys.exc_info()[0] is not None:

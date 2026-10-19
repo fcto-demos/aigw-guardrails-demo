@@ -886,6 +886,13 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   transform: translateY(-2px);
   box-shadow: 0 2px 4px color-mix(in srgb, var(--line-base) 7%, transparent), 0 14px 32px color-mix(in srgb, var(--line-base) 10%, transparent);
 }
+/* status "disabled": kept on the home screen, greyed out, not clickable. */
+.card.is-disabled {
+  opacity: .5;
+  filter: grayscale(1);
+  pointer-events: none;
+  box-shadow: none;
+}
 
 .card h3 {
   margin: 0;

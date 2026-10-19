@@ -175,6 +175,9 @@ DEFAULTS = {
     # (/<providerId>-<contextSuffix>, see resolve_gateway()) hangs off.
     # Blank: worked out from demo.env in load_config().
     "GATEWAY_BASE": "",
+    # The same for the MCP cards, when their proxies sit on a gateway of
+    # their own. Blank: GATEWAY_BASE.
+    "MCP_GATEWAY_BASE": "",
     # The operator this assistant belongs to. Deliberately a placeholder: set
     # BRAND_NAME once and it flows into the wordmark, the page title and the
     # system prompt. Nothing else hard-codes a brand.
@@ -475,6 +478,11 @@ def gateway_base():
     return CONF["GATEWAY_BASE"].strip().rstrip("/")
 
 
+def mcp_gateway_base():
+    """gateway_base() for the MCP cards' proxies."""
+    return CONF.get("MCP_GATEWAY_BASE", "").strip().rstrip("/") or gateway_base()
+
+
 def _env_key(showcase_id, field, provider_id=DEFAULT_PROVIDER_ID):
     """showcase_id + field (+ provider_id, for any provider but the default
     one) -> the config.env variable name, e.g. "semantic-routing" + "CONTEXT"
@@ -552,7 +560,7 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "mcp needs %s, disabled in providers.json" % provider
         if PROVIDERS[provider]["wire"] != "openai":
             return None, "mcp.provider %s must speak the OpenAI format" % provider
-        return gateway_base() + ctx.rstrip("/") + "/mcp", "showcases.json mcp"
+        return mcp_gateway_base() + ctx.rstrip("/") + "/mcp", "showcases.json mcp"
 
     # The context for any (showcase, provider) pair is always exactly
     # /<providerId>-<contextSuffix>, or bare /<providerId> when contextSuffix
@@ -679,7 +687,7 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         # wire whose URL isn't just showcase["url"] (Gemini: the model and
         # the operation are both part of the path) builds the real request
         # URL from. None when there's no context at all (unwired).
-        "baseUrl": (gateway_base() + context) if context else None,
+        "baseUrl": ((mcp_gateway_base() if mcp else gateway_base()) + context) if context else None,
         # A routed card with a selector names no model: the gateway picks the
         # provider and the model from the selector's header.
         "model": None if (entry.get("route") and selector) else str(model),
@@ -1072,7 +1080,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # As any MCP client: call the proxy, follow its 401.
             session = {}
-            self._mcp_rpc(gateway_base() + entry["mcp"]["context"].rstrip("/") + "/mcp", "tools/list", {}, session)
+            self._mcp_rpc(mcp_gateway_base() + entry["mcp"]["context"].rstrip("/") + "/mcp", "tools/list", {}, session)
             prm = protected_resource_metadata((session.get("headers") or {}).get("www-authenticate"))
             meta = mcp_authorization_server(prm)
         except (urllib.error.URLError, ValueError, KeyError) as exc:
@@ -1797,10 +1805,10 @@ def main():
               % (YELLOW, ", ".join(borrowed), RESET))
 
     print("\n  %sshowcases%s" % (BOLD, RESET))
-    base_host = urllib.parse.urlsplit(gateway_base()).netloc
     hosts, wired = set(), 0
     for entry in registry["list"]:
         url, source = resolve_gateway(entry)
+        base_host = urllib.parse.urlsplit(mcp_gateway_base() if entry.get("mcp") else gateway_base()).netloc
         ready = (entry.get("status") or "ready") == "ready"
         if url:
             wired += 1

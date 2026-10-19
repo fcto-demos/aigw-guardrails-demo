@@ -257,7 +257,7 @@ running, instead of this repo's own stack:
 2. In `providers.json`, disable any provider whose id already exists there.
 3. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
    and lists what would be created or overwritten.
-4. Run `./scripts/python/provision_showcases.py --existing-gateway`.
+4. Run `./scripts/python/provision_showcases.py --existing-gateway`. Add `--skip-existing` (to `--check` too) to only create what is missing and leave every provider, lane and MCP proxy that already exists untouched, its key included.
 5. Point the chatbot at that gateway: `GATEWAY_BASE=https://host:port` in
    `demo.env`.
 

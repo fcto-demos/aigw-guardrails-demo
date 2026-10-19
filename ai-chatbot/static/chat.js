@@ -38,6 +38,14 @@ export async function ask(question, origin) {
    * and the verdict still work. */
   if (!origin) origin = findOrigin(question);
 
+  /* A disabled showcase (opened from a direct link) never sends. */
+  if (activeShowcase.status === 'disabled') {
+    showError('This showcase is disabled',
+              (activeShowcase.blockedBy || []).join(' ') || (activeShowcase.title || activeId) + ' is disabled.',
+              '');
+    return;
+  }
+
   /* An unwired showcase is refused here rather than at the gateway: there is
    * no provider to call, and the reason is more useful than a 503 would be. */
   if (!activeShowcase.configured) {

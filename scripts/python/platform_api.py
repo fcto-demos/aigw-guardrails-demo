@@ -53,16 +53,22 @@ def _read_demo_env() -> dict:
 
 DEMO_ENV = _read_demo_env()
 
-# AIW_URL / GATEWAY_ID / GATEWAY_ENDPOINT env vars retarget every script here
-# at an already-running deployment instead of this repo's own compose stacks
-# -- see provision_showcases.py's --existing-gateway. Unset, they fall back to
-# the local-dev values below.
-AIW = os.environ.get("AIW_URL") or f"https://localhost:{DEMO_ENV['AI_WORKSPACE_PORT']}"  # ai-workspace BFF, see ai-workspace/docker-compose.yaml
+def _setting(name: str) -> str:
+    """A target setting from the environment, else from demo.env, else ""."""
+    return os.environ.get(name) or DEMO_ENV.get(name) or ""
+
+
+# AIW_URL / GATEWAY_ID / GATEWAY_ENDPOINT (env vars or demo.env) retarget every
+# script here at an already-running deployment instead of this repo's own
+# compose stacks -- see provision_showcases.py's --existing-gateway. Unset,
+# they fall back to the local-dev values below. ADMIN_PASSWORD is read from
+# the environment only: demo.env is not a secrets file.
+AIW = _setting("AIW_URL") or f"https://localhost:{DEMO_ENV['AI_WORKSPACE_PORT']}"  # ai-workspace BFF, see ai-workspace/docker-compose.yaml
 AIW = AIW.rstrip("/")
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_USERNAME = _setting("ADMIN_USERNAME") or "admin"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")  # seeded by scripts/generate-local-certs.sh
 
-GATEWAY_ID = os.environ.get("GATEWAY_ID") or "local-gateway"  # immutable resource id, not the display name
+GATEWAY_ID = _setting("GATEWAY_ID") or "local-gateway"  # immutable resource id, not the display name
 
 
 def gateway_ports() -> dict:
@@ -73,7 +79,12 @@ def gateway_ports() -> dict:
             if key.startswith("GATEWAY_") and key.endswith("_PORT") and value.isdigit()}
 
 
-GATEWAY_ENDPOINT = os.environ.get("GATEWAY_ENDPOINT") or f"localhost:{gateway_ports()['GATEWAY_HTTPS_PORT']}"
+GATEWAY_ENDPOINT = _setting("GATEWAY_ENDPOINT") or f"localhost:{gateway_ports()['GATEWAY_HTTPS_PORT']}"
+
+# MCP proxies can go to a gateway of their own, apart from the LLM traffic.
+# Unset, they share the gateway above.
+MCP_GATEWAY_ID = _setting("MCP_GATEWAY_ID") or GATEWAY_ID
+MCP_GATEWAY_ENDPOINT = _setting("MCP_GATEWAY_ENDPOINT") or GATEWAY_ENDPOINT
 
 # The gateway's own management API: asks the gateway what it holds without
 # sending traffic through it, so the checks leave nothing in analytics. Same
@@ -140,8 +151,11 @@ def load_providers() -> list:
         # var names, so already-deployed resources and an existing
         # config.env keep working untouched.
         p["lanePrefix"] = "" if p["id"] == providers[0]["id"] else f"{p['id']}-"
-        p["providerId"] = p["id"]
-        p["providerContext"] = f"/{p['id']}"
+        # Optional "providerId" renames only the LlmProvider resource (and
+        # its context), for a control plane where another LlmProvider
+        # already holds the id. Lanes, env vars and transformers keep "id".
+        p["providerId"] = p.get("providerId") or p["id"]
+        p["providerContext"] = f"/{p['providerId']}"
         p["appId"] = f"ai-chatbot-{p['id']}"
         p["appDisplayName"] = f"AI Chatbot ({p['displayName']})"
         p["appDescription"] = f"Public chatbot showcase — single key for all the {p['displayName']} lanes"
@@ -295,6 +309,15 @@ def bedrock_safety_missing() -> str:
     return "a Bedrock guardrail and API key in secrets/content-safety.env"
 
 
+def idp_missing() -> str:
+    """What the MCP sign-in cards (mcp-auth) still need; "" once it is set up."""
+    path = ROOT / "secrets" / "idp.env"
+    conf = _read_env_file(path) if path.exists() else {}
+    if all(conf.get(k) for k in ("IDP_ISSUER", "IDP_JWKS_URI", "IDP_CLIENT_ID")):
+        return ""
+    return "an identity provider in secrets/idp.env (see .docs/mcp-identity-provider.md)"
+
+
 def gateway_verdict(status: int, body) -> str:
     """Classifies a probe response by WHO produced it, since a probe that
     gets through the gateway reaches the real upstream, whose own 400/401/404
@@ -317,19 +340,19 @@ def gateway_verdict(status: int, body) -> str:
     return "live"
 
 
-def probe(context: str, messages_suffix: str, key: str = None) -> str:
+def probe(context: str, messages_suffix: str, key: str = None, endpoint: str = None) -> str:
     """One POST straight at the gateway (not the control plane), classified
     by gateway_verdict(). The body is empty on purpose: the verdict never
     depends on it, and a made-up model name would show up in analytics."""
-    status, body = request("POST", f"https://{GATEWAY_ENDPOINT}{context}{messages_suffix}",
+    status, body = request("POST", f"https://{endpoint or GATEWAY_ENDPOINT}{context}{messages_suffix}",
                            {}, {"X-API-Key": key} if key else None)
     return gateway_verdict(status, body)
 
 
-def route_is_live(context: str, messages_suffix: str) -> bool:
+def route_is_live(context: str, messages_suffix: str, endpoint: str = None) -> bool:
     """Envoy matched the route -- anything but a missing route or no answer
     (a 401 for the missing key still proves the route and its chain exist)."""
-    return probe(context, messages_suffix) in ("live", "key-rejected")
+    return probe(context, messages_suffix, endpoint=endpoint) in ("live", "key-rejected")
 
 
 def gateway_mgmt(method: str, path: str, data=None):
@@ -353,27 +376,36 @@ def gateway_state(resource: str, resource_id: str):
     return (held.get("state"), held.get("deployedAt"))
 
 
-def on_gateway(resource: str, resource_id: str, before, context: str, messages_suffix: str) -> bool:
+def own_state(resource: str, resource_id: str, gateway_id: str = None):
+    """gateway_state() on this repo's gateway; None on another one (the MCP
+    gateway, when set apart), whose controller is not known here."""
+    return gateway_state(resource, resource_id) if (gateway_id or GATEWAY_ID) == GATEWAY_ID else None
+
+
+def on_gateway(resource: str, resource_id: str, before, context: str, messages_suffix: str,
+               gateway_id: str = None, endpoint: str = None) -> bool:
     """The gateway holds a newer deployment of this resource than `before`
-    (gateway_state() taken before deploying). Without a controller to ask,
-    a probe checks that the route answers instead."""
-    now = gateway_state(resource, resource_id)
+    (own_state() taken before deploying). Without a controller to ask, a probe
+    checks that the route answers instead."""
+    now = own_state(resource, resource_id, gateway_id)
     if now is None:
-        return route_is_live(context, messages_suffix)
+        return route_is_live(context, messages_suffix, endpoint)
     return now[0] == "deployed" and now != before
 
 
 def deploy(resource_id: str, context: str, messages_suffix: str,
-           attempts: int = 3, resource: str = "llm-proxies"):
+           attempts: int = 3, resource: str = "llm-proxies",
+           gateway_id: str = None, endpoint: str = None):
     """Deployment is asynchronous by design (DEPLOYING -> DEPLOYED/FAILED,
     confirmed in docs/rest-apis/platform-api/llm-provider-deployments.md and
     llm-proxy-deployments.md), so this polls for a terminal status and
-    retries on failure. `resource` is "llm-proxies" (default, one per lane)
-    or "llm-providers" (one per PROVIDERS entry)."""
+    retries on failure. `resource` is "llm-proxies" (default, one per lane),
+    "llm-providers" (one per PROVIDERS entry) or "mcp-proxies", which pass
+    the MCP gateway's gateway_id and endpoint."""
     for attempt in range(1, attempts + 1):
-        before = gateway_state(resource, resource_id)
+        before = own_state(resource, resource_id, gateway_id)
         status, resp = api("POST", f"/{resource}/{resource_id}/deployments",
-                            {"name": "default", "base": "current", "gatewayId": GATEWAY_ID})
+                            {"name": "default", "base": "current", "gatewayId": gateway_id or GATEWAY_ID})
         if status != 201:
             sys.exit(f"  deploy failed: {status} {resp}")
         dep_id = resp["deploymentId"]
@@ -388,7 +420,7 @@ def deploy(resource_id: str, context: str, messages_suffix: str,
             status, resp = api("GET", f"/{resource}/{resource_id}/deployments/{dep_id}")
             if resp.get("status") in ("DEPLOYED", "FAILED"):
                 break
-            if on_gateway(resource, resource_id, before, context, messages_suffix):
+            if on_gateway(resource, resource_id, before, context, messages_suffix, gateway_id, endpoint):
                 print("  status still DEPLOYING but the gateway already holds it, proceeding")
                 return
         print(f"  deploy status: {resp.get('status')} (attempt {attempt}/{attempts})")
@@ -399,7 +431,7 @@ def deploy(resource_id: str, context: str, messages_suffix: str,
         # restart, logged there as "Upsert skipped (stale event)") even
         # though the runtime deploy actually completed — confirmed by curling
         # the gateway directly.
-        if on_gateway(resource, resource_id, before, context, messages_suffix):
+        if on_gateway(resource, resource_id, before, context, messages_suffix, gateway_id, endpoint):
             print("  status stuck at DEPLOYING but the gateway holds it, proceeding")
             return
         # A real DEPLOYMENT_TIMEOUT (route confirmed NOT live) is usually the
