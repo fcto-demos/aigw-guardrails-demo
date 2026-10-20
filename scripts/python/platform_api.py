@@ -219,7 +219,8 @@ def request(method: str, url: str, data=None, headers=None):
     for k, v in (headers or {}).items():
         req.add_header(k, v)
     try:
-        with _opener.open(req) as resp:
+        # A connection that never answers would otherwise hang the whole run.
+        with _opener.open(req, timeout=60) as resp:
             raw = resp.read()
             return resp.status, (json.loads(raw) if raw else None)
     except urllib.error.HTTPError as e:

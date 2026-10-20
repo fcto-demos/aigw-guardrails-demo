@@ -14,7 +14,7 @@
 #      (downloads the pinned release for this machine's OS/arch).
 #   4. Builds the custom gateway image (semantic/time/cost/intelligent-model-routing
 #      + model-round-robin need it — the stock image doesn't carry them) if
-#      it isn't already in the local Docker image store.
+#      it is missing, or if build.yaml or a local policy changed since.
 #   5. Wipes ai-workspace + ai-gateway state (containers + volumes).
 #   6. Creates the two api-platform.env files from their examples, then
 #      generates local certs/keys (both idempotent).
@@ -90,13 +90,22 @@ else
 fi
 
 echo "### custom gateway image (routing + failover policies)"
-if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1; then
+# The policies are compiled into the image, so it is rebuilt when build.yaml or
+# a local policy changes: their fingerprint at the last build is kept in .bin/.
+policies_fingerprint() {
+  { cat ai-gateway/build.yaml
+    find ai-gateway/policies -type f -print0 | sort -z | xargs -0 cat; } | shasum | cut -d' ' -f1
+}
+stamp="$ROOT/.bin/gateway-image-${DEMO_NAME}-${AI_GATEWAY_VERSION}"
+if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1 \
+   && [[ ! -f "$stamp" || "$(cat "$stamp")" == "$(policies_fingerprint)" ]]; then
   echo "  $CUSTOM_IMAGE already present"
 else
   echo "  building — this compiles semantic/time/cost/intelligent-model-routing and"
   echo "  model-round-robin into the image, takes a few minutes"
   (cd ai-gateway && "$AP_BIN" gateway image build --name "$DEMO_NAME")
 fi
+mkdir -p "$ROOT/.bin" && policies_fingerprint > "$stamp"
 
 echo "### wiping ai-workspace + ai-gateway state (containers + volumes)"
 # Each command's own noise goes to a log file instead of the terminal; set -e
@@ -110,6 +119,14 @@ echo "### wiping ai-workspace + ai-gateway state (containers + volumes)"
 echo "### api-platform.env files (local values, nothing to edit for a local run)"
 copy_example_if_missing "$ROOT" ai-workspace/api-platform.env
 copy_example_if_missing "$ROOT" ai-gateway/api-platform.env
+
+# The admin password is asked once, here, so the hash written next and the
+# provisioning's login further down use the same one.
+if [[ -z "${ADMIN_PASSWORD:-}" && -t 0 ]] \
+   && ! grep -q '^APIP_CP_ADMIN_PASSWORD_HASH=\$2' ai-workspace/api-platform.env; then
+  read -rsp "Choose a local admin password for AI Workspace (user admin): " ADMIN_PASSWORD && echo
+fi
+if [[ -n "${ADMIN_PASSWORD:-}" ]]; then export ADMIN_PASSWORD; fi
 
 echo "### certs and keys (idempotent — fills in only what's missing)"
 ./scripts/generate-local-certs.sh

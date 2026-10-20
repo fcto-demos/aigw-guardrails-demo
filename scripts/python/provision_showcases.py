@@ -79,7 +79,7 @@ import sys
 import time
 
 from platform_api import (
-    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID, gateway_ports,
+    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
     probe, gateway_mgmt, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
 )
@@ -677,12 +677,10 @@ def ensure_gateway_registered(gateway_id: str, display_name: str) -> bool:
 
 
 def restart_gateway_controller():
-    gw_dir = ROOT / "ai-gateway"
-    subprocess.run(
-        ["docker", "compose", "up", "-d", "--force-recreate", "gateway-controller"],
-        cwd=str(gw_dir), check=True,
-        env={**os.environ, **gateway_ports()},  # the same ports as run-local.sh, offset included
-    )
+    """Through the same script as run-local.sh, so the controller comes back
+    with all its settings: ports, analytics, embeddings key."""
+    subprocess.run([str(ROOT / "scripts" / "gateway-compose.sh"),
+                    "up", "-d", "--force-recreate", "gateway-controller"], check=True)
 
 
 def wait_for_gateway_active(gateway_id: str, timeout_s: int = 300):
@@ -997,7 +995,7 @@ def restart_ai_chatbot():
     log = open(AI_CHATBOT_LOG_FILE, "w")
     # -u: unbuffered, or the startup banner (the wiring table worth reading
     # in this log) sits in stdout's buffer and never reaches the file.
-    proc = subprocess.Popen(["python3", "-u", "server.py"], cwd=str(ROOT / "ai-chatbot"),
+    proc = subprocess.Popen([sys.executable, "-u", "server.py"], cwd=str(ROOT / "ai-chatbot"),
                              stdout=log, stderr=log, start_new_session=True)
     time.sleep(2)
     if proc.poll() is not None:
@@ -1018,13 +1016,28 @@ def _items(resp) -> list:
     return []
 
 
+def _list_all(path: str):
+    """(status, every item) of a listing, page after page: the control plane
+    returns 20 items per page unless asked for more."""
+    items, sep = [], "&" if "?" in path else "?"
+    while True:
+        status, resp = api("GET", f"{path}{sep}limit=100&offset={len(items)}")
+        if status != 200:
+            return status, resp
+        page = _items(resp)
+        items += page
+        total = (resp.get("pagination") or {}).get("total") if isinstance(resp, dict) else None
+        if not page or total is None or len(items) >= total:
+            return 200, items
+
+
 def _existing(resource: str, project_ids: list) -> dict:
     """id -> resource for every existing /{resource}, across every project
     when the endpoint is project-scoped (it 400s without ?projectId=) -- all
     projects deploy to the same gateway, so a context in any of them
     collides. Each item is tagged with its "_project"; context is filled in
     from a per-item GET when the listing is only a summary."""
-    status, resp = api("GET", f"/{resource}")
+    status, resp = _list_all(f"/{resource}")
     if status == 200:
         pages = [(None, resp)]
     # Worded differently per endpoint: "projectId query parameter is
@@ -1032,7 +1045,7 @@ def _existing(resource: str, project_ids: list) -> dict:
     elif status == 400 and re.search(r"project\s*id", str(resp), re.IGNORECASE):
         pages = []
         for pid in project_ids:
-            status, resp = api("GET", f"/{resource}?projectId={pid}")
+            status, resp = _list_all(f"/{resource}?projectId={pid}")
             if status != 200:
                 sys.exit(f"  could not list /{resource} in project {pid!r}: {status} {resp}")
             pages.append((pid, resp))

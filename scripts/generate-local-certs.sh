@@ -81,6 +81,10 @@ else
     fi
     read -rsp "Choose a local admin password: " ADMIN_PASSWORD && echo
   fi
+  if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
+    echo "  empty admin password — refusing to hash it, run again and type one." >&2
+    exit 1
+  fi
   ADMIN_HASH="$(htpasswd -bnBC 12 "" "$ADMIN_PASSWORD" | tr -d ':\n')"
   unset ADMIN_PASSWORD
 

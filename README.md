@@ -146,10 +146,9 @@ The setup creates the rest from the examples: `demo.env` and the two
 `api-platform.env` files, which need no editing for a local run. It also
 registers the gateway with AI Workspace.
 
-It asks you to choose a password for AI Workspace's `admin` user. For a local
-demo, `admin` is the simplest: the provisioning logs in with it unless
-`ADMIN_PASSWORD` is set. To use another one, pass it up front instead:
-`ADMIN_PASSWORD='...' ./scripts/reset-and-setup.sh`.
+It asks you to choose a password for AI Workspace's `admin` user, and uses it
+for the whole setup. Later, the scripts log in as `admin`/`admin` unless you
+set `ADMIN_PASSWORD`.
 
 If another program already uses the gateway's ports (8080, 8443...), create
 `demo.env` first (`cp demo.env.example demo.env`) and set
@@ -257,7 +256,7 @@ running, instead of this repo's own stack:
 - **"missing secrets/api-keys.env"**: `reset-and-setup.sh` refuses to
   continue without it; the error message shows the exact copy-paste fix.
 - **"login failed" while provisioning**: the AI Workspace admin password is
-  not `admin`. Run it again with `ADMIN_PASSWORD='...'` in front.
+  not `admin`. Run the script again with `ADMIN_PASSWORD='...'` in front.
 - **The gateway doesn't start, "port is already allocated"**: another program
   uses its ports. Set `GATEWAY_PORT_OFFSET=1` in `demo.env`.
 - **A showcase's card loads but refuses to chat**: that provider has no key

@@ -14,8 +14,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/tools.sh"
 load_demo_env "$ROOT"   # this machine's settings, created on the first run (see tools.sh)
 resolve_python   # sets $PYTHON -- python3, or a confirmed-Python-3 `python` (see tools.sh)
-resolve_analytics "$ROOT"   # sets $ANALYTICS_* from ANALYTICS_MODE (see tools.sh)
-resolve_embedding_key "$ROOT"   # sets $EMBEDDING_PROVIDER_API_KEY from EMBEDDINGS_PROVIDER_API_KEY (see tools.sh)
+resolve_analytics "$ROOT"   # says here, not in the log, when analytics stay off (see tools.sh)
 
 LOGS="$ROOT/.logs"
 
@@ -40,14 +39,7 @@ echo "### ai-workspace"
 (cd "$ROOT/ai-workspace" && docker compose up -d --wait) >"$LOGS/ai-workspace.log" 2>&1
 
 echo "### ai-gateway"
-# Analytics vars are scoped to just this one call (command-prefix, not
-# exported) -- see resolve_analytics() in tools.sh for why.
-(cd "$ROOT/ai-gateway" && \
-  APIP_GW_ANALYTICS_ENABLED="$ANALYTICS_ENABLED" \
-  APIP_GW_ANALYTICS_PUBLISHERS_MOESIF_APPLICATION_ID="$ANALYTICS_MOESIF_ID" \
-  COMPOSE_PROFILES="$ANALYTICS_COMPOSE_PROFILES" \
-  APIP_GW_EMBEDDING_PROVIDER_API_KEY="$EMBEDDING_PROVIDER_API_KEY" \
-  docker compose up -d) >"$LOGS/ai-gateway.log" 2>&1
+"$ROOT/scripts/gateway-compose.sh" up -d >"$LOGS/ai-gateway.log" 2>&1
 
 echo "### ai-chatbot"
 # Force a clean stop first — otherwise a repeat run leaves the old process
