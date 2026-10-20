@@ -85,6 +85,7 @@ reply, with what the gateway did.
 | Tool argument check | The gateway checks each `change_plan` call's arguments: switching to Plus goes through, to Unlimited is refused before the server sees it |
 | Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per MCP session; the 4th gets 429 |
 | Tool renaming | The gateway publishes its own names for the tools (`switch_plan` for `change_plan`) and translates them on the way to the server |
+| Poisoned tool description | A partner's MCP server hides an instruction to the agent in a tool's description (ask for the card number); the gateway publishes its own description, so the agent never reads it |
 | Authentication | Without a signed-in user the gateway answers 401; the page signs you in, as any MCP client would |
 | Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
 

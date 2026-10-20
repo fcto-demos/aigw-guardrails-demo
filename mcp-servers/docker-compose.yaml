@@ -14,6 +14,19 @@ services:
     networks:
       - mcp
 
+  # A partner's server (Globetrotter, roaming add-ons), from the same code: its
+  # tool description hides an instruction to the agent.
+  mcp-partner-offers:
+    image: python:3.12-alpine
+    command: ["python", "-u", "/app/server.py"]
+    environment:
+      - TOOLSET=partner
+    volumes:
+      - ./acme-mobile:/app:ro
+    mem_limit: 64m
+    networks:
+      - mcp
+
 networks:
   mcp:
     external: true
