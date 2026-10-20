@@ -880,6 +880,14 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 
 .card p { margin: 0; font-size: 14px; color: var(--text-muted); }
 
+/* What the card answers in a group like OWASP. */
+.card .card-ref {
+  font-size: 13px;
+  color: var(--text-strong);
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}
+
 /* One chip per policy, so a long pair wraps between names, never inside one. */
 .card-cap {
   display: flex; flex-wrap: wrap; gap: 6px;

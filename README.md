@@ -86,6 +86,9 @@ reply, with what the gateway did.
 The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
 Server or any other): see the [IDP Setup](.docs/mcp-identity-provider.md).
 
+Both pages also gather their cards under **OWASP Top 10 for LLMs**, with one
+line per card on the risk it answers.
+
 ## Prerequisites
 
 - **Docker**, with Compose v2 (`docker compose version`)

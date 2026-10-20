@@ -86,6 +86,7 @@ export function costBudgetFor(providerId) {
 
 let defaultId = 'plain-chat';
 let registryError = null;
+let brand = '';
 let onReset = null;
 
 /* Two home pages, one per gateway: a card with an "mcp" block belongs to the
@@ -155,6 +156,7 @@ export async function loadRegistry() {
     const response = await fetch('/api/showcases?provider=' + encodeURIComponent(activeProvider));
     const data = await response.json();
     defaultId = data.defaultShowcase || defaultId;
+    brand = data.brand || '';
     registryError = (data.registry && data.registry.error) || null;
     showcases.clear();
     for (const item of data.showcases || []) showcases.set(item.id, item);
@@ -176,7 +178,12 @@ function badge(showcase) {
   return '<span class="badge is-ready">Ready</span>';
 }
 
-function cardHtml(showcase) {
+/* {brand} in a text becomes the operator's name, as in the system prompts. */
+function branded(text) {
+  return text.replaceAll('{brand}', brand);
+}
+
+function cardHtml(showcase, group) {
   /* Anchors, not buttons: middle-click, keyboard activation, the back button
    * and "copy link" all work with no JavaScript of ours. */
   const needs = [];
@@ -192,6 +199,10 @@ function cardHtml(showcase) {
     + badge(showcase)
     + '<h3>' + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
+    /* In a group like OWASP, what the card answers there. */
+    + (showcase.refs && showcase.refs[group]
+        ? '<p class="card-ref">' + escapeHtml(branded(showcase.refs[group])) + '</p>'
+        : '')
     + (caps.length
         ? '<p class="card-cap">' + caps.map((c) => '<span title="' + escapeHtml(c) + '">'
             + escapeHtml(c) + '</span>').join('')
@@ -205,13 +216,15 @@ function cardHtml(showcase) {
     + '</a>';
 }
 
-/* Each group's icon and, in one line, what it brings. */
+/* Each group's icon and, in one line, what it brings. Groups show in this
+ * order, on whichever page has cards in them. */
 const GROUPS = {
   'Routing and resilience': ['route', 'The gateway picks the provider and the model for each request, and keeps answering when one fails.'],
   'Cost and performance': ['gauge', 'Fewer tokens and a capped bill: answers from cache, compressed prompts, a cheaper model as spend rises, and a budget the gateway enforces.'],
   'Safety': ['shield', 'What reaches the model, and what comes back, is checked at the gateway.'],
   'Identity': ['user', 'Who is calling, and what they may do: tokens from your identity provider, checked at the gateway.'],
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
+  'OWASP Top 10 for LLMs': ['alert', 'The risks of the OWASP Top 10 for LLM applications (2025), as they would hit {brand}, each one stopped at the gateway.'],
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
 const ICONS = {
@@ -221,6 +234,7 @@ const ICONS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-2.4z"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
 };
 
 function groupHeadHtml(name, count) {
@@ -229,7 +243,7 @@ function groupHeadHtml(name, count) {
     + '<span class="group-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
     + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[icon] + '</svg></span>'
     + '<div><h2 class="group-title">' + escapeHtml(name) + '</h2>'
-    + (text ? '<p class="group-desc">' + escapeHtml(text) + '</p>' : '') + '</div>'
+    + (text ? '<p class="group-desc">' + escapeHtml(branded(text)) + '</p>' : '') + '</div>'
     + '<span class="group-count">' + count + (count === 1 ? ' card' : ' cards') + '</span>'
     + '</header>';
 }
@@ -250,9 +264,9 @@ function groupsOf(showcase) {
   return Array.isArray(showcase.group) ? showcase.group : [showcase.group || ''];
 }
 
-/* Cards are grouped by theme, groups in the order they first appear in
- * showcases.json, so the page reads as a story rather than a flat list. In
- * its other groups, a card comes after the group's own cards. */
+/* Cards are grouped by theme, groups in GROUPS order (others after them), so
+ * the page reads as a story rather than a flat list. In its other groups, a
+ * card comes after the group's own cards. */
 function renderCards() {
   const items = [...showcases.values()].filter((s) => pageOf(s) === activePage);
   const groups = new Map();
@@ -262,14 +276,17 @@ function renderCards() {
   };
   for (const item of items) add(groupsOf(item)[0], item);
   for (const item of items) groupsOf(item).slice(1).forEach((name) => add(name, item));
+  const order = Object.keys(GROUPS);
+  const rank = (name) => (order.includes(name) ? order.indexOf(name) : order.length);
+  const sorted = [...groups].sort(([a], [b]) => rank(a) - rank(b));
   cardsBox.innerHTML =
     (registryError
       ? '<div class="notice"><strong>The registry did not load cleanly</strong>'
         + '<p>' + escapeHtml(registryError) + '</p></div>'
       : '')
-    + [...groups].map(([name, cards]) => '<section class="card-group">'
+    + sorted.map(([name, cards]) => '<section class="card-group">'
         + (name ? groupHeadHtml(name, cards.length) : '')
-        + '<div class="card-grid">' + cards.map(cardHtml).join('') + '</div>'
+        + '<div class="card-grid">' + cards.map((card) => cardHtml(card, name)).join('') + '</div>'
         + '</section>').join('');
   requestAnimationFrame(updateScrollHint);
 }
