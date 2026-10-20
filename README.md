@@ -94,8 +94,8 @@ Server or any other): see the [IDP Setup](.docs/mcp-identity-provider.md).
 
 The LLM Gateway page also gathers its cards under the **OWASP Top 10 for LLMs
 (2026)**, the MCP Gateway page under the **OWASP Top 10 for Agentic
-Applications**, and both under **Compliance (EU AI Act)**, with one line per
-card on the risk or the article it answers.
+Applications**, and the LLM Gateway page under **Compliance (EU AI Act)**, with
+one line per card on the risk or the article it answers.
 
 ## Prerequisites
 

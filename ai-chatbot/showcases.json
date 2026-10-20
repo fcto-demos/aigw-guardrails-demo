@@ -362,10 +362,7 @@
   },
   {
     "id": "eu-residency",
-    "group": [
-      "Routing and resilience",
-      "Compliance (EU AI Act)"
-    ],
+    "group": "Routing and resilience",
     "route": {
       "context": "/eu-residency",
       "defaultProvider": "mistral",
@@ -425,13 +422,7 @@
         "notes": "Same app, same question: only the region changed, and the gateway alone chose where the conversation went."
       }
     ],
-    "notes": "llm-header-router v0.9.1 reads x-customer-region and picks the provider: Mistral for europe, Anthropic for elsewhere, and Mistral when the header is missing, so a forgotten header never sends a European conversation out. Each provider's transformer sets the model. Mistral's API is hosted in the EU by default; whether a provider keeps data in the EU depends on its contract and settings, so check the provider's current terms before relying on it.",
-    "refs": {
-      "Compliance (EU AI Act)": {
-        "code": "GDPR",
-        "text": "Transfers outside the EU: European customers' conversations only go to a provider hosted in the EU."
-      }
-    }
+    "notes": "llm-header-router v0.9.1 reads x-customer-region and picks the provider: Mistral for europe, Anthropic for elsewhere, and Mistral when the header is missing, so a forgotten header never sends a European conversation out. Each provider's transformer sets the model. Mistral's API is hosted in the EU by default; whether a provider keeps data in the EU depends on its contract and settings, so check the provider's current terms before relying on it."
   },
   {
     "id": "model-failover",
@@ -783,10 +774,7 @@
   },
   {
     "id": "topic-guardrail",
-    "group": [
-      "Safety",
-      "OWASP Top 10 for LLMs (2026)"
-    ],
+    "group": "Safety",
     "contextSuffix": "topic",
     "title": "Topic guardrail",
     "tagline": "The assistant only answers about mobile plans: anything else is refused before the model is called.",
@@ -883,13 +871,7 @@
         "notes": "Only the last message is checked, so follow-ups must pass on their own. Short replies (Hi, Yes please, Thank you) are in the allowed list for that reason."
       }
     ],
-    "notes": "semantic-prompt-guard v1.0.1 in allow-list mode: the gateway embeds the visitor's last message with mistral-embed and refuses it when its best cosine similarity to the allowedPhrases above is below 0.71. Measured 2026-10-17 on 31 on-topic questions (lowest 0.73: a question in French) and 20 off-topic requests (highest 0.70: “How do I change a tyre?”). The margin is narrow: wording close to the line can go either way, so re-measure before editing the phrases.",
-    "refs": {
-      "OWASP Top 10 for LLMs (2026)": {
-        "code": "LLM06",
-        "text": "Unbounded consumption: the assistant cannot be used as a free general-purpose chatbot."
-      }
-    }
+    "notes": "semantic-prompt-guard v1.0.1 in allow-list mode: the gateway embeds the visitor's last message with mistral-embed and refuses it when its best cosine similarity to the allowedPhrases above is below 0.71. Measured 2026-10-17 on 31 on-topic questions (lowest 0.73: a question in French) and 20 off-topic requests (highest 0.70: “How do I change a tyre?”). The margin is narrow: wording close to the line can go either way, so re-measure before editing the phrases."
   },
   {
     "id": "prompt-decoration",
@@ -1926,8 +1908,7 @@
     "id": "mcp-tool-control",
     "group": [
       "Tool governance",
-      "OWASP Top 10 for Agentic Applications",
-      "Compliance (EU AI Act)"
+      "OWASP Top 10 for Agentic Applications"
     ],
     "mcp": {
       "server": "Acme",
@@ -2011,11 +1992,6 @@
       "OWASP Top 10 for Agentic Applications": {
         "code": "ASI02",
         "text": "Tool misuse and exploitation: the agent gets only the tools its job needs, so it cannot change a plan."
-      },
-      "Compliance (EU AI Act)": {
-        "code": "Art. 14",
-        "text": "Human oversight: plan changes stay with {brand}'s staff, not the agent.",
-        "scope": "high-risk"
       }
     }
   },
@@ -2023,8 +1999,7 @@
     "id": "mcp-tool-arguments",
     "group": [
       "Tool governance",
-      "OWASP Top 10 for Agentic Applications",
-      "Compliance (EU AI Act)"
+      "OWASP Top 10 for Agentic Applications"
     ],
     "mcp": {
       "server": "Acme",
@@ -2111,11 +2086,6 @@
       "OWASP Top 10 for Agentic Applications": {
         "code": "ASI02",
         "text": "Tool misuse and exploitation: a plan change outside the rules (Unlimited) is refused before it runs."
-      },
-      "Compliance (EU AI Act)": {
-        "code": "Art. 14",
-        "text": "Human oversight: the agent cannot move a customer to Unlimited on its own.",
-        "scope": "high-risk"
       }
     }
   },
