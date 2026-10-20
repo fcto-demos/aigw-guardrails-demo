@@ -178,6 +178,12 @@ function badge(showcase) {
   return '<span class="badge is-ready">Ready</span>';
 }
 
+/* An EU AI Act article that binds high-risk systems only says so, plainly:
+ * for a customer assistant it is good practice, not an obligation. */
+function scopeBadge(ref) {
+  return ref.scope === 'high-risk' ? '<span class="ref-scope">High-risk systems only</span> ' : '';
+}
+
 /* {brand} in a text becomes the operator's name, as in the system prompts. */
 function branded(text) {
   return text.replaceAll('{brand}', brand);
@@ -202,7 +208,7 @@ function cardHtml(showcase, group) {
     + '<h3>' + (ref ? '<span class="ref-code">' + escapeHtml(ref.code) + '</span> ' : '')
     + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
-    + (ref ? '<p class="card-ref">' + escapeHtml(branded(ref.text)) + '</p>' : '')
+    + (ref ? '<p class="card-ref">' + scopeBadge(ref) + escapeHtml(branded(ref.text)) + '</p>' : '')
     + (caps.length
         ? '<p class="card-cap">' + caps.map((c) => '<span title="' + escapeHtml(c) + '">'
             + escapeHtml(c) + '</span>').join('')
@@ -226,7 +232,7 @@ const GROUPS = {
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
   'OWASP Top 10 for LLMs (2026)': ['alert', 'The risks of the OWASP Top 10 for LLM applications, 2026 edition, as they would hit {brand}, each one stopped at the gateway.'],
   'OWASP Top 10 for Agentic Applications': ['alert', 'The risks of the OWASP Top 10 for agentic applications (2026), as they would hit {brand}\'s agent, each one stopped at the gateway.'],
-  'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50), keep people in charge of what it does (Art. 14), keep answering when a part fails (Art. 15) and keep a record of it (Art. 12); the last three are required of high-risk systems, applied here as good practice. Personal data falls under the GDPR.'],
+  'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50); personal data falls under the GDPR. Record-keeping (Art. 12), human oversight (Art. 14) and robustness (Art. 15) bind high-risk systems only, which a customer assistant is not: they show here as good practice.'],
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
 const ICONS = {
@@ -285,7 +291,9 @@ function renderCards() {
   const code = (card, name) => ((card.refs || {})[name] || {}).code;
   for (const [name, cards] of sorted) {
     if (cards.every((card) => code(card, name))) {
-      cards.sort((a, b) => code(a, name).localeCompare(code(b, name), 'en', { numeric: true }));
+      const scope = (card) => (((card.refs || {})[name] || {}).scope === 'high-risk' ? 1 : 0);
+      cards.sort((a, b) => scope(a) - scope(b)
+        || code(a, name).localeCompare(code(b, name), 'en', { numeric: true }));
     }
   }
   cardsBox.innerHTML =
@@ -374,7 +382,7 @@ function mountShowcase(showcase) {
   introBody.textContent = INTRO_BODY;
   introRefs.innerHTML = Object.entries(showcase.refs || {}).map(([group, ref]) =>
     '<div class="intro-ref"><span class="ref-group">' + escapeHtml(group) + '</span>'
-    + '<p><span class="ref-code">' + escapeHtml(ref.code) + '</span> '
+    + '<p><span class="ref-code">' + escapeHtml(ref.code) + '</span> ' + scopeBadge(ref)
     + escapeHtml(branded(ref.text)) + '</p></div>').join('');
   introChips.innerHTML = (introData.chips || []).map((chip) =>
     '<button type="button" class="chip" data-ask="' + escapeHtml(chip.ask || '')

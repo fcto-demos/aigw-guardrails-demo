@@ -519,7 +519,8 @@
     "refs": {
       "Compliance (EU AI Act)": {
         "code": "Art. 15",
-        "text": "Robustness: when a model fails, another one answers, the kind of backup plan the Act names."
+        "text": "Robustness: when a model fails, another one answers, the kind of backup plan the Act names.",
+        "scope": "high-risk"
       }
     }
   },
@@ -954,7 +955,7 @@
     ],
     "contextSuffix": "audit-log",
     "title": "Audit log",
-    "tagline": "Every question and answer is recorded by the gateway, with its time and lane, and without the credentials.",
+    "tagline": "What an audit record holds: each question and answer, with its time and lane, and never the credentials.",
     "capability": "log-message v1.0.3",
     "status": "ready",
     "blockedBy": [],
@@ -992,17 +993,18 @@
             }
           }
         ],
-        "notes": "In production the same log goes to the observability stack (OpenSearch in the demo's local analytics mode), where it is kept for as long as the organisation must keep it."
+        "notes": "In production the audit trail is a separate pipeline, not a policy on a lane: the gateway's analytics events and access logs, sent to a log store (OpenSearch, a SIEM, Moesif) with its own retention and access control."
       }
     ],
-    "notes": "log-message v1.0.3 on the request (payload and headers, minus x-api-key, authorization and cookie) and on the response (payload). Each entry goes to the gateway runtime's log, and scripts/audit-log.sh reads them back as a record. On this gateway version the answer's entry carries no request id, so the record pairs question and answer by order. Art. 12 asks high-risk systems to log events automatically, and Art. 26 asks their deployers to keep those logs for at least six months; for a customer assistant it is good practice.",
+    "notes": "log-message v1.0.3 on the request (payload and headers, minus x-api-key, authorization and cookie) and on the response (payload), written to the gateway runtime's log; scripts/audit-log.sh reads them back. It shows what an audit record holds; a real audit trail is kept apart from the traffic, from the gateway's analytics events and access logs, in a store with retention and access control. Payloads can hold personal data: in production, log metadata only or mask it first. On this gateway version the answer's entry carries no request id, so the record pairs question and answer by order. Art. 12 binds high-risk systems only (with Art. 26, which has their deployers keep the logs for at least six months); a customer assistant is not one, so here it is good practice.",
     "gateway": {
       "stream": false
     },
     "refs": {
       "Compliance (EU AI Act)": {
         "code": "Art. 12",
-        "text": "Record-keeping: every question and answer is logged with its time and lane, so it can be traced later."
+        "text": "Record-keeping: each exchange can be traced later, from a record kept apart from the traffic.",
+        "scope": "high-risk"
       }
     }
   },
@@ -2012,7 +2014,8 @@
       },
       "Compliance (EU AI Act)": {
         "code": "Art. 14",
-        "text": "Human oversight: plan changes stay with {brand}'s staff, not the agent."
+        "text": "Human oversight: plan changes stay with {brand}'s staff, not the agent.",
+        "scope": "high-risk"
       }
     }
   },
@@ -2111,7 +2114,8 @@
       },
       "Compliance (EU AI Act)": {
         "code": "Art. 14",
-        "text": "Human oversight: the agent cannot move a customer to Unlimited on its own."
+        "text": "Human oversight: the agent cannot move a customer to Unlimited on its own.",
+        "scope": "high-risk"
       }
     }
   },

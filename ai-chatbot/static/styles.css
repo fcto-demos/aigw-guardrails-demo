@@ -911,6 +911,15 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   vertical-align: .1em;
 }
 
+/* An EU AI Act article that binds high-risk systems only. */
+.ref-scope {
+  display: inline-block;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: #3D2A00; background: #F5B700;
+  border-radius: 6px; padding: 1px 6px; margin-right: 4px;
+  vertical-align: .1em;
+}
+
 /* What the card answers in a group like OWASP or the EU AI Act. */
 .card .card-ref {
   font-size: 13px;
