@@ -139,6 +139,16 @@ INTERNAL_ADDRESS = (
 # in an address.
 DATA_IN_LINK = r"\bhttps?://[^\s?#]+\?[^\s#]*="
 
+# Secret Guard's pattern: a password or PIN given in a sentence (its value holds
+# a digit or a symbol, so "my password is expired" goes through), AWS access
+# keys, private keys, Anthropic/OpenAI, Google and GitHub API keys, Slack
+# tokens and JWTs.
+SECRET = (
+    r"(?i)\b(?:password|passwd|pwd|passcode|pin)\s*(?:is|:|=)\s*\S*[0-9!@#$%^&*?]\S*"
+    r"|\bAKIA[0-9A-Z]{16}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    r"|\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}|\bAIza[0-9A-Za-z_-]{35}|\bgh[pousr]_[A-Za-z0-9]{36}"
+    r"|\bxox[baprs]-[A-Za-z0-9-]{10,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
+
 
 def lane_templates(provider: dict) -> dict:
     """The showcase catalogue, generic across providers. Keyed by base_id —
@@ -254,6 +264,14 @@ def lane_templates(provider: dict) -> dict:
                 "response": {"enabled": True, "invert": True,
                              "jsonPath": provider["responseContentPath"],
                              "regex": INTERNAL_ADDRESS + "|" + DATA_IN_LINK}}}],
+        },
+        # A question carrying a password or a key is refused with a 422 before it
+        # leaves for the model provider.
+        "secret-guard": {
+            "context_suffix": "secret-guard", "displayName": "Secret Guard", "wired": True,
+            "globalPolicies": [{"name": "regex-guardrail", "version": "v1", "params": {
+                "request": {"enabled": True, "invert": True,
+                            "jsonPath": provider["contentPath"], "regex": SECRET}}}],
         },
         "prompt-decoration": {
             "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,

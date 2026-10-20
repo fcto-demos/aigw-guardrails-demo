@@ -1141,6 +1141,81 @@
     }
   },
   {
+    "id": "secret-guard",
+    "group": [
+      "Safety",
+      "OWASP Top 10 for LLMs (2026)"
+    ],
+    "contextSuffix": "secret-guard",
+    "title": "Secret guard",
+    "tagline": "A question carrying a password or a key is refused before it leaves for the model provider.",
+    "capability": "regex-guardrail v1.0.3",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "regex-guardrail v1.0.3",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [
+      "blocked",
+      "tokens"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Talking about a password",
+        "sends": [
+          {
+            "ask": "How do I reset my password in the Acme Mobile app?",
+            "expect": {
+              "text": "A normal answer: a question about a password goes through, only the password itself is stopped."
+            }
+          }
+        ]
+      },
+      {
+        "n": 2,
+        "title": "A customer's password",
+        "sends": [
+          {
+            "ask": "I can't log in, my password is Summer2026! Can you check what's wrong?",
+            "expect": {
+              "blocked": true,
+              "text": "422 from the gateway, type REGEX_GUARDRAIL, before any model is called: the password never leaves for the model provider, and no tokens are billed."
+            }
+          }
+        ]
+      },
+      {
+        "n": 3,
+        "title": "A key in a pasted config",
+        "sends": [
+          {
+            "ask": "Our billing export fails with this config, any idea why?\n\nAWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nAWS_REGION=eu-west-3",
+            "expect": {
+              "blocked": true,
+              "text": "Blocked the same way: a cloud key pasted with a config is caught too. AKIAIOSFODNN7EXAMPLE is the example key from AWS's own documentation."
+            }
+          }
+        ],
+        "notes": "The same happens to a private key, an API key or a session token: none of them is ever sent to the model provider."
+      }
+    ],
+    "notes": "regex-guardrail v1.0.3 on the question: a password or PIN given in a sentence (its value holds a digit or a symbol, so \"my password is expired\" goes through), AWS access keys, private keys, Anthropic/OpenAI, Google and GitHub API keys, Slack tokens and JWTs. Unlike PII masking, which swaps personal data out and lets the question through, a secret is refused outright: it has no business reaching a model provider at all. A pattern only sees secrets as written: one split or encoded needs another check.",
+    "gateway": {
+      "blockStatus": 422
+    },
+    "refs": {
+      "OWASP Top 10 for LLMs (2026)": {
+        "code": "LLM02",
+        "text": "Sensitive information disclosure: a password or a key pasted into a question never reaches the model provider."
+      }
+    }
+  },
+  {
     "id": "spend-limit",
     "group": [
       "Cost and performance",
