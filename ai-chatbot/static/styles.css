@@ -880,7 +880,7 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 
 .card p { margin: 0; font-size: 14px; color: var(--text-muted); }
 
-/* What the card answers in a group like OWASP. */
+/* What the card answers in a group like OWASP or the EU AI Act. */
 .card .card-ref {
   font-size: 13px;
   color: var(--text-strong);

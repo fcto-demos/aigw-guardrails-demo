@@ -260,7 +260,7 @@ def lane_templates(provider: dict) -> dict:
             "globalPolicies": [{"name": "prompt-decorator", "version": "v1", "params": {
                 "jsonPath": provider["contentPath"], "append": True,
                 "promptDecoratorConfig": {"text": "\n\nEnd your answer with this exact sentence, on its "
-                                                  "own line: Prices include VAT and may change at any time."}}}],
+                                                  "own line: This answer was written by an AI assistant."}}}],
         },
         "semantic-caching": {
             "context_suffix": "cache", "displayName": "Semantic Caching", "wired": True,

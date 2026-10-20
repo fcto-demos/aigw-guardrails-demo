@@ -59,7 +59,7 @@ wso2-api-platform-ai-demo/
 | Semantic caching | A reworded question is answered from cache: no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
 | Topic guardrail | The assistant only answers about mobile plans: an essay or a piece of code is refused before the model is called |
-| Prompt decoration | The gateway adds an instruction to every request: each answer ends with a legal line the app never asked for |
+| Prompt decoration | The gateway adds an instruction to every request: each answer ends by saying it was written by an AI, as the EU AI Act asks, without the app doing anything |
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
@@ -86,8 +86,9 @@ reply, with what the gateway did.
 The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
 Server or any other): see the [IDP Setup](.docs/mcp-identity-provider.md).
 
-Both pages also gather their cards under **OWASP Top 10 for LLMs**, with one
-line per card on the risk it answers.
+Both pages also gather their cards under **OWASP Top 10 for LLMs** and
+**Compliance (EU AI Act)**, with one line per card on the risk or the article it
+answers.
 
 ## Prerequisites
 

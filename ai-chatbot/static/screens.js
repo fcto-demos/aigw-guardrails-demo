@@ -199,7 +199,7 @@ function cardHtml(showcase, group) {
     + badge(showcase)
     + '<h3>' + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
-    /* In a group like OWASP, what the card answers there. */
+    /* In a group like OWASP or the EU AI Act, what the card answers there. */
     + (showcase.refs && showcase.refs[group]
         ? '<p class="card-ref">' + escapeHtml(branded(showcase.refs[group])) + '</p>'
         : '')
@@ -225,6 +225,7 @@ const GROUPS = {
   'Identity': ['user', 'Who is calling, and what they may do: tokens from your identity provider, checked at the gateway.'],
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
   'OWASP Top 10 for LLMs': ['alert', 'The risks of the OWASP Top 10 for LLM applications (2025), as they would hit {brand}, each one stopped at the gateway.'],
+  'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50). Human oversight (Art. 14) and cybersecurity (Art. 15), required for high-risk systems, applied here as good practice.'],
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
 const ICONS = {
@@ -235,6 +236,7 @@ const ICONS = {
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-2.4z"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+  scale: '<path d="M12 3v18M7 21h10M4 7h16M4 7l-2.5 6a2.5 2.5 0 0 0 5 0zM20 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/>',
 };
 
 function groupHeadHtml(name, count) {
