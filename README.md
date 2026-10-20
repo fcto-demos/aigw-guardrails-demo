@@ -56,6 +56,7 @@ wso2-api-platform-ai-demo/
 | Gradual model rollout | A cheaper model gets a quarter of the traffic: three answers in four come from the current model, one from the new one |
 | Intelligent routing | An LLM reads each question and picks the provider and model |
 | Customer tier routing | Premium customers are served by Anthropic, the others by Mistral, from a tier header the gateway would read from the user's token (a selector in the demo) |
+| EU data residency | European customers are only answered by a provider hosted in the EU (Mistral), the others may be served by Anthropic, from a region header the gateway would read from the user's token (a selector in the demo) |
 | Semantic caching | A reworded question is answered from cache: no model call, no tokens |
 | Prompt injection guardrails | The request is refused before any model is called: a pattern catches the obvious attempts, a meaning-based guard catches rewordings and other languages |
 | Topic guardrail | The assistant only answers about mobile plans: an essay or a piece of code is refused before the model is called |

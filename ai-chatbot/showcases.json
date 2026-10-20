@@ -361,6 +361,79 @@
     "notes": "llm-header-router v0.9.1 reads x-customer-tier and selects one of two upstreams declared on the LlmProxy: standard (Mistral) or premium (Anthropic); no header means standard. The app sends the OpenAI format and names no model: each provider's transformer (openai-to-mistral, openai-to-anthropic) supplies its model, ministral-8b or claude-opus, and the Anthropic one also translates the request and the reply. In production the tier comes from the signed-in user's token: jwt-auth's claimMappings copies a claim (for example tier) into x-customer-tier before the router runs. This page has no sign-in on the LLM side, so a selector stands in for that claim. The card ignores the provider dropdown, like Intelligent routing."
   },
   {
+    "id": "eu-residency",
+    "group": [
+      "Routing and resilience",
+      "Compliance (EU AI Act)"
+    ],
+    "route": {
+      "context": "/eu-residency",
+      "defaultProvider": "mistral",
+      "routedProvider": "anthropic"
+    },
+    "selector": {
+      "label": "Customer region",
+      "header": "x-customer-region",
+      "values": [
+        "europe",
+        "elsewhere"
+      ],
+      "hint": "Stands in for the customer's region, which in production the gateway reads from the signed-in customer's token."
+    },
+    "title": "EU data residency",
+    "tagline": "European customers are only ever answered by a provider hosted in the EU: the app only says where the customer lives.",
+    "capability": "llm-header-router v0.9.1",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "llm-header-router v0.9.1",
+      "openai-to-mistral-transformer v0.9.1",
+      "openai-to-anthropic-transformer v0.9.2"
+    ],
+    "gateway": {},
+    "emphasis": [
+      "model"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "A customer in Europe",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "text": "Customer region: Europe. Answered by Mistral's model (see Answered by): the conversation goes to a provider hosted in the EU."
+            }
+          }
+        ],
+        "notes": "The region is in the selector at the top. In production the gateway reads it from the customer's token; the demo picks it with this selector."
+      },
+      {
+        "n": 2,
+        "title": "A customer elsewhere",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "text": "Switch the region to Elsewhere first: the same question is answered by Anthropic's model. Outside Europe, any provider may serve the customer."
+            }
+          }
+        ],
+        "notes": "Same app, same question: only the region changed, and the gateway alone chose where the conversation went."
+      }
+    ],
+    "notes": "llm-header-router v0.9.1 reads x-customer-region and picks the provider: Mistral for europe, Anthropic for elsewhere, and Mistral when the header is missing, so a forgotten header never sends a European conversation out. Each provider's transformer sets the model. Mistral's API is hosted in the EU by default; whether a provider keeps data in the EU depends on its contract and settings, so check the provider's current terms before relying on it.",
+    "refs": {
+      "Compliance (EU AI Act)": {
+        "code": "GDPR",
+        "text": "Transfers outside the EU: European customers' conversations only go to a provider hosted in the EU."
+      }
+    }
+  },
+  {
     "id": "model-failover",
     "group": [
       "Routing and resilience",

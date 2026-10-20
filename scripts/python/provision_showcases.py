@@ -646,16 +646,34 @@ def cross_provider_lanes() -> dict:
 
     default, routed = _route_providers("tier-routing")
     if default and routed:
-        tiers = {"standard": (default, "small"), "premium": (routed, "large")}
-        lanes["tier-routing"] = _cross_lane(
+        lanes["tier-routing"] = _header_lane(
             "tier-routing", "Customer Tier Routing", default, routed,
-            [{"id": prov["providerId"], "as": tier} for tier, (prov, _) in tiers.items()],
-            [("llm-header-router", {
-                "headerName": showcase("tier-routing")["selector"]["header"], "defaultProvider": "standard",
-                "mappings": [{"headerValue": tier, "provider": tier} for tier in tiers]})]
-            + [(f"openai-to-{prov['id']}-transformer", {"providerId": tier, "model": prov["models"][size]})
-               for tier, (prov, size) in tiers.items()])
+            {"standard": (default, "small"), "premium": (routed, "large")}, "standard")
+
+    # EU customers only ever go to the provider hosted in the EU; without the
+    # header, the request is treated as European.
+    default, routed = _route_providers("eu-residency")
+    if default and routed:
+        lanes["eu-residency"] = _header_lane(
+            "eu-residency", "EU Data Residency", default, routed,
+            {"europe": (default, "small"), "elsewhere": (routed, "small")}, "europe")
     return lanes
+
+
+def _header_lane(card_id: str, display_name: str, default: dict, routed: dict,
+                 mapping: dict, fallback: str) -> dict:
+    """A lane llm-header-router switches on the header of the card's selector:
+    mapping is {header value: (provider, model size)}, fallback the value the
+    router uses when the header is missing. Each provider's transformer,
+    attached after the router, supplies the model."""
+    return _cross_lane(
+        card_id, display_name, default, routed,
+        [{"id": prov["providerId"], "as": value} for value, (prov, _) in mapping.items()],
+        [("llm-header-router", {
+            "headerName": showcase(card_id)["selector"]["header"], "defaultProvider": fallback,
+            "mappings": [{"headerValue": value, "provider": value} for value in mapping]})]
+        + [(f"openai-to-{prov['id']}-transformer", {"providerId": value, "model": prov["models"][size]})
+           for value, (prov, size) in mapping.items()])
 
 
 ALL_LANES = {}
