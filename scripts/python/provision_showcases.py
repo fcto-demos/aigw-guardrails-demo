@@ -173,6 +173,7 @@ def lane_templates(provider: dict) -> dict:
     path = provider["messagesSuffix"]
     request_model = provider["requestModel"]
     budget = budget_for(provider)
+    peak = showcase("time-based-routing")["peak"]
     return {
         "plain-chat": {
             "context_suffix": "plain", "displayName": "Plain Chat", "wired": True,
@@ -445,8 +446,8 @@ def lane_templates(provider: dict) -> dict:
             "supportedRequestModelLocations": {"payload", "header", "queryParam", "pathParam"},
             "operationPolicies": [{"name": "time-based-model-routing", "version": "v0", "paths": [{
                 "path": path, "methods": ["POST"], "params": {
-                    "timezone": "Europe/Madrid",
-                    "schedules": [{"from": "13:30", "to": "18:00", "model": {"modelName": small}}],
+                    "timezone": peak["timezone"],
+                    "schedules": [{"from": peak["from"], "to": peak["to"], "model": {"modelName": small}}],
                     "fallback": {"modelName": large},
                     "requestModel": request_model,
                 }}]}],
