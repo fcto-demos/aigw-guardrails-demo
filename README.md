@@ -64,6 +64,7 @@ wso2-api-platform-ai-demo/
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
 | Link guard | An internal address in the question is refused before the model (SSRF), and an answer that would send customer data out in a link is blocked (exfiltration) |
+| Markup guard | An answer carrying a script, or anything a web page would run, is blocked before it reaches the page that shows it |
 | Secret guard | A question carrying a password or a key is refused before it leaves for the model provider |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
 | Prompt compression | The gateway compresses the system prompt, and long messages, before the model reads them: about a fifth fewer input tokens, same answers |

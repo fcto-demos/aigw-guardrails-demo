@@ -139,6 +139,11 @@ INTERNAL_ADDRESS = (
 # in an address.
 DATA_IN_LINK = r"\bhttps?://[^\s?#]+\?[^\s#]*="
 
+# Markup Guard's pattern: markup a web page showing the answer would run.
+# Ordinary HTML (lists, links) goes through.
+MARKUP = (r"(?i)<\s*(?:script|iframe|object|embed)\b|\bjavascript\s*:|\bdata\s*:\s*text/html"
+          r"|\bon(?:error|load|click|mouseover|focus|submit)\s*=")
+
 # Secret Guard's pattern: a password or PIN given in a sentence (its value holds
 # a digit or a symbol, so "my password is expired" goes through), AWS access
 # keys, private keys, Anthropic/OpenAI, Google and GitHub API keys, Slack
@@ -264,6 +269,14 @@ def lane_templates(provider: dict) -> dict:
                 "response": {"enabled": True, "invert": True,
                              "jsonPath": provider["responseContentPath"],
                              "regex": INTERNAL_ADDRESS + "|" + DATA_IN_LINK}}}],
+        },
+        # An answer carrying markup a web page would run (a script, an event
+        # handler, a javascript: link) is blocked with a 422.
+        "markup-guard": {
+            "context_suffix": "markup-guard", "displayName": "Markup Guard", "wired": True,
+            "globalPolicies": [{"name": "regex-guardrail", "version": "v1", "params": {
+                "response": {"enabled": True, "invert": True,
+                             "jsonPath": provider["responseContentPath"], "regex": MARKUP}}}],
         },
         # A question carrying a password or a key is refused with a 422 before it
         # leaves for the model provider.
