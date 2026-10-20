@@ -126,6 +126,20 @@ def env_key(base_id: str, field: str, provider_id: str) -> str:
     return "%s_%s" % (key, field)
 
 
+# Link Guard's patterns. An internal address: loopback, the private ranges, the
+# cloud metadata address (169.254.x.x), names ending in .internal, .local, .lan
+# or .corp, and one-word host names (http://billing/, http://10.1.2.3 written as
+# a single number).
+INTERNAL_ADDRESS = (
+    r"(?i)\bfile://|\b(?:https?|ftp)://(?:localhost|127(?:\.\d+){3}|10(?:\.\d+){3}"
+    r"|192\.168(?:\.\d+){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d+){2}|169\.254(?:\.\d+){2}"
+    r"|0\.0\.0\.0|\[[0-9a-f:.]*\]|[a-z0-9.-]*\.(?:internal|local|lan|corp)(?:[:/?#\s]|$)"
+    r"|[a-z0-9-]+(?::\d+)?(?:[/?#\s]|$))")
+# A link that carries parameters (?name=value), the usual way to send data out
+# in an address.
+DATA_IN_LINK = r"\bhttps?://[^\s?#]+\?[^\s#]*="
+
+
 def lane_templates(provider: dict) -> dict:
     """The showcase catalogue, generic across providers. Keyed by base_id —
     the showcases.json id, shared by every provider's version of that lane."""
@@ -228,14 +242,18 @@ def lane_templates(provider: dict) -> dict:
                     "rules": [{"upperTokenLimit": 200, "type": "ratio", "value": 1.0},
                               {"upperTokenLimit": -1, "type": "ratio", "value": 0.6}]}}],
         },
-        # Every link in the answer must open (HTTP HEAD, 2xx or 3xx) before the
-        # customer sees it; a dead one blocks the answer with a 422.
+        # The question may not point at an internal address (SSRF), and the
+        # answer may not either, nor carry data out in a link's parameters
+        # (exfiltration). A match blocks with a 422.
         "link-check": {
-            "context_suffix": "link-check", "displayName": "Link Check", "wired": True,
-            "globalPolicies": [{"name": "url-guardrail", "version": "v1", "params": {
-                "request": {"enabled": False},
-                "response": {"enabled": True, "jsonPath": provider["responseContentPath"],
-                             "showAssessment": True}}}],
+            "context_suffix": "link-check", "displayName": "Link Guard", "wired": True,
+            "globalPolicies": [{"name": "regex-guardrail", "version": "v1", "params": {
+                "request": {"enabled": True, "invert": True,
+                            "jsonPath": provider["contentPath"],
+                            "regex": INTERNAL_ADDRESS},
+                "response": {"enabled": True, "invert": True,
+                             "jsonPath": provider["responseContentPath"],
+                             "regex": INTERNAL_ADDRESS + "|" + DATA_IN_LINK}}}],
         },
         "prompt-decoration": {
             "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,

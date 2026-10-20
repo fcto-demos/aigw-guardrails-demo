@@ -790,6 +790,15 @@ def guardrail_verdict(raw):
     return isinstance(message, dict) and message.get("action") == "GUARDRAIL_INTERVENED"
 
 
+def block_direction(raw):
+    """REQUEST or RESPONSE: which side a guardrail refused, when it says so."""
+    try:
+        message = json.loads(raw).get("message")
+    except (ValueError, AttributeError):
+        return None
+    return message.get("direction") if isinstance(message, dict) else None
+
+
 def classify_gateway_error(status, headers, body, showcase):
     """Did the gateway refuse on purpose, or did it break?
 
@@ -1265,6 +1274,8 @@ class Handler(BaseHTTPRequestHandler):
             if outcome == "budget_exhausted":
                 payload["error"] = ("the gateway refused this call: the "
                                     "cost budget for this provider is exhausted")
+            elif outcome == "policy_block" and block_direction(body) == "RESPONSE":
+                payload["error"] = "a gateway policy blocked the model's answer"
             elif outcome == "policy_block":
                 payload["error"] = ("a gateway policy blocked this request "
                                     "before any model was called")
