@@ -948,6 +948,65 @@
     }
   },
   {
+    "id": "audit-log",
+    "group": [
+      "Compliance (EU AI Act)"
+    ],
+    "contextSuffix": "audit-log",
+    "title": "Audit log",
+    "tagline": "Every question and answer is recorded by the gateway, with its time and lane, and without the credentials.",
+    "capability": "log-message v1.0.3",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "log-message v1.0.3",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [
+      "tokens"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "An ordinary conversation",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "text": "A normal answer: the customer sees nothing different."
+            }
+          }
+        ]
+      },
+      {
+        "n": 2,
+        "title": "The gateway's record",
+        "sends": [
+          {
+            "ask": "How much is the Plus plan?",
+            "expect": {
+              "text": "A normal answer. Now run ./scripts/audit-log.sh in a terminal: both questions and both answers, each with its time, lane and token count. The API key and other credentials are not in the record."
+            }
+          }
+        ],
+        "notes": "In production the same log goes to the observability stack (OpenSearch in the demo's local analytics mode), where it is kept for as long as the organisation must keep it."
+      }
+    ],
+    "notes": "log-message v1.0.3 on the request (payload and headers, minus x-api-key, authorization and cookie) and on the response (payload). Each entry goes to the gateway runtime's log, and scripts/audit-log.sh reads them back as a record. On this gateway version the answer's entry carries no request id, so the record pairs question and answer by order. Art. 12 asks high-risk systems to log events automatically, and Art. 26 asks their deployers to keep those logs for at least six months; for a customer assistant it is good practice.",
+    "gateway": {
+      "stream": false
+    },
+    "refs": {
+      "Compliance (EU AI Act)": {
+        "code": "Art. 12",
+        "text": "Record-keeping: every question and answer is logged with its time and lane, so it can be traced later."
+      }
+    }
+  },
+  {
     "id": "pii-masking",
     "group": [
       "Safety",

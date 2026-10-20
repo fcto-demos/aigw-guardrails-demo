@@ -275,6 +275,15 @@ def lane_templates(provider: dict) -> dict:
                              "jsonPath": provider["responseContentPath"],
                              "regex": INTERNAL_ADDRESS + "|" + DATA_IN_LINK}}}],
         },
+        # Every question and answer is written to the gateway's log, with its
+        # headers but never the credentials: the record scripts/audit-log.sh shows.
+        "audit-log": {
+            "context_suffix": "audit-log", "displayName": "Audit Log", "wired": True,
+            "globalPolicies": [{"name": "log-message", "version": "v1", "params": {
+                "request": {"payload": True, "headers": True,
+                            "excludeHeaders": ["x-api-key", "authorization", "cookie"]},
+                "response": {"payload": True}}}],
+        },
         # Each customer (the x-customer-id header) has a token allowance over a
         # window, counted from the tokens each answer used. A customer who uses
         # it up gets a 429; the others are not affected.
