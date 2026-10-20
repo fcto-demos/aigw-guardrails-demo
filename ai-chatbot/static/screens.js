@@ -226,7 +226,7 @@ const GROUPS = {
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
   'OWASP Top 10 for LLMs (2026)': ['alert', 'The risks of the OWASP Top 10 for LLM applications, 2026 edition, as they would hit {brand}, each one stopped at the gateway.'],
   'OWASP Top 10 for Agentic Applications': ['alert', 'The risks of the OWASP Top 10 for agentic applications (2026), as they would hit {brand}\'s agent, each one stopped at the gateway.'],
-  'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50), and keep people in charge of what it does (Art. 14, required of high-risk systems, applied here as good practice). Personal data falls under the GDPR.'],
+  'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50), keep people in charge of what it does (Art. 14) and keep answering when a part fails (Art. 15); the last two are required of high-risk systems, applied here as good practice. Personal data falls under the GDPR.'],
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
 const ICONS = {
