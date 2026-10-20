@@ -80,7 +80,7 @@ import time
 
 from platform_api import (
     ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID, gateway_ports,
-    probe, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
+    probe, gateway_mgmt, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
 )
 
@@ -873,7 +873,8 @@ def issue_key(lane_id: str) -> tuple[str, str]:
     return key_id, key_value
 
 
-def wait_for_key_live(context: str, messages_suffix: str, key: str, timeout_s: int = 180) -> str:
+def wait_for_key_live(lane_id: str, key_id: str, context: str, messages_suffix: str, key: str,
+                      timeout_s: int = 180) -> str:
     """A freshly issued key travels to the runtime over its own APIKeyState
     xDS channel, separate from the PolicyChainConfig one route_is_live()
     checks — the two can and do desync (observed: policy chain resynced
@@ -881,13 +882,25 @@ def wait_for_key_live(context: str, messages_suffix: str, key: str, timeout_s: i
     leaving a just-issued key rejected for a while). Confirms this specific
     key is actually accepted before we hand it to ai-chatbot.
 
-    Returns platform_api.gateway_verdict()'s last answer: "live" on success,
-    otherwise why it never got there. Only the gateway's own replies count
-    against the key -- a 404 used to pass as "accepted", which hid a route
-    that never deployed."""
+    Asks the gateway's controller whether it holds this key, active, so no
+    request crosses the gateway. The controller names a key after its id in
+    the control plane, not its display name (cut to 40 characters there).
+    Without a controller to ask, a probe sends the key through the gateway
+    instead.
+
+    Returns platform_api.gateway_verdict()'s vocabulary: "live" on success,
+    otherwise why it never got there."""
     verdict = "transient"
     for _ in range(timeout_s // 2):
-        verdict = probe(context, messages_suffix, key)
+        status, resp = gateway_mgmt("GET", f"/llm-proxies/{lane_id}/api-keys")
+        if status == 200:
+            held = any(k.get("name") == key_id and k.get("status") == "active"
+                       for k in resp.get("apiKeys") or [])
+            verdict = "live" if held else "key-rejected"
+        elif status == 404:
+            verdict = "no-route"
+        else:
+            verdict = probe(context, messages_suffix, key)
         if verdict == "live":
             return verdict
         time.sleep(2)
@@ -931,7 +944,7 @@ def provision_lane(lane: dict, provider_ref: str, display_prefix: str,
     else:
         print(f"  api key: {key}  (no showcases.json entry — not wired into ai-chatbot)")
 
-    verdict = wait_for_key_live(lane["context"], messages_suffix, key)
+    verdict = wait_for_key_live(lane_id, key_id, lane["context"], messages_suffix, key)
     if verdict != "live":
         sys.exit("  " + KEY_NOT_LIVE[verdict].format(context=lane["context"], endpoint=GATEWAY_ENDPOINT))
     print("  key confirmed live on the gateway")
