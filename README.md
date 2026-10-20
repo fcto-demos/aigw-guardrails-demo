@@ -86,9 +86,10 @@ reply, with what the gateway did.
 The last two need an OpenID Connect identity provider (Asgardeo, WSO2 Identity
 Server or any other): see the [IDP Setup](.docs/mcp-identity-provider.md).
 
-Both pages also gather their cards under **OWASP Top 10 for LLMs** and
-**Compliance (EU AI Act)**, with one line per card on the risk or the article it
-answers.
+The LLM Gateway page also gathers its cards under the **OWASP Top 10 for LLMs
+(2026)**, the MCP Gateway page under the **OWASP Top 10 for Agentic
+Applications**, and both under **Compliance (EU AI Act)**, with one line per
+card on the risk or the article it answers.
 
 ## Prerequisites
 
