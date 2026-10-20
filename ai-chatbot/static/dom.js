@@ -46,6 +46,7 @@ export const transcript  = document.getElementById('transcript');
 export const intro       = document.getElementById('intro');
 export const introHead   = document.getElementById('intro-head');
 export const introBody   = document.getElementById('intro-body');
+export const introRefs   = document.getElementById('intro-refs');
 export const introChips  = document.getElementById('intro-chips');
 export const form        = document.getElementById('form');
 export const input       = document.getElementById('input');

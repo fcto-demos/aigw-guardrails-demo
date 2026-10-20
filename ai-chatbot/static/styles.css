@@ -309,6 +309,23 @@ body {
 
 .intro p { margin: 0 auto 22px; color: var(--text-muted); max-width: 46ch; }
 
+.intro-refs {
+  display: grid; gap: 10px;
+  max-width: 56ch; margin: 0 auto 22px;
+  text-align: left;
+}
+.intro-refs:empty { display: none; }
+.intro-ref {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 12px;
+}
+.intro-ref .ref-group {
+  display: block;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.intro .intro-ref p { margin: 2px 0 0; max-width: none; font-size: 14px; color: var(--text-strong); }
+
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 
 .chip {
@@ -879,6 +896,20 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
 }
 
 .card p { margin: 0; font-size: 14px; color: var(--text-muted); }
+
+/* The OWASP risk or EU AI Act article, before a card's title and in the chat
+ * intro. */
+.ref-code {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .78em;
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--accent-deep);
+  border-radius: 6px;
+  padding: 1px 7px;
+  vertical-align: .1em;
+}
 
 /* What the card answers in a group like OWASP or the EU AI Act. */
 .card .card-ref {
