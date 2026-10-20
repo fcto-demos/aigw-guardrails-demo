@@ -287,9 +287,9 @@ def bedrock_safety_missing() -> str:
 
 def gateway_verdict(status: int, body) -> str:
     """Classifies a probe response by WHO produced it, since a probe that
-    gets through the gateway reaches the real upstream, whose own 401/404
-    (Anthropic: bad upstream key, unknown model "probe") must not be read as
-    the gateway's. Returns:
+    gets through the gateway reaches the real upstream, whose own 400/401/404
+    (an empty request, a bad upstream key) must not be read as the gateway's.
+    Returns:
       "transient"     -- no HTTP answer at all (status 0)
       "no-route"      -- Envoy has no route for this context: not deployed
       "key-rejected"  -- api-key-auth refused the key (or no key was sent)
@@ -309,10 +309,10 @@ def gateway_verdict(status: int, body) -> str:
 
 def probe(context: str, messages_suffix: str, key: str = None) -> str:
     """One POST straight at the gateway (not the control plane), classified
-    by gateway_verdict()."""
+    by gateway_verdict(). The body is empty on purpose: the verdict never
+    depends on it, and a made-up model name would show up in analytics."""
     status, body = request("POST", f"https://{GATEWAY_ENDPOINT}{context}{messages_suffix}",
-                           {"model": "probe", "max_tokens": 1, "messages": []},
-                           {"X-API-Key": key} if key else None)
+                           {}, {"X-API-Key": key} if key else None)
     return gateway_verdict(status, body)
 
 
