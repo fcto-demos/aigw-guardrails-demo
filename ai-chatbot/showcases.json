@@ -113,7 +113,10 @@
   },
   {
     "id": "cost-based-routing",
-    "group": "Routing and resilience",
+    "group": [
+      "Routing and resilience",
+      "Cost and performance"
+    ],
     "contextSuffix": "cost-routing",
     "unsupportedProviders": [
       "gemini"

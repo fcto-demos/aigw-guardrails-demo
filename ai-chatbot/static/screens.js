@@ -208,7 +208,7 @@ function cardHtml(showcase) {
 /* Each group's icon and, in one line, what it brings. */
 const GROUPS = {
   'Routing and resilience': ['route', 'The gateway picks the provider and the model for each request, and keeps answering when one fails.'],
-  'Cost and performance': ['gauge', 'Fewer tokens and a capped bill: answers from cache, and a budget the gateway enforces.'],
+  'Cost and performance': ['gauge', 'Fewer tokens and a capped bill: answers from cache, compressed prompts, a cheaper model as spend rises, and a budget the gateway enforces.'],
   'Safety': ['shield', 'What reaches the model, and what comes back, is checked at the gateway.'],
   'Identity': ['user', 'Who is calling, and what they may do: tokens from your identity provider, checked at the gateway.'],
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
@@ -244,16 +244,24 @@ window.addEventListener('resize', updateScrollHint);
 scrollHint.addEventListener('click', () =>
   screenHome.scrollBy({ top: screenHome.clientHeight * 0.8, behavior: 'smooth' }));
 
+/* A card's group is one name, or a list when it belongs to several themes:
+ * it then shows in each, and the first one is its home. */
+function groupsOf(showcase) {
+  return Array.isArray(showcase.group) ? showcase.group : [showcase.group || ''];
+}
+
 /* Cards are grouped by theme, groups in the order they first appear in
- * showcases.json, so the page reads as a story rather than a flat list. */
+ * showcases.json, so the page reads as a story rather than a flat list. In
+ * its other groups, a card comes after the group's own cards. */
 function renderCards() {
   const items = [...showcases.values()].filter((s) => pageOf(s) === activePage);
   const groups = new Map();
-  for (const item of items) {
-    const name = item.group || '';
+  const add = (name, item) => {
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(item);
-  }
+  };
+  for (const item of items) add(groupsOf(item)[0], item);
+  for (const item of items) groupsOf(item).slice(1).forEach((name) => add(name, item));
   cardsBox.innerHTML =
     (registryError
       ? '<div class="notice"><strong>The registry did not load cleanly</strong>'
