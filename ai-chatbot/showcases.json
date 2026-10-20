@@ -295,12 +295,16 @@
     "route": {
       "context": "/tier-routing",
       "defaultProvider": "mistral",
-      "routedProvider": "anthropic",
+      "routedProvider": "anthropic"
+    },
+    "selector": {
+      "label": "Customer tier",
       "header": "x-customer-tier",
-      "tiers": [
+      "values": [
         "standard",
         "premium"
-      ]
+      ],
+      "hint": "Stands in for the customer's tier, which in production the gateway reads from the signed-in customer's token."
     },
     "title": "Customer tier routing",
     "tagline": "Premium customers are answered by Anthropic's large model, the others by Mistral: the app only says which tier.",
@@ -1355,6 +1359,104 @@
       "OWASP Top 10 for LLMs (2026)": {
         "code": "LLM06",
         "text": "Unbounded consumption: a runaway script cannot run up {brand}'s bill."
+      }
+    }
+  },
+  {
+    "id": "token-quota",
+    "group": [
+      "Cost and performance",
+      "OWASP Top 10 for LLMs (2026)"
+    ],
+    "contextSuffix": "token-quota",
+    "title": "Token quota per customer",
+    "tagline": "Each customer has their own token allowance: one who uses it up is refused, the others are not.",
+    "capability": "advanced-ratelimit v1.3.1",
+    "status": "ready",
+    "blockedBy": [],
+    "selector": {
+      "label": "Customer",
+      "header": "x-customer-id",
+      "values": [
+        "sam",
+        "alex"
+      ],
+      "hint": "Stands in for the signed-in customer, whom in production the gateway reads from the customer's token."
+    },
+    "quota": {
+      "tokens": 2000,
+      "duration": "5m"
+    },
+    "policies": [
+      "advanced-ratelimit v1.3.1",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [
+      "blocked",
+      "tokens"
+    ],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Sam asks two questions",
+        "sends": [
+          {
+            "ask": "Which plans include roaming in Zone A?",
+            "expect": {
+              "text": "A normal answer. The gateway counts the tokens it used against Sam's allowance."
+            }
+          },
+          {
+            "ask": "And which one has the most data?",
+            "expect": {
+              "text": "Another normal answer: Sam's allowance is now nearly used up."
+            }
+          }
+        ],
+        "notes": "Customer: Sam, in the selector at the top. In production the gateway reads who the customer is from their token; the demo picks it with this selector. Each answer uses about 1,200 tokens, most of them the plan catalogue sent with every question."
+      },
+      {
+        "n": 2,
+        "title": "Sam's allowance is used up",
+        "sends": [
+          {
+            "ask": "Is 5G included on the Plus plan?",
+            "expect": {
+              "blocked": true,
+              "text": "429 from the gateway: Sam's allowance for the window is used up. Nothing reaches the model, and nothing is billed."
+            }
+          }
+        ]
+      },
+      {
+        "n": 3,
+        "title": "Alex is not affected",
+        "sends": [
+          {
+            "ask": "Is 5G included on the Plus plan?",
+            "expect": {
+              "text": "Switch the customer to Alex first: the same question gets a normal answer, from Alex's own allowance."
+            }
+          }
+        ],
+        "notes": "One customer, or one runaway script on a customer's account, cannot use up what the others are entitled to."
+      }
+    ],
+    "notes": "advanced-ratelimit v1.3.1 with one quota per customer: the key is the x-customer-id header, which in production the gateway would read from the customer's token, and the cost of each call is the number of tokens in the answer's usage block (input plus output). 2,000 tokens per customer every 5 minutes, and each question here uses about 1,200 (most of it the plan catalogue sent with every question). A call is counted once it has been answered, so the one that crosses the line goes through and the next one is refused. The x-ratelimit-remaining header shows what is left.",
+    "gateway": {
+      "stream": false,
+      "limit": {
+        "title": "Token quota used up",
+        "message": "the gateway refused this call: this customer's token allowance is used up until the window ends"
+      }
+    },
+    "refs": {
+      "OWASP Top 10 for LLMs (2026)": {
+        "code": "LLM06",
+        "text": "Unbounded consumption: one customer, or a runaway script on their account, cannot use up the tokens the others are entitled to."
       }
     }
   },

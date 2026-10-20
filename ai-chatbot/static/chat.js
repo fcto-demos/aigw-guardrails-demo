@@ -11,7 +11,7 @@ import { renderMarkdown, escapeHtml } from './markdown.js';
 import {
   transcript, intro, form, input, sendBtn, clearBtn,
   alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, toolListHtml, toolCallHtml, setBusy,
-  showError, showRefusal, clearError, showRoute, showBudget, tierBox, tierSelect,
+  showError, showRefusal, clearError, showRoute, showBudget, selectorBox, selectorSelect,
   markBudgetExhausted, showSpendMeter, scrollDown, resetRoute, signinBox,
 } from './dom.js';
 import { activeId, activeShowcase, activeProvider, onSessionReset } from './screens.js';
@@ -74,7 +74,7 @@ export async function ask(question, origin) {
       /* A showcase *id*, never a URL. The server owns the id-to-provider
        * mapping; see the comment at the lookup in server.py. */
       body: JSON.stringify({ messages, showcase: activeId, provider: activeProvider, conversation,
-                             tier: tierBox.hidden ? undefined : tierSelect.value }),
+                             choice: selectorBox.hidden ? undefined : selectorSelect.value }),
       signal: inFlight.signal,
     });
 
@@ -108,7 +108,8 @@ export async function ask(question, origin) {
       const status = payload.gatewayStatus
         ? ' (gateway returned HTTP ' + payload.gatewayStatus + ')'
         : '';
-      if (turn.outcome === 'refused') markBudgetExhausted();
+      /* A card's own limit (a token quota) is not the cost budget. */
+      if (turn.outcome === 'refused' && !payload.limitTitle) markBudgetExhausted();
       else showBudget(payload.costLimit, payload.costRemaining);
 
       if (outcome === 'signin_required') {
@@ -128,7 +129,7 @@ export async function ask(question, origin) {
                     (payload.error || 'The request was refused.') + status,
                     payload.gatewayBody || '');
       } else if (turn.outcome === 'refused') {
-        showError('Cost budget exhausted',
+        showError(payload.limitTitle || 'Cost budget exhausted',
                   (payload.error || 'The request failed.') + status,
                   payload.gatewayBody || '');
       } else {

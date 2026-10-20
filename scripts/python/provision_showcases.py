@@ -139,6 +139,11 @@ INTERNAL_ADDRESS = (
 # in an address.
 DATA_IN_LINK = r"\bhttps?://[^\s?#]+\?[^\s#]*="
 
+# Where each wire format reports the tokens a call used, for the token quota.
+TOKEN_PATHS = {"anthropic": ["$.usage.input_tokens", "$.usage.output_tokens"],
+               "openai": ["$.usage.total_tokens"],
+               "gemini": ["$.usageMetadata.totalTokenCount"]}
+
 # Markup Guard's pattern: markup a web page showing the answer would run.
 # Ordinary HTML (lists, links) goes through.
 MARKUP = (r"(?i)<\s*(?:script|iframe|object|embed)\b|\bjavascript\s*:|\bdata\s*:\s*text/html"
@@ -269,6 +274,21 @@ def lane_templates(provider: dict) -> dict:
                 "response": {"enabled": True, "invert": True,
                              "jsonPath": provider["responseContentPath"],
                              "regex": INTERNAL_ADDRESS + "|" + DATA_IN_LINK}}}],
+        },
+        # Each customer (the x-customer-id header) has a token allowance over a
+        # window, counted from the tokens each answer used. A customer who uses
+        # it up gets a 429; the others are not affected.
+        "token-quota": {
+            "context_suffix": "token-quota", "displayName": "Token Quota", "wired": True,
+            "globalPolicies": [{"name": "advanced-ratelimit", "version": "v1", "params": {"quotas": [{
+                "name": "tokens-per-customer",
+                "limits": [{"limit": showcase("token-quota")["quota"]["tokens"],
+                            "duration": showcase("token-quota")["quota"]["duration"]}],
+                "keyExtraction": [{"type": "routename"},
+                                  {"type": "header", "key": showcase("token-quota")["selector"]["header"]}],
+                "costExtraction": {"enabled": True, "sources": [
+                    {"type": "response_body", "jsonPath": path} for path in TOKEN_PATHS[provider["wire"]]]},
+            }]}}],
         },
         # An answer carrying markup a web page would run (a script, an event
         # handler, a javascript: link) is blocked with a 422.
@@ -631,7 +651,7 @@ def cross_provider_lanes() -> dict:
             "tier-routing", "Customer Tier Routing", default, routed,
             [{"id": prov["providerId"], "as": tier} for tier, (prov, _) in tiers.items()],
             [("llm-header-router", {
-                "headerName": showcase("tier-routing")["route"]["header"], "defaultProvider": "standard",
+                "headerName": showcase("tier-routing")["selector"]["header"], "defaultProvider": "standard",
                 "mappings": [{"headerValue": tier, "provider": tier} for tier in tiers]})]
             + [(f"openai-to-{prov['id']}-transformer", {"providerId": tier, "model": prov["models"][size]})
                for tier, (prov, size) in tiers.items()])

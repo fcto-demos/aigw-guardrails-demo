@@ -88,10 +88,12 @@
         </div>
 
         <div class="control-actions">
-          <label class="tier" id="tier" hidden
-                 title="Stands in for the customer's tier, which in production the gateway reads from the signed-in customer's token.">
-            <span class="control-label">Customer tier</span>
-            <select id="tier-select"></select>
+          <label class="selector" id="selector" hidden>
+            <span class="selector-text">
+              <span class="control-label" id="selector-label"></span>
+              <span class="selector-note">from the customer's token in production</span>
+            </span>
+            <select id="selector-select"></select>
           </label>
 
           <span class="signin" id="signin" hidden

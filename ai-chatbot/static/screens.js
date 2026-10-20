@@ -16,7 +16,7 @@ import {
   wordmark, brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
   intro, introHead, introBody, introRefs, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
-  showSpendMeter, signinBox, signinWho, signinLink, tierBox, tierSelect,
+  showSpendMeter, signinBox, signinWho, signinLink, selectorBox, selectorLabel, selectorSelect,
   screenHome, scrollHint,
 } from './dom.js';
 import { buildRail, closeRail, showHeaders } from './rail.js';
@@ -349,14 +349,18 @@ function mountShowcase(showcase) {
 
   refreshSignin(showcase);
 
-  /* Cards that route on the customer's tier get a selector for it. */
-  const tiers = (showcase.route && showcase.route.tiers) || [];
-  tierBox.hidden = !tiers.length;
-  tierSelect.innerHTML = tiers.map((t) => '<option value="' + escapeHtml(t) + '">'
-    + escapeHtml(t.charAt(0).toUpperCase() + t.slice(1)) + '</option>').join('');
-  /* Its colour follows the tier, so a switch shows from across the room. */
-  tierSelect.dataset.tier = tierSelect.value;
-  tierSelect.onchange = () => { tierSelect.dataset.tier = tierSelect.value; };
+  /* A card whose gateway reads something about the customer from a header
+   * (tier, region, id) gets a selector standing in for it. */
+  const sel = showcase.selector;
+  selectorBox.hidden = !sel;
+  selectorBox.title = (sel && sel.hint) || '';
+  selectorLabel.textContent = sel ? sel.label : '';
+  selectorSelect.innerHTML = (sel ? sel.values : []).map((v) => '<option value="' + escapeHtml(v) + '">'
+    + escapeHtml(v.charAt(0).toUpperCase() + v.slice(1)) + '</option>').join('');
+  /* Its colour changes off the first value, so a switch shows from across the room. */
+  const paint = () => { selectorSelect.dataset.alt = String(!!sel && selectorSelect.value !== sel.values[0]); };
+  paint();
+  selectorSelect.onchange = paint;
 
   const notice = noticeFor(showcase);
   noticeBox.hidden = !notice;

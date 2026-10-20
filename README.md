@@ -67,6 +67,7 @@ wso2-api-platform-ai-demo/
 | Markup guard | An answer carrying a script, or anything a web page would run, is blocked before it reaches the page that shows it |
 | Secret guard | A question carrying a password or a key is refused before it leaves for the model provider |
 | LLM spend limit | The cost budget refuses traffic once the money is gone |
+| Token quota per customer | Each customer has their own token allowance: one who uses it up gets a 429, the others are still served |
 | Prompt compression | The gateway compresses the system prompt, and long messages, before the model reads them: about a fifth fewer input tokens, same answers |
 
 On the **MCP Gateway** page, the assistant becomes an agent. Its tools come
