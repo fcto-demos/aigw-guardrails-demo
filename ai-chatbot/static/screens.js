@@ -235,10 +235,10 @@ const GROUPS = {
   'Safety': ['shield', 'What reaches the model, and what comes back, is checked at the gateway.'],
   'Identity': ['user', 'Who is calling, and what they may do: tokens from your identity provider, checked at the gateway.'],
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
+  'Third-party policies': ['plug', 'Policies that call an outside service, attached at the gateway like any other: TypeSafe AI\'s Jev, Azure Content Safety and AWS Bedrock Guardrails. Each one needs its key in secrets/content-safety.env.'],
   'OWASP Top 10 for LLMs (2026)': ['alert', 'The risks of the OWASP Top 10 for LLM applications, 2026 edition, as they would hit {brand}, each one stopped at the gateway.'],
   'OWASP Top 10 for Agentic Applications': ['alert', 'The risks of the OWASP Top 10 for agentic applications (2026), as they would hit {brand}\'s agent, each one stopped at the gateway.'],
   'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50); personal data falls under the GDPR. Record-keeping (Art. 12) and robustness (Art. 15) bind high-risk systems only, which a customer assistant is not: they show here as good practice.'],
-  'Third-party policies': ['plug', 'Policies that call an outside service, attached at the gateway like any other: TypeSafe AI\'s Jev, Azure Content Safety and AWS Bedrock Guardrails. Each one needs its key in secrets/content-safety.env.'],
   /* Always last. */
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
