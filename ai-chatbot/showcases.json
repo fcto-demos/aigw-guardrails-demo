@@ -1003,6 +1003,7 @@
           {
             "ask": "How much is the Plus plan?",
             "expect": {
+              "blocked": true,
               "text": "The gateway answers itself: “The assistant is paused. Please contact an advisor.”, HTTP 503 and zero tokens. No model was called."
             }
           }
