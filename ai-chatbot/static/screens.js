@@ -356,8 +356,11 @@ function mountShowcase(showcase) {
   document.body.toggleAttribute('data-fixed-provider', Boolean(showcase.provider));
   closeRail();
 
-  brandProduct.textContent = showcase.title || 'AI Assistant';
-  document.title = (showcase.title || 'AI Assistant') + ' - AI Gateway showcase';
+  /* The tile shows the outside service as a label; here it follows the name,
+   * so the two Content safety cards stay apart. */
+  const name = (showcase.title || 'AI Assistant') + (showcase.vendor ? ' (' + showcase.vendor + ')' : '');
+  brandProduct.textContent = name;
+  document.title = name + ' - AI Gateway showcase';
 
   /* The status line names the provider, so the reminder that these cards are
    * different providers, not different prompts, is always on screen. */
