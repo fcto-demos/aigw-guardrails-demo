@@ -778,11 +778,13 @@ body {
 body[data-screen="home"] #screen-chat,
 body[data-screen="chat"] #screen-home { display: none; }
 
-/* Two pages, one per gateway. MCP cards fix their own model, so the provider
-   picker has nothing to do there. */
+/* Two pages, one per gateway. MCP cards fix their own model, and so does an
+   LLM card that names its provider, so the provider picker has nothing to do
+   there. */
 body[data-page="llm"] [data-page-only="mcp"],
 body[data-page="mcp"] [data-page-only="llm"],
-body[data-page="mcp"] .provider { display: none; }
+body[data-page="mcp"] .provider,
+body[data-fixed-provider] .provider { display: none; }
 
 .gw-nav { display: flex; gap: 6px; }
 .gw-nav a { text-decoration: none; }

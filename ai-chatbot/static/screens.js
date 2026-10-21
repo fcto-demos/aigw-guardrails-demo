@@ -352,6 +352,8 @@ function mountShowcase(showcase) {
   activeShowcase = showcase;
   document.body.dataset.screen = 'chat';
   setPage(pageOf(showcase));
+  /* A card that runs on one provider has no use for the picker. */
+  document.body.toggleAttribute('data-fixed-provider', Boolean(showcase.provider));
   closeRail();
 
   brandProduct.textContent = showcase.title || 'AI Assistant';
@@ -451,6 +453,7 @@ function mountHome(page) {
   /* Each page starts at its top, not where the other one was left. */
   if (page !== activePage) screenHome.scrollTop = 0;
   setPage(page);
+  document.body.removeAttribute('data-fixed-provider');
   renderCards();
   setIdleStatus();
   statusEl.title = '';

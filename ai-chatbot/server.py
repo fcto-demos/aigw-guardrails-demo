@@ -514,6 +514,12 @@ def _resolve_model_role(role, provider_id):
     return PROVIDERS[provider_id]["models"].get(role) if role else None
 
 
+def card_provider(entry, provider_id):
+    """The provider a card runs on: the one it names in showcases.json, when
+    that one is enabled, whatever the dropdown says; else the dropdown's."""
+    return entry["provider"] if (entry or {}).get("provider") in PROVIDERS else provider_id
+
+
 def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
     """(url, source) for one showcase on one provider; (None, reason) when
     it is not wired.
@@ -522,6 +528,9 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
     client-supplied id into a registry entry via a dict lookup.
     """
     sid = entry["id"]
+    if entry.get("provider") and entry["provider"] not in PROVIDERS:
+        return None, "needs %s, disabled in providers.json" % entry["provider"]
+    provider_id = card_provider(entry, provider_id)
     suffix = PROVIDERS[provider_id]["messagesSuffix"]
 
     pinned = _sc_conf(sid, "URL", provider_id)
@@ -586,6 +595,7 @@ def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
     """The provider path, host stripped -- safe to publish to the browser."""
     if not url:
         return None
+    provider_id = card_provider(entry, provider_id)
     path = urllib.parse.urlsplit(url).path
     route = (entry or {}).get("route")
     if (entry or {}).get("mcp"):
@@ -635,6 +645,7 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
     the wrong model.
     """
     entry = _REGISTRY["by_id"][showcase_id]
+    provider_id = card_provider(entry, provider_id)
     url, source = resolve_gateway(entry, provider_id)
     wiring = entry.get("gateway") or {}
     overrides = entry.get("overrides") or {}

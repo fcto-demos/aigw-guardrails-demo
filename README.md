@@ -68,7 +68,7 @@ wso2-api-platform-ai-demo/
 | Content safety (Azure) | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety (AWS Bedrock) | The same, through an AWS Bedrock guardrail |
 | Jailbreak guard (Jev) | TypeSafe AI's Jev judges what a message is trying to do: the role-plays and other languages that Prompt injection guardrails let through are refused |
-| Promise guard (Jev) | Jev reads the model's answer: one that promises the customer a refund or a free month is blocked before they read it |
+| Promise guard (Jev) | Jev reads the model's answer: one that promises the customer a refund or a free month is blocked before they read it. It always runs on Mistral, which writes such promises where Claude and Gemini refuse |
 | Retention routing (Jev) | Jev reads why the customer is writing: one about to leave is answered by the large model, everyday questions by the small one |
 | Link guard | An internal address in the question is refused before the model (SSRF), and an answer that would send customer data out in a link is blocked (exfiltration) |
 | Markup guard | An answer carrying a script, or anything a web page would run, is blocked before it reaches the page that shows it |
