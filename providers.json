@@ -47,7 +47,7 @@
     "upstreamUrl": "https://api.mistral.ai",
     "authHeader": "Authorization",
     "authValuePrefix": "Bearer ",
-    "costBudget": 0.00016
+    "costBudget": 0.00036
   },
   {
     "id": "gemini",

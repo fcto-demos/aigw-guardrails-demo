@@ -196,6 +196,13 @@ llm_provider_endpoint = "https://api.mistral.ai/v1/chat/completions"
 llm_provider_model    = "ministral-14b-latest"
 llm_provider_api_key  = "{{ env \"APIP_GW_EMBEDDING_PROVIDER_API_KEY\" \"\" }}"
 
+# How the budgets and rate limits count (spend limit, cost-based routing, token
+# quota, MCP rate limit): RATE_LIMIT_ALGORITHM in demo.env, which lists the
+# possible values. Without it, fixed-window, the gateway's own default for
+# most of these policies. The counters stay in each gateway's memory.
+[policy_configurations.ratelimit_v1]
+algorithm = '{{ env "RATE_LIMIT_ALGORITHM" "fixed-window" }}'
+
 # TypeSafe AI's Jev, for the Jev cards. The key is set in
 # secrets/content-safety.env; left blank, those cards are not provisioned.
 [policy_configurations.typesafe_jev_v0]

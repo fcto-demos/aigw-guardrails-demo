@@ -65,6 +65,10 @@
     ],
     "title": "Time-based routing",
     "tagline": "During peak hours ({PEAK_HOURS} {PEAK_TIMEZONE}), even complex questions go to the fast model.",
+    "warning": {
+      "title": "Only one of the two steps works at a given time",
+      "text": "Step 1 needs a time outside the peak hours ({PEAK_HOURS}, {PEAK_TIMEZONE}), step 2 a time inside them. To show the other one, change PEAK_HOURS in demo.env, then run ./scripts/python/provision_showcases.py time-based-routing (mistral-time-based-routing or gemini-time-based-routing for those providers)."
+    },
     "capability": "time-based-model-routing v0.9.1",
     "status": "ready",
     "blockedBy": [],
@@ -216,7 +220,7 @@
         "notes": "The last of four. If the meter has not already gone amber, this is usually where it does -- but nothing here depends on that."
       }
     ],
-    "notes": "Four questions, none of them claiming to be the one that crosses the wall. The budget is shared across callers and runs on a fixed window, so which send steps down depends on what the lane has already spent this hour -- a step asserting a model would go red exactly when the policy was working. The rail reports the served model per step instead, and the meter and the stepped-down chip carry the story. Each question is written to be answered at length, because output tokens at $25/MTok on opus-4-6 are what actually walks the $0.02/1h budget down. WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. The policy keys on the model the CLIENT asks for -- requestModel is $.model in the payload -- and looks up that model’s budget entry. So this lane, alone among the three routers, depends on what the app sends: with the app default of claude-haiku-4-5 the request matches the economy budget ($1000/1h), which never runs out on stage, and the card would serve haiku from the first call and never step down. Hence overrides.model = claude-opus-4-6. The time lane needs no such override because its fallback names the deep model, and the semantic lane names a model on every route. Budgets are per model and shared across all callers. onExhausted is 'fallback'; the fallback model must have its own budget entry with capacity or the request returns 429 instead of stepping down, and there is no second hop -- an exhausted fallback does not try another model. The limit trips a call or two late because cost is only known after the response completes, so a request can overshoot. cost-based-model-routing is listed before llm-cost so reverse response-phase evaluation lets llm-cost publish the final cost first. No remaining-budget headers are emitted, by design -- the balance is unknown until the body completes. Excluded on gemini: this demo's Gemini account has exactly one usable model without billing (gemini-3.8-flash) -- every other variant (pro tier, lite, dated/preview versions) is either quota:0 or decommissioned for this account, confirmed by direct calls against the real API, not just this gateway. A route with small==large can't show a switch, so there's nothing honest to demo here for this provider."
+    "notes": "Four questions, none of them claiming to be the one that crosses the wall. The budget is shared across callers and comes back over its 5-minute window (gradually with gcra, the demo's RATE_LIMIT_ALGORITHM; all at once every 5 minutes with fixed-window), so which send steps down depends on what the lane has already spent in the current 5-minute window -- a step asserting a model would go red exactly when the policy was working. The rail reports the served model per step instead, and the meter and the stepped-down chip carry the story. Each question is written to be answered at length, because output tokens at $25/MTok on opus-4-6 are what actually walks the $0.02-per-5-minutes budget down. WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. The policy keys on the model the CLIENT asks for -- requestModel is $.model in the payload -- and looks up that model’s budget entry. So this lane, alone among the three routers, depends on what the app sends: with the app default of claude-haiku-4-5 the request matches the economy budget ($1000 per 5 minutes), which never runs out on stage, and the card would serve haiku from the first call and never step down. Hence overrides.model = claude-opus-4-6. The time lane needs no such override because its fallback names the deep model, and the semantic lane names a model on every route. Budgets are per model and shared across all callers. onExhausted is 'fallback'; the fallback model must have its own budget entry with capacity or the request returns 429 instead of stepping down, and there is no second hop -- an exhausted fallback does not try another model. The limit trips a call or two late because cost is only known after the response completes, so a request can overshoot. cost-based-model-routing is listed before llm-cost so reverse response-phase evaluation lets llm-cost publish the final cost first. No remaining-budget headers are emitted, by design -- the balance is unknown until the body completes. Excluded on gemini: this demo's Gemini account has exactly one usable model without billing (gemini-3.8-flash) -- every other variant (pro tier, lite, dated/preview versions) is either quota:0 or decommissioned for this account, confirmed by direct calls against the real API, not just this gateway. A route with small==large can't show a switch, so there's nothing honest to demo here for this provider."
   },
   {
     "id": "intelligent-routing",
@@ -1777,7 +1781,7 @@
       "stream": false
     },
     "budget": {
-      "duration": "1m"
+      "duration": "5m"
     },
     "emphasis": [
       "budget",
@@ -1824,7 +1828,7 @@
         "notes": "The gateway's own response body is shown verbatim, and the question is handed back to the input box."
       }
     ],
-    "notes": "Runs on its own provider, /anthropic-cost-limit, where llm-cost and llm-cost-based-ratelimit are attached -- so exhausting the budget here refuses this card and nothing else. Unlike plain-chat, it never falls back to another provider's lane: a spend-limit card silently answering through the never-refuses /anthropic-plain lane would look like a working demo while proving the opposite. It is a provider-wide kill switch, not a per-visitor quota: consumerBased is false because per-consumer counters key on x-wso2-application-id, which only api-key-auth sets. On a genuinely public chatbot one visitor can spend the budget for everyone -- a denial-of-service-by-cost worth naming rather than discovering. The window is fixed, not rolling. Cost headers vanish on a 429, so missing values must read as unknown, never zero. Excluded on gemini: the card asks for the large model (overrides.model), and this demo's Gemini account has no free-tier quota for it (gemini-3.1-pro: limit 0), so Google refuses every call before the budget is ever spent.",
+    "notes": "Runs on its own provider, /anthropic-cost-limit, where llm-cost and llm-cost-based-ratelimit are attached -- so exhausting the budget here refuses this card and nothing else. Unlike plain-chat, it never falls back to another provider's lane: a spend-limit card silently answering through the never-refuses /anthropic-plain lane would look like a working demo while proving the opposite. It is a provider-wide kill switch, not a per-visitor quota: consumerBased is false because per-consumer counters key on x-wso2-application-id, which only api-key-auth sets. On a genuinely public chatbot one visitor can spend the budget for everyone -- a denial-of-service-by-cost worth naming rather than discovering. How the budget comes back follows RATE_LIMIT_ALGORITHM in demo.env. The budget is per 5 minutes. With gcra, the demo's setting, it refills gradually: measured, with 30 seconds of talk before step 2, step 2 is refused and the wall lifts about 2.5 minutes after step 1 on Anthropic, 3.5 on Mistral. A 1-minute window was too short: the wall lifted after a few seconds. With fixed-window the budget empties at the next 5-minute mark, which can let the last question through. Cost headers vanish on a 429, so missing values must read as unknown, never zero. Excluded on gemini: the card asks for the large model (overrides.model), and this demo's Gemini account has no free-tier quota for it (gemini-3.1-pro: limit 0), so Google refuses every call before the budget is ever spent.",
     "refs": {
       "OWASP Top 10 for LLMs (2026)": {
         "code": "LLM06",
@@ -1855,7 +1859,7 @@
     },
     "quota": {
       "tokens": 2000,
-      "duration": "5m"
+      "duration": "15m"
     },
     "policies": [
       "advanced-ratelimit v1.3.1",
@@ -1915,7 +1919,7 @@
         "notes": "One customer, or one runaway script on a customer's account, cannot use up what the others are entitled to."
       }
     ],
-    "notes": "advanced-ratelimit v1.3.1 with one quota per customer: the key is the x-customer-id header, which in production the gateway would read from the customer's token, and the cost of each call is the number of tokens in the answer's usage block (input plus output). 2,000 tokens per customer every 5 minutes, and each question here uses about 1,200 (most of it the plan catalogue sent with every question). A call is counted once it has been answered, so the one that crosses the line goes through and the next one is refused. The x-ratelimit-remaining header shows what is left.",
+    "notes": "advanced-ratelimit v1.3.1 with one quota per customer: the key is the x-customer-id header, which in production the gateway would read from the customer's token, and the cost of each call is the number of tokens in the answer's usage block (input plus output). 2,000 tokens per customer per 15 minutes, and each question here uses about 1,200 (most of it the plan catalogue sent with every question). A call is counted once it has been answered, so the one that crosses the line goes through and the next one is refused. The x-ratelimit-remaining header shows what is left. With gcra, the demo's RATE_LIMIT_ALGORITHM, the tokens come back gradually: measured, Sam is served again about 2.5 minutes after the refusal. With fixed-window they all come back at the next quarter hour.",
     "gateway": {
       "stream": false,
       "limit": {
@@ -2465,7 +2469,7 @@
                 "limits": [
                   {
                     "limit": 3,
-                    "duration": "1h"
+                    "duration": "5m"
                   }
                 ],
                 "keyExtraction": [
@@ -2511,17 +2515,17 @@
           {
             "ask": "Actually, make it Everyday.",
             "expect": {
-              "text": "Goes through: second change this hour."
+              "text": "Goes through: second change in these 5 minutes."
             }
           },
           {
             "ask": "Hmm, go for Plus instead.",
             "expect": {
-              "text": "Goes through: third and last change allowed this hour."
+              "text": "Goes through: third and last change allowed in these 5 minutes."
             }
           }
         ],
-        "notes": "Three change_plan calls per hour and per MCP session, counted at the gateway. Clear chat opens a new MCP session, with a fresh count."
+        "notes": "Three change_plan calls per 5 minutes and per MCP session, counted at the gateway. Clear chat opens a new MCP session, with a fresh count."
       },
       {
         "n": 2,
@@ -2537,7 +2541,7 @@
         "notes": "Only change_plan is limited: reading the account still works."
       }
     ],
-    "notes": "mcp-ratelimit, 3 change_plan calls per 1h window, keyed on the route plus the Mcp-Session-Id header, the standard MCP session every client sends after initialize. The app keeps one MCP session per chat and opens a new one on Clear chat or on switching cards, so the card can be rerun at once. In production the key would rather be the user, from the token mcp-auth validates. An hour rather than a minute because the gateway's default algorithm is a fixed window aligned to the clock, and a demo at a human pace straddles a minute boundary almost every time.",
+    "notes": "mcp-ratelimit, 3 change_plan calls per 5 minutes, keyed on the route plus the Mcp-Session-Id header, the standard MCP session every client sends after initialize. The app keeps one MCP session per chat and opens a new one on Clear chat or on switching cards, so the card can be rerun at once. In production the key would rather be the user, from the token mcp-auth validates. With gcra, the demo's RATE_LIMIT_ALGORITHM, one call comes back every 100 seconds, so the fourth change must come within about a minute and a half of the first; with fixed-window the count resets every 5 minutes on the 5, possibly between the third and the fourth call.",
     "status": "ready",
     "blockedBy": [],
     "gateway": {

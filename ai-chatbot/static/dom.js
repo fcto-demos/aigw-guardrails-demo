@@ -356,7 +356,7 @@ export function showSpendMeter(state) {
   budgetBox.title = 'Estimated from this session\u2019s token counts and the'
     + ' gateway\u2019s own price file -- the ' + state.model + ' budget ($'
     + limit.toFixed(2) + (state.duration ? ' / ' + state.duration : '')
-    + ') publishes no balance. It is shared across callers on a fixed window, so'
+    + ') publishes no balance. It is shared across callers and comes back over time, so'
     + ' this is a floor on the real spend, not the balance.' + unpriced;
 }
 
