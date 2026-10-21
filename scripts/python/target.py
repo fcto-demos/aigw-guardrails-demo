@@ -53,36 +53,46 @@ def gateway_ports() -> dict:
             if key.startswith("GATEWAY_") and key.endswith("_PORT") and value.isdigit()}
 
 
-# Any of these set means a remote target; the first three are then required.
-REMOTE_SETTINGS = ("REMOTE_AIW_URL", "REMOTE_GATEWAY_ID", "REMOTE_GATEWAY_URL", "REMOTE_ADMIN_USERNAME",
-                   "REMOTE_PROJECT_ID", "REMOTE_GATEWAY_CONTROLLER_URL", "REMOTE_MCP_GATEWAY_ID",
-                   "REMOTE_MCP_GATEWAY_URL")
-REMOTE = any(setting(name) for name in REMOTE_SETTINGS)
-if REMOTE and not all(setting(name) for name in REMOTE_SETTINGS[:3]):
-    sys.exit(f"a remote target needs {', '.join(REMOTE_SETTINGS[:3])} -- see demo.env.example")
-
 # id: the gateway's id in AI Workspace. url: where its proxies answer.
 # controller_url: its management API, which says what the gateway holds
 # without sending traffic through it, so the checks leave nothing in
-# analytics. Without one, the checks call the gateway's routes instead.
-Gateway = namedtuple("Gateway", "id url controller_url")
+# analytics; without one, they call the gateway's routes. local: this
+# machine's own gateway, which the provisioning registers.
+Gateway = namedtuple("Gateway", "id url controller_url local")
 
-_ports = gateway_ports()
-_controller = setting("REMOTE_GATEWAY_CONTROLLER_URL") if REMOTE \
-    else f"http://localhost:{_ports['GATEWAY_CONTROLLER_REST_PORT']}"
 
-WORKSPACE_URL = setting("REMOTE_AIW_URL", f"https://localhost:{DEMO_ENV['AI_WORKSPACE_PORT']}").rstrip("/")
-PROJECT_ID = setting("REMOTE_PROJECT_ID", "default")
-ADMIN_USERNAME = setting("REMOTE_ADMIN_USERNAME", "admin")
-# From the environment only: demo.env holds no secret. This machine's is the
-# one scripts/generate-local-certs.sh hashed.
-ADMIN_PASSWORD = os.environ.get("REMOTE_ADMIN_PASSWORD", "") if REMOTE else os.environ.get("ADMIN_PASSWORD", "admin")
+def remote_gateway(prefix: str):
+    """The gateway <prefix>_ID and <prefix>_URL name (both, or neither),
+    with <prefix>_CONTROLLER_URL if set. None when they name none."""
+    gateway_id, url = setting(f"{prefix}_ID"), setting(f"{prefix}_URL")
+    if bool(gateway_id) != bool(url):
+        sys.exit(f"{prefix}_ID and {prefix}_URL go together -- see demo.env.example")
+    return Gateway(gateway_id, url.rstrip("/"), setting(f"{prefix}_CONTROLLER_URL").rstrip("/"), False) \
+        if gateway_id else None
 
-LLM_GATEWAY = Gateway(setting("REMOTE_GATEWAY_ID", "local-gateway"),
-                      setting("REMOTE_GATEWAY_URL", f"https://localhost:{_ports['GATEWAY_HTTPS_PORT']}").rstrip("/"),
-                      _controller.rstrip("/"))
-# The MCP proxies' gateway: the same one unless REMOTE_MCP_GATEWAY_* names
-# another, whose controller is then not known.
-_mcp_id = setting("REMOTE_MCP_GATEWAY_ID", LLM_GATEWAY.id)
-MCP_GATEWAY = Gateway(_mcp_id, setting("REMOTE_MCP_GATEWAY_URL", LLM_GATEWAY.url).rstrip("/"),
-                      LLM_GATEWAY.controller_url if _mcp_id == LLM_GATEWAY.id else "")
+
+# This machine's stack, unless REMOTE_AIW_URL names an AI Workspace already
+# running elsewhere, with the gateway REMOTE_GATEWAY_ID and _URL name there.
+REMOTE = bool(setting("REMOTE_AIW_URL"))
+_remote_llm = remote_gateway("REMOTE_GATEWAY")
+if REMOTE != bool(_remote_llm):
+    sys.exit("REMOTE_AIW_URL, REMOTE_GATEWAY_ID and REMOTE_GATEWAY_URL go together -- see demo.env.example")
+
+if REMOTE:
+    WORKSPACE_URL = setting("REMOTE_AIW_URL").rstrip("/")
+    PROJECT_ID = setting("REMOTE_PROJECT_ID", "default")
+    ADMIN_USERNAME = setting("REMOTE_ADMIN_USERNAME", "admin")
+    ADMIN_PASSWORD = os.environ.get("REMOTE_ADMIN_PASSWORD", "")  # never in demo.env
+    LLM_GATEWAY = _remote_llm
+else:
+    _ports = gateway_ports()
+    WORKSPACE_URL = f"https://localhost:{DEMO_ENV['AI_WORKSPACE_PORT']}"
+    PROJECT_ID = "default"
+    ADMIN_USERNAME = "admin"
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")  # the one generate-local-certs.sh hashed
+    LLM_GATEWAY = Gateway("local-gateway", f"https://localhost:{_ports['GATEWAY_HTTPS_PORT']}",
+                          f"http://localhost:{_ports['GATEWAY_CONTROLLER_REST_PORT']}", True)
+
+# The MCP proxies go to another gateway when REMOTE_MCP_GATEWAY_ID and _URL
+# name one, with this machine's stack as with a remote one.
+MCP_GATEWAY = remote_gateway("REMOTE_MCP_GATEWAY") or LLM_GATEWAY

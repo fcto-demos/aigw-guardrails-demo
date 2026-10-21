@@ -268,6 +268,11 @@ running, instead of this repo's own stack:
    application, provider, lane and MCP proxy that already exists untouched,
    its key included.
 
+The MCP proxies can go to a gateway of their own, with this machine's stack
+as with a remote one: `REMOTE_MCP_GATEWAY_ID` and `REMOTE_MCP_GATEWAY_URL`
+(see `demo.env.example`). That gateway must already be registered in AI
+Workspace; it is only used, like a remote one.
+
 The cards that need a gateway setting (an identity provider, a content
 safety service) are provisioned when it is set in this repo's `secrets/`
 files: that gateway must have the same settings in its own configuration.

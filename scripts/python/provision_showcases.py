@@ -90,7 +90,7 @@ from platform_api import (
     probe_gateway, controller_api, api, login, deploy, read_secret, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases,
 )
-from target import DEMO_ENV, REMOTE, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
+from target import DEMO_ENV, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
 
 # =============================================================================
 # 1. Configuration. Where everything is reached (AI Workspace, gateways,
@@ -790,8 +790,7 @@ def restore_local_gateway_name():
 
 
 def confirm_gateway_exists(gateway: Gateway):
-    """A remote gateway is someone else's, already registered and wired to
-    its controller: this only confirms it is there."""
+    """Confirms a gateway is registered in AI Workspace, without touching it."""
     status, resp = api("GET", f"/gateways/{gateway.id}")
     if status != 200:
         _, listing = api("GET", "/gateways")
@@ -801,13 +800,9 @@ def confirm_gateway_exists(gateway: Gateway):
     print(f"  using gateway {gateway.id!r} ({resp.get('displayName')}) at {gateway.url}, {state}")
 
 
-def prepare_gateways():
-    """This machine's gateway is registered, restarted when it gets a new
-    token, and named as LOCAL_GATEWAY says. A remote one is only confirmed."""
-    if REMOTE:
-        for gateway in dict.fromkeys([LLM_GATEWAY, MCP_GATEWAY]):
-            confirm_gateway_exists(gateway)
-        return
+def register_local_gateway():
+    """This machine's gateway: registered, restarted when it gets a new
+    token, and named as LOCAL_GATEWAY says."""
     if issue_local_gateway_token():
         print("  new token issued — recreating gateway-controller")
         restart_gateway_controller()
@@ -815,6 +810,16 @@ def prepare_gateways():
     else:
         print("  already registered and active")
     restore_local_gateway_name()
+
+
+def prepare_gateways():
+    """This machine's gateway is registered; any other is someone else's,
+    only confirmed to exist."""
+    for gateway in dict.fromkeys([LLM_GATEWAY, MCP_GATEWAY]):
+        if gateway.local:
+            register_local_gateway()
+        else:
+            confirm_gateway_exists(gateway)
 
 
 # =============================================================================
