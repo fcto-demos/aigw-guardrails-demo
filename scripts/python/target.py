@@ -26,15 +26,16 @@ def read_env_file(path: Path) -> dict:
 
 
 def _read_demo_env() -> dict:
-    """This machine's settings from demo.env. On the first run, demo.env is
-    created from demo.env.example, as the shell scripts do."""
+    """This machine's settings from demo.env, with demo.env.example's value
+    for any it lacks. On the first run, demo.env is created from
+    demo.env.example, as the shell scripts do."""
     path, example = ROOT / "demo.env", ROOT / "demo.env.example"
     if not path.exists():
         if not example.exists():
             sys.exit(f"missing {example} -- run this from a checkout of the repo")
         path.write_text(example.read_text())
         print(f"  created {path.name} from {example.name} -- adapt it to this machine if needed")
-    return read_env_file(path)
+    return {**read_env_file(example), **read_env_file(path)}
 
 
 DEMO_ENV = _read_demo_env()
@@ -96,3 +97,4 @@ else:
 # The MCP proxies go to another gateway when REMOTE_MCP_GATEWAY_ID and _URL
 # name one, with this machine's stack as with a remote one.
 MCP_GATEWAY = remote_gateway("REMOTE_MCP_GATEWAY") or LLM_GATEWAY
+

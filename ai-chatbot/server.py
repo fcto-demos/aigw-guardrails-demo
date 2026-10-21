@@ -47,7 +47,7 @@ STATIC = os.path.join(HERE, "static")
 # which cards this gateway's settings leave out (gateway_settings.py).
 sys.path.insert(0, os.path.join(HERE, "..", "scripts", "python"))
 from gateway_settings import missing_gateway_settings  # noqa: E402
-from target import LLM_GATEWAY, MCP_GATEWAY  # noqa: E402
+from target import LLM_GATEWAY, MCP_GATEWAY, ROOT, read_env_file, setting  # noqa: E402
 
 # The showcase registry. Deliberately NOT under static/ -- _serve_static would
 # hand the whole file, gateway wiring included, to any GET.
@@ -414,7 +414,7 @@ def load_showcases():
     """
     try:
         with open(SHOWCASES_FILE) as handle:
-            raw = json.load(handle)
+            raw = json.loads(re.sub(r"\{([A-Z][A-Z0-9_]*)\}", _demo_setting, handle.read()))
     except OSError:
         if not _REGISTRY["list"]:
             _install_registry([dict(_FALLBACK_ENTRY)], "showcases.json not found")
@@ -446,6 +446,19 @@ def load_showcases():
 
     _install_registry(good, "; ".join(problems) or None)
     return _REGISTRY
+
+
+# The settings a card's texts may show as {NAME}: those demo.env.example
+# declares, none of them a secret.
+SHOWABLE_SETTINGS = set(read_env_file(ROOT / "demo.env.example"))
+
+
+def _demo_setting(match):
+    """A {NAME} of showcases.json (the time-based routing card's peak window,
+    for one): that demo.env setting, escaped so it cannot change the JSON
+    around it. Any other name is left as is."""
+    value = setting(match[1]) if match[1] in SHOWABLE_SETTINGS else ""
+    return json.dumps(value)[1:-1] if value else match[0]
 
 
 def _install_registry(entries, error):

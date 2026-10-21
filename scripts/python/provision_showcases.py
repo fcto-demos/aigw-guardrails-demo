@@ -90,7 +90,7 @@ from platform_api import (
     probe_gateway, controller_api, api, login, deploy, read_secret, provider_key, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases,
 )
-from target import DEMO_ENV, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
+from target import DEMO_ENV, setting, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
 
 # =============================================================================
 # 1. Configuration. Where everything is reached (AI Workspace, gateways,
@@ -174,7 +174,7 @@ def lane_templates(provider: dict) -> dict:
     path = provider["messagesSuffix"]
     request_model = provider["requestModel"]
     budget = budget_for(provider)
-    peak = showcase("time-based-routing")["peak"]
+    peak_start, peak_end = setting("PEAK_HOURS").split("-")
     return {
         "plain-chat": {
             "context_suffix": "plain", "displayName": "Plain Chat", "wired": True,
@@ -445,8 +445,8 @@ def lane_templates(provider: dict) -> dict:
             "supportedRequestModelLocations": {"payload", "header", "queryParam", "pathParam"},
             "operationPolicies": [{"name": "time-based-model-routing", "version": "v0", "paths": [{
                 "path": path, "methods": ["POST"], "params": {
-                    "timezone": peak["timezone"],
-                    "schedules": [{"from": peak["from"], "to": peak["to"], "model": {"modelName": small}}],
+                    "timezone": setting("PEAK_TIMEZONE"),
+                    "schedules": [{"from": peak_start, "to": peak_end, "model": {"modelName": small}}],
                     "fallback": {"modelName": large},
                     "requestModel": request_model,
                 }}]}],

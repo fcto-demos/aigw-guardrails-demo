@@ -64,15 +64,10 @@
       "gemini"
     ],
     "title": "Time-based routing",
-    "tagline": "During peak hours, even complex questions go to the fast model.",
+    "tagline": "During peak hours ({PEAK_HOURS} {PEAK_TIMEZONE}), even complex questions go to the fast model.",
     "capability": "time-based-model-routing v0.9.1",
     "status": "ready",
     "blockedBy": [],
-    "peak": {
-      "timezone": "Europe/Madrid",
-      "from": "13:30",
-      "to": "18:00"
-    },
     "policies": [
       "time-based-model-routing v0.9.1",
       "llm-cost v1.2.0"
@@ -101,20 +96,20 @@
       },
       {
         "n": 2,
-        "title": "The same question, inside the peak window",
+        "title": "The same question, inside the peak window ({PEAK_HOURS} {PEAK_TIMEZONE})",
         "sends": [
           {
             "ask": "Do you support eSIM?",
             "expect": {
               "modelRole": "small",
-              "text": "The fast model: between 13:30 and 18:00 Europe/Madrid the peak window forces it. Same question, same client, different model."
+              "text": "The fast model: inside the peak window, the gateway forces it. Same question, same client, different model."
             }
           }
         ],
         "notes": "Same question, same client, different model, decided purely by the gateway clock."
       }
     ],
-    "notes": "WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. Peak is this card's peak block, 13:30-18:00 Europe/Madrid, from inclusive and to exclusive: the gateway is provisioned from it. The fallback model is named explicitly so off-peak does not depend on whatever model the client happened to send."
+    "notes": "WORKING on the hosted gateway as of 2026-09-09 on stock policies; the locally-vendored build previously needed here has been reverted. The policy is attached at OPERATION scope (POST /v1/messages), not globally. That is what makes it work at all: the gateway injects the requestModel mapping from the LLM provider template only for operation-scoped attachments, so a global attachment fails to build its chain and 500s every request. Stock 1.2.0 policies, no fork. See GATEWAY-POLICY-FINDINGS.md finding 1. Peak is PEAK_HOURS in PEAK_TIMEZONE from demo.env, from inclusive and to exclusive: the gateway is provisioned from it and the texts show it as {PEAK_HOURS} {PEAK_TIMEZONE}. The fallback model is named explicitly so off-peak does not depend on whatever model the client happened to send."
   },
   {
     "id": "cost-based-routing",
