@@ -413,6 +413,26 @@ def lane_templates(provider: dict) -> dict:
                 "response": {"enabled": True, "jsonPath": provider["responseContentPath"], "showAssessment": True},
             }}],
         },
+        # TypeSafe AI's Jev reads the visitor's message and answers its default
+        # questions about it (a jailbreak? a request for harm?): one crossing its
+        # threshold is refused with a 422 before the model is called.
+        "jev-jailbreak-guard": {
+            "context_suffix": "jev-jailbreak", "displayName": "Jailbreak Guard (Jev)", "wired": True,
+            "globalPolicies": [{"name": "typesafe-jev-content-safety", "version": "v0", "params": {
+                "request": {"jsonPath": provider["contentPath"], "showAssessment": True}}}],
+        },
+        # Jev reads the model's answer instead: one that promises the customer
+        # money or a free service is blocked before they read it.
+        "jev-promise-guard": {
+            "context_suffix": "jev-promise", "displayName": "Promise Guard (Jev)", "wired": True,
+            "globalPolicies": [{"name": "typesafe-jev-content-safety", "version": "v0", "params": {
+                "response": {"jsonPath": provider["responseContentPath"], "showAssessment": True,
+                             "questions": [{
+                                 "key": "commitment", "type": "noul", "threshold": 0.7,
+                                 "instructions": ("Does this reply promise or confirm to the customer a refund, a "
+                                                  "credit, a discount, a free month or any other compensation? "
+                                                  "Saying that an advisor can look into it does not count.")}]}}}],
+        },
         "semantic-routing": {
             "context_suffix": "semantic-routing", "displayName": "Semantic Routing", "wired": True,
             # Confirmed directly in ai-gateway/policies/semantic-model-routing
@@ -515,6 +535,30 @@ def lane_templates(provider: dict) -> dict:
             "operationPolicies": [{"name": "model-weighted-round-robin", "version": "v1", "paths": [{
                 "path": path, "methods": ["POST"], "params": {
                     "models": [{"model": large, "weight": 3}, {"model": small, "weight": 1}],
+                }}]}],
+        },
+        # Jev reads each question and picks a rule: a customer about to leave
+        # is answered by the large model, everyday questions by the small one.
+        # Like semantic routing, it only finds the model in the request body.
+        "jev-routing": {
+            "context_suffix": "jev-routing", "displayName": "Retention Routing (Jev)", "wired": True,
+            "supportedRequestModelLocations": {"payload"},
+            "operationPolicies": [{"name": "typesafe-jev-model-routing", "version": "v0", "paths": [{
+                "path": path, "methods": ["POST"], "params": {
+                    "contentPath": provider["contentPath"],
+                    "routingRules": [
+                        {"name": "Customer about to leave",
+                         "context": ("The customer says they want to cancel or leave for another network, asks for "
+                                     "their own PAC code to move their number, or is angry about the service or a bill."),
+                         "model": large},
+                        {"name": "Everyday question",
+                         "context": ("Ordinary questions about plans, prices, features, roaming, the account or "
+                                     "billing, including what a term such as PAC code means, from a customer who "
+                                     "says nothing about leaving."),
+                         "model": small},
+                    ],
+                    "defaultModel": small,
+                    "requestModel": request_model,
                 }}]}],
         },
     }
@@ -951,8 +995,10 @@ def upsert_mcp_proxy(card: dict):
     capabilities = {k: info.get(k) or [] for k in ("tools", "resources", "prompts")} if status == 200 else None
     _upsert("mcp-proxies", {
         "id": card["id"],
-        # "<server> - <card>", like the LLM proxies' "<provider> - <lane>".
-        "displayName": " - ".join(filter(None, (mcp.get("server"), card.get("title") or card["id"]))),
+        # "<server> - <card>", like the LLM proxies' "<provider> - <lane>". The
+        # gateway only accepts letters, digits, spaces, - _ and . in this name.
+        "displayName": re.sub(r"[^\w .-]+", "-",
+                              " - ".join(filter(None, (mcp.get("server"), card.get("title") or card["id"])))),
         "description": card.get("tagline", ""),
         "version": "v1.0",
         "projectId": PROJECT_ID,

@@ -180,6 +180,15 @@ policies:
     - name: time-based-model-routing
       version: v0.9.1
       gomodule: github.com/wso2/gateway-controllers/policies/time-based-model-routing@v0
+    - name: typesafe-jev-content-safety
+      version: v0.8.0
+      gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-content-safety@v0
+    - name: typesafe-jev-mcp-tool-result-screening
+      version: v0.8.0
+      gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-mcp-tool-result-screening@v0
+    - name: typesafe-jev-model-routing
+      version: v0.8.0
+      gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-model-routing@v0
     - name: intelligent-model-routing
       version: v0.9.0
       gomodule: github.com/wso2/gateway-controllers/policies/intelligent-model-routing@v0

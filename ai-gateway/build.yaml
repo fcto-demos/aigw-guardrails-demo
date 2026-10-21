@@ -122,6 +122,12 @@ policies:
     gomodule: github.com/wso2/gateway-controllers/policies/semantic-model-routing@v0
   - name: time-based-model-routing
     gomodule: github.com/wso2/gateway-controllers/policies/time-based-model-routing@v0
+  - name: typesafe-jev-content-safety
+    gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-content-safety@v0
+  - name: typesafe-jev-mcp-tool-result-screening
+    gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-mcp-tool-result-screening@v0
+  - name: typesafe-jev-model-routing
+    gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-model-routing@v0
   - name: intelligent-model-routing
     gomodule: github.com/wso2/gateway-controllers/policies/intelligent-model-routing@v0
   - name: gateway-mcp-auth

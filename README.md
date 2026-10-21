@@ -67,6 +67,9 @@ wso2-api-platform-ai-demo/
 | PII masking | Personal data is swapped out before the request leaves the gateway |
 | Content safety · Azure | Azure Content Safety checks the message and the model's answer: a threat of violence is refused, an angry customer is not |
 | Content safety · AWS Bedrock | The same, through an AWS Bedrock guardrail |
+| Jailbreak guard · Jev | TypeSafe AI's Jev judges what a message is trying to do: the role-plays and other languages that Prompt injection guardrails let through are refused |
+| Promise guard · Jev | Jev reads the model's answer: one that promises the customer a refund or a free month is blocked before they read it |
+| Retention routing · Jev | Jev reads why the customer is writing: one about to leave is answered by the large model, everyday questions by the small one |
 | Link guard | An internal address in the question is refused before the model (SSRF), and an answer that would send customer data out in a link is blocked (exfiltration) |
 | Markup guard | An answer carrying a script, or anything a web page would run, is blocked before it reaches the page that shows it |
 | Secret guard | A question carrying a password or a key is refused before it leaves for the model provider |
@@ -88,6 +91,7 @@ reply, with what the gateway did.
 | Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per MCP session; the 4th gets 429 |
 | Tool renaming | The gateway publishes its own names for the tools (`switch_plan` for `change_plan`) and translates them on the way to the server |
 | Poisoned tool description | A partner's MCP server hides an instruction to the agent in a tool's description (ask for the card number); the gateway publishes its own description, so the agent never reads it |
+| Tool result screening · Jev | The same attack in what a tool returns: the partner's terms end with a note for the agent; Jev spots it and the gateway withholds the result |
 | Authentication | Without a signed-in user the gateway answers 401; the page signs you in, as any MCP client would |
 | Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
 
@@ -98,6 +102,10 @@ The LLM Gateway page also gathers its cards under the **OWASP Top 10 for LLMs
 (2026)**, the MCP Gateway page under the **OWASP Top 10 for Agentic
 Applications**, and the LLM Gateway page under **Compliance (EU AI Act)**, with
 one line per card on the risk or the article it answers.
+
+Both pages end with a **Third-party policies** row: the cards whose policy calls
+an outside service (TypeSafe AI's Jev, Azure Content Safety, AWS Bedrock
+Guardrails), each with a label naming that service.
 
 ## Prerequisites
 
@@ -129,6 +137,8 @@ the card is skipped and the chatbot says what to set:
   its endpoint and key, in `secrets/content-safety.env`
 - **Content safety · AWS Bedrock (Not Tested yet)**: a [Bedrock guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-components.html)
   and a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html), in `secrets/content-safety.env`
+- **The four Jev cards**: a [TypeSafe AI](https://typesafe.ai) API key, created
+  on its [console](https://console.typesafe.ai/keys), in `secrets/content-safety.env`
 - **MCP Authentication and Authorization**: an OpenID Connect identity provider,
   for example [Asgardeo](https://asgardeo.io/signup), in `secrets/idp.env`
   (see the [IDP Setup](.docs/mcp-identity-provider.md))
@@ -150,7 +160,7 @@ cp secrets/idp.env.example secrets/idp.env
 # (Optional) edit secrets/idp.env: to configure the AuthN / AuthZ use cases (MCP)
 
 cp secrets/content-safety.env.example secrets/content-safety.env
-# (Optional) edit secrets/content-safety.env: Azure Content Safety and/or AWS Bedrock Guardrails, for the Content safety cards
+# (Optional) edit secrets/content-safety.env: Azure Content Safety, AWS Bedrock Guardrails and TypeSafe AI's Jev, for the third-party cards
 
 ./scripts/reset-and-setup.sh
 ```

@@ -14,8 +14,8 @@ services:
     networks:
       - mcp
 
-  # A partner's server (Globetrotter, roaming add-ons), from the same code: its
-  # tool description hides an instruction to the agent.
+  # A partner's server (Globetrotter, roaming add-ons), from the same code: a
+  # tool description and a tool result hide an instruction to the agent.
   mcp-partner-offers:
     image: python:3.12-alpine
     command: ["python", "-u", "/app/server.py"]

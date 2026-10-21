@@ -204,7 +204,11 @@ function cardHtml(showcase, group) {
   const ref = (showcase.refs || {})[group];
 
   return '<a class="card" href="#/' + encodeURIComponent(showcase.id) + '">'
-    + badge(showcase)
+    + '<div class="card-tags">' + badge(showcase)
+    /* A policy that calls an outside service names that service. */
+    + (showcase.vendor ? '<span class="vendor" title="Third-party policy: calls ' + escapeHtml(showcase.vendor)
+        + '">' + escapeHtml(showcase.vendor) + '</span>' : '')
+    + '</div>'
     + '<h3>' + (ref ? '<span class="ref-code">' + escapeHtml(ref.code) + '</span> ' : '')
     + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
@@ -233,6 +237,8 @@ const GROUPS = {
   'OWASP Top 10 for LLMs (2026)': ['alert', 'The risks of the OWASP Top 10 for LLM applications, 2026 edition, as they would hit {brand}, each one stopped at the gateway.'],
   'OWASP Top 10 for Agentic Applications': ['alert', 'The risks of the OWASP Top 10 for agentic applications (2026), as they would hit {brand}\'s agent, each one stopped at the gateway.'],
   'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50); personal data falls under the GDPR. Record-keeping (Art. 12) and robustness (Art. 15) bind high-risk systems only, which a customer assistant is not: they show here as good practice.'],
+  'Third-party policies': ['plug', 'Policies that call an outside service, attached at the gateway like any other: TypeSafe AI\'s Jev, Azure Content Safety and AWS Bedrock Guardrails. Each one needs its key in secrets/content-safety.env.'],
+  /* Always last. */
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
 const ICONS = {
@@ -244,6 +250,7 @@ const ICONS = {
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
   scale: '<path d="M12 3v18M7 21h10M4 7h16M4 7l-2.5 6a2.5 2.5 0 0 0 5 0zM20 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/>',
+  plug: '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>',
 };
 
 function groupHeadHtml(name, count) {

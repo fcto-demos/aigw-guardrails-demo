@@ -195,3 +195,10 @@ llm_provider          = "OPENAI"
 llm_provider_endpoint = "https://api.mistral.ai/v1/chat/completions"
 llm_provider_model    = "ministral-14b-latest"
 llm_provider_api_key  = "{{ env \"APIP_GW_EMBEDDING_PROVIDER_API_KEY\" \"\" }}"
+
+# TypeSafe AI's Jev, for the Jev cards. The key is set in
+# secrets/content-safety.env; left blank, those cards are not provisioned.
+[policy_configurations.typesafe_jev_v0]
+api_key  = "{{ env \"TYPESAFE_API_KEY\" \"\" }}"
+base_url = "https://api.typesafe.ai"
+model    = "jev-latest"
