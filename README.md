@@ -234,7 +234,10 @@ and the other cards use one of the two. They must differ, and the spend limit
 and cost-based routing need a model priced in
 `ai-gateway/configs/llm-pricing/model_prices.json`. After a change, run
 `./scripts/run-local.sh` then `./scripts/python/provision_showcases.py`.
-`"enabled": false` leaves out a provider you have no key for.
+A provider whose key is missing from `secrets/api-keys.env` is not deployed;
+`"enabled": false` leaves one out for everyone. In AI Workspace, the providers
+are named after their `providerId` (`demo-mistral`), so they don't clash with
+one already there.
 
 **Updating a copy cloned before `demo.env` left git**: `git pull` would delete
 your `demo.env`, or refuse to run if you changed it. Keep it aside around the
@@ -259,11 +262,9 @@ running, instead of this repo's own stack:
    registered, renamed or restarted. If its controller is reachable from
    here, `REMOTE_GATEWAY_CONTROLLER_URL` lets the provisioning ask it rather
    than send requests through the gateway, which would show in analytics.
-2. In `providers.json`, disable any provider whose id already exists there,
-   or give it a `providerId` of its own (`"providerId": "demo-mistral"`).
-3. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
+2. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
    and lists what would be created or overwritten.
-4. Run `./scripts/python/provision_showcases.py`. Add `--skip-existing` (to
+3. Run `./scripts/python/provision_showcases.py`. Add `--skip-existing` (to
    `--check` too) to create only what is missing and leave every
    application, provider, lane and MCP proxy that already exists untouched,
    its key included.

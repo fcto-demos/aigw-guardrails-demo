@@ -87,7 +87,7 @@ from urllib.parse import urlsplit
 from gateway_settings import missing_gateway_settings
 from platform_api import (
     ROOT, PROVIDERS, DEFAULT_PROVIDER_ID,
-    probe_gateway, controller_api, api, login, deploy, read_secret, upsert_shared_provider, budget_for,
+    probe_gateway, controller_api, api, login, deploy, read_secret, provider_key, upsert_shared_provider, budget_for,
     budget_duration, showcase, showcases,
 )
 from target import DEMO_ENV, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
@@ -569,7 +569,11 @@ def build_lanes(provider: dict) -> dict:
     return lanes
 
 
-PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
+# A provider whose key is missing from secrets/api-keys.env is not deployed,
+# nor any lane that runs on it. The chatbot still lists it, its cards shown
+# as not provisioned.
+KEYED_PROVIDERS = [p for p in PROVIDERS if provider_key(p)]
+PROVIDER_BY_ID = {p["id"]: p for p in KEYED_PROVIDERS}
 
 
 # =============================================================================
@@ -691,12 +695,17 @@ def _header_lane(card_id: str, display_name: str, default: dict, routed: dict,
            for value, (prov, size) in mapping.items()])
 
 
-# Cards left out because their policies need a gateway setting still blank:
-# card id -> what to set. The chatbot shows the same cards unwired.
+# Left out: cards whose policies need a gateway setting still blank (the
+# chatbot shows them unwired), and providers without a key. Id -> what to set.
 LEFT_OUT = {card["id"]: need for card in showcases() if (need := missing_gateway_settings(card))}
+LEFT_OUT.update({p["id"]: f"{p['secretVar']} set in secrets/api-keys.env" for p in PROVIDERS
+                 if p not in KEYED_PROVIDERS})
+# An MCP card's agent runs on its mcp.provider: without that provider, the card is left out too.
+LEFT_OUT.update({card["id"]: LEFT_OUT[card["mcp"]["provider"]] for card in showcases()
+                 if card.get("mcp") and card["mcp"].get("provider") in LEFT_OUT})
 
 ALL_LANES = {}
-for _p in PROVIDERS:
+for _p in KEYED_PROVIDERS:
     ALL_LANES.update(build_lanes(_p))
 ALL_LANES.update(cross_provider_lanes())
 ALL_LANES = {lid: lane for lid, lane in ALL_LANES.items() if lane["base_id"] not in LEFT_OUT}
@@ -1327,6 +1336,8 @@ def main():
     login()
     if "--check" in flags:
         sys.exit(0 if check(work, skip_existing) else 1)
+    if not KEYED_PROVIDERS:
+        sys.exit("no provider key in secrets/api-keys.env: paste at least one (see the README)")
 
     if skip_existing:
         work = without_existing(work)

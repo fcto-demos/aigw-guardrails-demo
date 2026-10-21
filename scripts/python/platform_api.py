@@ -19,7 +19,7 @@ import time
 import urllib.error
 import urllib.request
 
-from target import ROOT, WORKSPACE_URL, ADMIN_USERNAME, ADMIN_PASSWORD, REMOTE, Gateway
+from target import ROOT, WORKSPACE_URL, ADMIN_USERNAME, ADMIN_PASSWORD, REMOTE, Gateway, read_env_file
 
 # One entry per upstream LLM, loaded from providers.json at the repo root --
 # not defined here, because ai-chatbot/server.py needs the exact same
@@ -197,14 +197,19 @@ def login(attempts: int = 5):
                     else "ADMIN_PASSWORD, the one chosen at scripts/generate-local-certs.sh)"))
 
 
+def provider_key(provider: dict) -> str:
+    """The provider's key from secrets/api-keys.env, "" when blank or still
+    the example's placeholder (sk-ant-..., ...)."""
+    key = (read_env_file(SECRETS_FILE) if SECRETS_FILE.exists() else {}).get(provider["secretVar"], "")
+    return "" if "..." in key or "<" in key else key
+
+
 def read_secret(provider: dict) -> str:
-    if not SECRETS_FILE.exists():
-        sys.exit(f"missing {SECRETS_FILE} — copy secrets/api-keys.env.example there and fill in real keys")
-    prefix = provider["secretVar"] + "="
-    for line in SECRETS_FILE.read_text().splitlines():
-        if line.startswith(prefix):
-            return line.split("=", 1)[1].strip()
-    sys.exit(f"{provider['secretVar']} not set in {SECRETS_FILE}")
+    key = provider_key(provider)
+    if not key:
+        sys.exit(f"{provider['secretVar']} not set in {SECRETS_FILE} -- copy secrets/api-keys.env.example "
+                 "there and fill in real keys")
+    return key
 
 
 def gateway_verdict(status: int, body) -> str:

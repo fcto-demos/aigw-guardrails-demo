@@ -68,6 +68,10 @@ if [[ ! -f "$SECRETS_FILE" ]]; then
   echo "  cp secrets/api-keys.env.example $SECRETS_FILE   # then edit it with real keys" >&2
   exit 1
 fi
+if ! "$PYTHON" -c "import sys; sys.path.insert(0, 'scripts/python'); from platform_api import PROVIDERS, provider_key; sys.exit(not any(map(provider_key, PROVIDERS)))"; then
+  echo "no provider key in $SECRETS_FILE: paste at least one (see the README)" >&2
+  exit 1
+fi
 # Which keys are actually required (only the enabled providers, per
 # providers.json) and whether each one looks real is scripts/python/provision_showcases.py's
 # job alone (read_secret()) -- it already fails loudly and specifically, so

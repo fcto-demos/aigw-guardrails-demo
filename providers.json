@@ -1,6 +1,7 @@
 [
   {
     "id": "anthropic",
+    "providerId": "demo-anthropic",
     "displayName": "Anthropic",
     "enabled": true,
     "wire": "anthropic",
@@ -25,6 +26,7 @@
   },
   {
     "id": "mistral",
+    "providerId": "demo-mistral",
     "displayName": "Mistral",
     "enabled": true,
     "wire": "openai",
@@ -49,6 +51,7 @@
   },
   {
     "id": "gemini",
+    "providerId": "demo-gemini",
     "displayName": "Gemini",
     "enabled": true,
     "wire": "gemini",
