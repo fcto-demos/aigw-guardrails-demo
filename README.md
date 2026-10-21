@@ -120,8 +120,8 @@ Intelligent routing spans two providers: it needs both an **Anthropic** and
 a **Mistral** key, and is skipped when either is disabled in
 `providers.json`.
 
-Optional, for the cards that rely on an outside service (left out until it is
-set up):
+Optional, for the cards that rely on an outside service (left out, and shown
+in the chatbot with what to set, until it is set up):
 
 - **Content safety · Azure (Tested)**: an [Azure AI Content Safety resource](https://aka.ms/acs-create),
   its endpoint and key, in `secrets/content-safety.env`
@@ -251,15 +251,26 @@ cp ~/demo.env.keep demo.env
 To load the showcases onto an AI Workspace and gateway that are already
 running, instead of this repo's own stack:
 
-1. Export `AIW_URL`, `GATEWAY_ID`, `GATEWAY_ENDPOINT`, `ADMIN_USERNAME` and
-   `ADMIN_PASSWORD`, and optionally `DEMO_PROJECT_ID` to keep the demo in its
-   own project (created if missing).
-2. In `providers.json`, disable any provider whose id already exists there.
+1. Fill in the `REMOTE_` settings at the end of `demo.env` (see
+   `demo.env.example`): `REMOTE_AIW_URL`, `REMOTE_GATEWAY_ID` and
+   `REMOTE_GATEWAY_URL` at least. Export `REMOTE_ADMIN_PASSWORD`, never in a
+   file. The provisioning and the chatbot then both use them
+   (`scripts/python/target.py`), and that gateway is only used, never
+   registered, renamed or restarted. If its controller is reachable from
+   here, `REMOTE_GATEWAY_CONTROLLER_URL` lets the provisioning ask it rather
+   than send requests through the gateway, which would show in analytics.
+2. In `providers.json`, disable any provider whose id already exists there,
+   or give it a `providerId` of its own (`"providerId": "demo-mistral"`).
 3. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
    and lists what would be created or overwritten.
-4. Run `./scripts/python/provision_showcases.py --existing-gateway`. Add `--skip-existing` (to `--check` too) to only create what is missing and leave every provider, lane and MCP proxy that already exists untouched, its key included.
-5. Point the chatbot at that gateway: `GATEWAY_BASE=https://host:port` in
-   `demo.env`.
+4. Run `./scripts/python/provision_showcases.py`. Add `--skip-existing` (to
+   `--check` too) to create only what is missing and leave every
+   application, provider, lane and MCP proxy that already exists untouched,
+   its key included.
+
+The cards that need a gateway setting (an identity provider, a content
+safety service) are provisioned when it is set in this repo's `secrets/`
+files: that gateway must have the same settings in its own configuration.
 
 ## Troubleshooting
 

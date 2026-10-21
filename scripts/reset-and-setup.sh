@@ -52,6 +52,13 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   exit 1
 fi
 resolve_python   # sets $PYTHON -- python3, or a confirmed-Python-3 `python` (see tools.sh)
+# This script builds this machine's own stack: stop before wiping anything
+# when the REMOTE_ settings target another one (target.py decides).
+if ! "$PYTHON" -c "import sys; sys.path.insert(0, 'scripts/python'); import target; sys.exit(target.REMOTE)"; then
+  echo "demo.env or the environment targets a remote AI Workspace (REMOTE_ settings):" >&2
+  echo "  reset-and-setup only builds this machine's own stack. See the README to provision onto it." >&2
+  exit 1
+fi
 docker info >/dev/null 2>&1 || { echo "docker is not running — start Docker/Colima first" >&2; exit 1; }
 
 echo "### checking secrets"

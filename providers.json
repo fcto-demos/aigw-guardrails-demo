@@ -25,7 +25,6 @@
   },
   {
     "id": "mistral",
-    "providerId": "demo-mistral",
     "displayName": "Mistral",
     "enabled": true,
     "wire": "openai",
@@ -51,7 +50,7 @@
   {
     "id": "gemini",
     "displayName": "Gemini",
-    "enabled": false,
+    "enabled": true,
     "wire": "gemini",
     "messagesSuffix": "/v1beta/models/gemini-2.5-flash:generateContent",
     "models": {

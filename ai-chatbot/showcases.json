@@ -1130,8 +1130,8 @@
     "title": "Content safety · AWS Bedrock",
     "tagline": "AWS Bedrock Guardrails check the message and the model's answer: abuse and threats are refused.",
     "capability": "aws-bedrock-guardrail v1.2.1",
-    "status": "disabled",
-    "blockedBy": ["AWS Bedrock Guardrails is not working at the moment"],
+    "status": "ready",
+    "blockedBy": [],
     "policies": [
       "aws-bedrock-guardrail v1.2.1",
       "llm-cost v1.2.0"

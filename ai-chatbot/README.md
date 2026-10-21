@@ -95,8 +95,8 @@ Paste a key per lane into `config.env` and all nine come up. (With no
 `config.env` at all the app still starts and resolves all **9 of 9** contexts —
 those are computed from `providers.json` + `showcases.json`'s contextSuffix,
 not read from `config.env` -- but none are keyed, so every request 401s.) Real
-environment variables override the file, and `--port`, `--model` and
-`--gateway-base` override both:
+environment variables override the file, and `--port` and `--model`
+override both:
 
 ```bash
 python3 server.py --port 8601 --model not-a-real-model   # useful for demoing the error path

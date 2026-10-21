@@ -69,7 +69,7 @@ Precedence, lowest to highest:
 1. built-in defaults in `server.py` — already the hosted PoC gateway
 2. `config.env` in this directory
 3. real environment variables
-4. `--port`, `--model`, `--gateway-base`, `--config`
+4. `--port`, `--model`, `--config`
 
 `config.env` is tracked here and holds the PoC's live lane wiring — with the
 nine `SHOWCASE_*_API_KEY` values blank, because those are the only secrets in
@@ -80,8 +80,8 @@ The settings that matter:
 
 | Key | Why it is set the way it is |
 |---|---|
-| `GATEWAY_BASE` | scheme://host:port every showcase's computed context hangs off. `--gateway-base` moves **every** showcase at once. |
-| `SHOWCASE_*_CONTEXT` | One context path per showcase. This is the whole wiring: `GATEWAY_BASE` + context + `/v1/messages`. |
+| Gateway URL | scheme://host:port every showcase's computed context hangs off: this machine's gateway, or `REMOTE_GATEWAY_URL` in `../demo.env` (`scripts/python/target.py`, shared with the provisioning). |
+| `SHOWCASE_*_CONTEXT` | One context path per showcase. This is the whole wiring: gateway URL + context + `/v1/messages`. |
 | *(no `MODEL=`)* | No global default to set: each request's default is that provider's own fast/cheap model from `providers.json`, resolved per-showcase — the gateway's routers choose the model that actually answers regardless. `--model <id>` overrides every showcase at once with a literal id of your own, useful for demoing the error path. |
 | `MAX_TOKENS=2048` | Keep it generous. A reasoning model spends output tokens on thinking *before* it writes; at 32 this gateway returned a `thinking` block and no text — a blank reply, not an error. |
 | `BRAND_NAME` | Rebrands the whole app: wordmark, page title, system prompt. |
@@ -315,7 +315,7 @@ for `claude-haiku-4-5` with the dated id), then `text_delta` events.
 | Only 1 of 8 lanes wired | `config.env` is absent — the lane contexts live only there, `showcases.json` carries none. |
 | A card explains itself but refuses to chat | That lane is unwired. Check the startup banner for `MISSING`/`unwired` and the matching `SHOWCASE_*_CONTEXT`. |
 | Every request on a routing card returns 500 | The routing policy is attached at global scope. It must be at operation scope (`POST /v1/messages`) or the gateway never injects `requestModel`. |
-| 404 from the gateway on every card | `GATEWAY_BASE` points somewhere without those context paths. |
+| 404 from the gateway on every card | The gateway URL points somewhere without those context paths. |
 | Reply arrives empty, no error | `MAX_TOKENS` too small — thinking consumed the whole budget. |
 | PII lane returns `*****` | The lane is running `redactPII: true` — one-way masking, and the card's Expect line is written for it. Not a fault. |
 | PII lane returns the visitor's real address | The lane is running `redactPII: false` — reversible masking. Correct behaviour for that mode, but it contradicts the card's Expect line; check which mode you are demoing. |
