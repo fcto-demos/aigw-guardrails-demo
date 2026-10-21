@@ -78,9 +78,8 @@ def load_providers() -> list:
         # var names, so already-deployed resources and an existing
         # config.env keep working untouched.
         p["lanePrefix"] = "" if p["id"] == providers[0]["id"] else f"{p['id']}-"
-        # Optional "providerId" renames only the LlmProvider resource (and
-        # its context), for a control plane where another LlmProvider
-        # already holds the id. Lanes, env vars and transformers keep "id".
+        # providerId is the provider's name in AI Workspace (demo-mistral), so
+        # it does not clash with another one there. Everything else uses "id".
         p["providerId"] = p.get("providerId") or p["id"]
         p["providerContext"] = f"/{p['providerId']}"
         p["appId"] = f"ai-chatbot-{p['id']}"
@@ -198,8 +197,8 @@ def login(attempts: int = 5):
 
 
 def provider_key(provider: dict) -> str:
-    """The provider's key from secrets/api-keys.env, "" when blank or still
-    the example's placeholder (sk-ant-..., ...)."""
+    """The provider's key from secrets/api-keys.env, "" if blank or still the
+    example's placeholder."""
     key = (read_env_file(SECRETS_FILE) if SECRETS_FILE.exists() else {}).get(provider["secretVar"], "")
     return "" if "..." in key or "<" in key else key
 
@@ -250,10 +249,9 @@ def gateway_has_route(gateway: Gateway, context: str, messages_suffix: str) -> b
 
 
 def controller_api(gateway: Gateway, method: str, path: str, data=None):
-    """Call against the gateway's management API, which says what the gateway
-    holds without sending traffic through it, so it leaves nothing in
-    analytics. Same admin account as AI Workspace. Status 0 when the gateway
-    has no controller reachable from here."""
+    """Asks the gateway's management API what it holds, without sending
+    traffic through it, so nothing shows in analytics. Status 0 when there is
+    no management API to ask."""
     if not gateway.controller_url:
         return 0, None
     token = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()

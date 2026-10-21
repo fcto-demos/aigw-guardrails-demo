@@ -1,10 +1,8 @@
-"""Where the demo works, in one place: the AI Workspace the provisioning
-writes to, and the gateways its proxies deploy to and the chatbot calls.
+"""Where the demo runs: the AI Workspace and the gateways. The provisioning
+and the chatbot both read them here.
 
-This machine's own stack by default. The REMOTE_ settings, in demo.env or
-the environment, name an AI Workspace and gateways already running elsewhere
-instead (see demo.env.example). Read by the provisioning and the chatbot
-alike, so an address changes here and nowhere else. Import only.
+By default, this machine's stack. The REMOTE_ settings in demo.env point to
+one that runs elsewhere (see demo.env.example).
 """
 import os
 import sys
@@ -15,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def read_env_file(path: Path) -> dict:
-    """KEY=VALUE lines, as demo.env and the secrets/ files hold them."""
+    """Reads a KEY=VALUE file, such as demo.env or secrets/*.env."""
     conf = {}
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -26,9 +24,8 @@ def read_env_file(path: Path) -> dict:
 
 
 def _read_demo_env() -> dict:
-    """This machine's settings from demo.env, with demo.env.example's value
-    for any it lacks. On the first run, demo.env is created from
-    demo.env.example, as the shell scripts do."""
+    """demo.env, with the example's value for any setting it lacks. Created
+    from demo.env.example on the first run."""
     path, example = ROOT / "demo.env", ROOT / "demo.env.example"
     if not path.exists():
         if not example.exists():
@@ -42,29 +39,26 @@ DEMO_ENV = _read_demo_env()
 
 
 def setting(name: str, default: str = "") -> str:
-    """A setting from the environment, else from demo.env, else the default."""
+    """A setting from the environment, else demo.env, else the default."""
     return os.environ.get(name) or DEMO_ENV.get(name) or default
 
 
 def gateway_ports() -> dict:
-    """This machine's gateway ports, each moved up by GATEWAY_PORT_OFFSET."""
+    """This machine's gateway ports, plus GATEWAY_PORT_OFFSET."""
     offset = int(DEMO_ENV.get("GATEWAY_PORT_OFFSET") or 0)
     return {key: str(int(value) + offset)
             for key, value in read_env_file(ROOT / "ai-gateway" / ".env").items()
             if key.startswith("GATEWAY_") and key.endswith("_PORT") and value.isdigit()}
 
 
-# id: the gateway's id in AI Workspace. url: where its proxies answer.
-# controller_url: its management API, which says what the gateway holds
-# without sending traffic through it, so the checks leave nothing in
-# analytics; without one, they call the gateway's routes. local: this
-# machine's own gateway, which the provisioning registers.
+# A gateway: its id in AI Workspace, its URL, its management API (to check
+# deployments without leaving traces in analytics; "" if unknown), and
+# whether it is this machine's own.
 Gateway = namedtuple("Gateway", "id url controller_url local")
 
 
 def remote_gateway(prefix: str):
-    """The gateway <prefix>_ID and <prefix>_URL name (both, or neither),
-    with <prefix>_CONTROLLER_URL if set. None when they name none."""
+    """The gateway set by <prefix>_ID and <prefix>_URL, None if not set."""
     gateway_id, url = setting(f"{prefix}_ID"), setting(f"{prefix}_URL")
     if bool(gateway_id) != bool(url):
         sys.exit(f"{prefix}_ID and {prefix}_URL go together -- see demo.env.example")
@@ -72,15 +66,14 @@ def remote_gateway(prefix: str):
         if gateway_id else None
 
 
-# This machine's stack, unless REMOTE_AIW_URL names an AI Workspace already
-# running elsewhere, with the gateway REMOTE_GATEWAY_ID and _URL name there.
-REMOTE = bool(setting("REMOTE_AIW_URL"))
+# This machine's stack, unless REMOTE_AI_WORKSPACE_URL points elsewhere.
+REMOTE = bool(setting("REMOTE_AI_WORKSPACE_URL"))
 _remote_llm = remote_gateway("REMOTE_GATEWAY")
 if REMOTE != bool(_remote_llm):
-    sys.exit("REMOTE_AIW_URL, REMOTE_GATEWAY_ID and REMOTE_GATEWAY_URL go together -- see demo.env.example")
+    sys.exit("REMOTE_AI_WORKSPACE_URL, REMOTE_GATEWAY_ID and REMOTE_GATEWAY_URL go together -- see demo.env.example")
 
 if REMOTE:
-    WORKSPACE_URL = setting("REMOTE_AIW_URL").rstrip("/")
+    WORKSPACE_URL = setting("REMOTE_AI_WORKSPACE_URL").rstrip("/")
     PROJECT_ID = setting("REMOTE_PROJECT_ID", "default")
     ADMIN_USERNAME = setting("REMOTE_ADMIN_USERNAME", "admin")
     ADMIN_PASSWORD = os.environ.get("REMOTE_ADMIN_PASSWORD", "")  # never in demo.env
@@ -94,7 +87,6 @@ else:
     LLM_GATEWAY = Gateway("local-gateway", f"https://localhost:{_ports['GATEWAY_HTTPS_PORT']}",
                           f"http://localhost:{_ports['GATEWAY_CONTROLLER_REST_PORT']}", True)
 
-# The MCP proxies go to another gateway when REMOTE_MCP_GATEWAY_ID and _URL
-# name one, with this machine's stack as with a remote one.
+# The MCP cards can use another gateway, local stack or not.
 MCP_GATEWAY = remote_gateway("REMOTE_MCP_GATEWAY") or LLM_GATEWAY
 

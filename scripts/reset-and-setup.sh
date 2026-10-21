@@ -52,11 +52,11 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   exit 1
 fi
 resolve_python   # sets $PYTHON -- python3, or a confirmed-Python-3 `python` (see tools.sh)
-# This script builds this machine's own stack: stop before wiping anything
-# when the REMOTE_ settings target another one (target.py decides).
+# This script rebuilds this machine's stack: refuse when demo.env points to
+# a remote AI Workspace, before anything is wiped.
 if ! "$PYTHON" -c "import sys; sys.path.insert(0, 'scripts/python'); import target; sys.exit(target.REMOTE)"; then
-  echo "demo.env or the environment targets a remote AI Workspace (REMOTE_ settings):" >&2
-  echo "  reset-and-setup only builds this machine's own stack. See the README to provision onto it." >&2
+  echo "demo.env points to a remote AI Workspace (REMOTE_ settings)." >&2
+  echo "  This script only rebuilds this machine's stack. To provision the remote one, see the README." >&2
   exit 1
 fi
 docker info >/dev/null 2>&1 || { echo "docker is not running — start Docker/Colima first" >&2; exit 1; }
@@ -68,8 +68,9 @@ if [[ ! -f "$SECRETS_FILE" ]]; then
   echo "  cp secrets/api-keys.env.example $SECRETS_FILE   # then edit it with real keys" >&2
   exit 1
 fi
+# At least one provider key, or there is nothing to deploy.
 if ! "$PYTHON" -c "import sys; sys.path.insert(0, 'scripts/python'); from platform_api import PROVIDERS, provider_key; sys.exit(not any(map(provider_key, PROVIDERS)))"; then
-  echo "no provider key in $SECRETS_FILE: paste at least one (see the README)" >&2
+  echo "no provider key in $SECRETS_FILE: add at least one (see the README)" >&2
   exit 1
 fi
 # Which keys are actually required (only the enabled providers, per

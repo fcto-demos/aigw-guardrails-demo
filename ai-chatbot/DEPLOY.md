@@ -80,7 +80,7 @@ The settings that matter:
 
 | Key | Why it is set the way it is |
 |---|---|
-| Gateway URL | scheme://host:port every showcase's computed context hangs off: this machine's gateway, or `REMOTE_GATEWAY_URL` in `../demo.env` (`scripts/python/target.py`, shared with the provisioning). |
+| Gateway URL | The gateway every card calls: this machine's, or `REMOTE_GATEWAY_URL` in `../demo.env`, the same as the provisioning. |
 | `SHOWCASE_*_CONTEXT` | One context path per showcase. This is the whole wiring: gateway URL + context + `/v1/messages`. |
 | *(no `MODEL=`)* | No global default to set: each request's default is that provider's own fast/cheap model from `providers.json`, resolved per-showcase — the gateway's routers choose the model that actually answers regardless. `--model <id>` overrides every showcase at once with a literal id of your own, useful for demoing the error path. |
 | `MAX_TOKENS=2048` | Keep it generous. A reasoning model spends output tokens on thinking *before* it writes; at 32 this gateway returned a `thinking` block and no text — a blank reply, not an error. |

@@ -120,8 +120,8 @@ Intelligent routing spans two providers: it needs both an **Anthropic** and
 a **Mistral** key, and is skipped when either is disabled in
 `providers.json`.
 
-Optional, for the cards that rely on an outside service (left out, and shown
-in the chatbot with what to set, until it is set up):
+Optional, for the cards that rely on an outside service. Until it is set up,
+the card is skipped and the chatbot says what to set:
 
 - **Content safety · Azure (Tested)**: an [Azure AI Content Safety resource](https://aka.ms/acs-create),
   its endpoint and key, in `secrets/content-safety.env`
@@ -234,10 +234,9 @@ and the other cards use one of the two. They must differ, and the spend limit
 and cost-based routing need a model priced in
 `ai-gateway/configs/llm-pricing/model_prices.json`. After a change, run
 `./scripts/run-local.sh` then `./scripts/python/provision_showcases.py`.
-A provider whose key is missing from `secrets/api-keys.env` is not deployed;
-`"enabled": false` leaves one out for everyone. In AI Workspace, the providers
-are named after their `providerId` (`demo-mistral`), so they don't clash with
-one already there.
+A provider with no key in `secrets/api-keys.env` is skipped. To remove one for
+everyone, set `"enabled": false`. In AI Workspace, the providers are named
+`demo-anthropic`, `demo-mistral` and `demo-gemini` (their `providerId`).
 
 **Updating a copy cloned before `demo.env` left git**: `git pull` would delete
 your `demo.env`, or refuse to run if you changed it. Keep it aside around the
@@ -251,32 +250,33 @@ cp ~/demo.env.keep demo.env
 
 ### Provisioning onto an existing AI Workspace and gateway
 
-To load the showcases onto an AI Workspace and gateway that are already
-running, instead of this repo's own stack:
+To put the showcases on an AI Workspace and a gateway that already run
+somewhere else:
 
-1. Fill in the `REMOTE_` settings at the end of `demo.env` (see
-   `demo.env.example`): `REMOTE_AIW_URL`, `REMOTE_GATEWAY_ID` and
-   `REMOTE_GATEWAY_URL` at least. Export `REMOTE_ADMIN_PASSWORD`, never in a
-   file. The provisioning and the chatbot then both use them
-   (`scripts/python/target.py`), and that gateway is only used, never
-   registered, renamed or restarted. If its controller is reachable from
-   here, `REMOTE_GATEWAY_CONTROLLER_URL` lets the provisioning ask it rather
-   than send requests through the gateway, which would show in analytics.
-2. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
-   and lists what would be created or overwritten.
-3. Run `./scripts/python/provision_showcases.py`. Add `--skip-existing` (to
-   `--check` too) to create only what is missing and leave every
-   application, provider, lane and MCP proxy that already exists untouched,
-   its key included.
+1. In `demo.env`, set `REMOTE_AI_WORKSPACE_URL`, `REMOTE_GATEWAY_ID` and
+   `REMOTE_GATEWAY_URL` (examples in `demo.env.example`).
+2. Export the admin password: `export REMOTE_ADMIN_PASSWORD=...`. Never write
+   it in a file.
+3. Check first: `./scripts/python/provision_showcases.py --check`. It changes
+   nothing and lists what it would create or overwrite.
+4. Provision: `./scripts/python/provision_showcases.py`. Add `--skip-existing`
+   to create only what is missing.
 
-The MCP proxies can go to a gateway of their own, with this machine's stack
-as with a remote one: `REMOTE_MCP_GATEWAY_ID` and `REMOTE_MCP_GATEWAY_URL`
-(see `demo.env.example`). That gateway must already be registered in AI
-Workspace; it is only used, like a remote one.
+The chatbot then uses that gateway too. The scripts never register, rename or
+restart it.
 
-The cards that need a gateway setting (an identity provider, a content
-safety service) are provisioned when it is set in this repo's `secrets/`
-files: that gateway must have the same settings in its own configuration.
+Optional settings in `demo.env`:
+
+- `REMOTE_ADMIN_USERNAME`: if the admin user is not `admin`.
+- `REMOTE_PROJECT_ID`: a project of its own for the demo.
+- `REMOTE_GATEWAY_CONTROLLER_URL`: the gateway's management API. Deployments
+  are then checked there, without test requests that would show in analytics.
+- `REMOTE_MCP_GATEWAY_ID` and `REMOTE_MCP_GATEWAY_URL`: another gateway for
+  the MCP cards. This also works with this machine's stack.
+
+The cards that need an identity provider or a content safety service are only
+provisioned when it is set in `secrets/`. The remote gateway needs the same
+settings in its own configuration.
 
 ## Troubleshooting
 

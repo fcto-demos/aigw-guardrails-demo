@@ -43,8 +43,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
 
-# Shared with the provisioning: the gateways the cards call (target.py), and
-# which cards this gateway's settings leave out (gateway_settings.py).
+# Shared with the provisioning: where the gateways are, and which cards they can run.
 sys.path.insert(0, os.path.join(HERE, "..", "scripts", "python"))
 from gateway_settings import missing_gateway_settings  # noqa: E402
 from target import LLM_GATEWAY, MCP_GATEWAY, ROOT, read_env_file, setting  # noqa: E402
@@ -448,15 +447,14 @@ def load_showcases():
     return _REGISTRY
 
 
-# The settings a card's texts may show as {NAME}: those demo.env.example
-# declares, none of them a secret.
+# The settings a card's text can show as {NAME}: those of demo.env.example,
+# none of them secret.
 SHOWABLE_SETTINGS = set(read_env_file(ROOT / "demo.env.example"))
 
 
 def _demo_setting(match):
-    """A {NAME} of showcases.json (the time-based routing card's peak window,
-    for one): that demo.env setting, escaped so it cannot change the JSON
-    around it. Any other name is left as is."""
+    """Replaces a {NAME} of showcases.json with its demo.env value, escaped so
+    it stays text. Any other name is left as is."""
     value = setting(match[1]) if match[1] in SHOWABLE_SETTINGS else ""
     return json.dumps(value)[1:-1] if value else match[0]
 
@@ -479,8 +477,7 @@ def _valid_url(url):
 
 
 def gateway_url(entry=None):
-    """scheme://host:port a card's context path hangs off: target.py's MCP
-    gateway for an MCP card, its LLM gateway for any other."""
+    """The gateway a card calls: the MCP one for an MCP card."""
     return (MCP_GATEWAY if (entry or {}).get("mcp") else LLM_GATEWAY).url
 
 
@@ -533,7 +530,7 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "%s is not an http(s) URL" % _env_key(sid, "URL", provider_id)
         return pinned, _env_key(sid, "URL", provider_id)
 
-    # Left out of the provisioning for lack of a gateway setting.
+    # Skipped by the provisioning: a gateway setting is missing.
     needs = missing_gateway_settings(entry)
     if needs:
         return None, "needs " + needs

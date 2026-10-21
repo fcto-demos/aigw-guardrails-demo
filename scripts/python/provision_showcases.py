@@ -42,20 +42,15 @@ Usage:
     ./scripts/python/provision_showcases.py mistral-model-failover  # ... or Mistral's
     ./scripts/python/provision_showcases.py mcp-rate-limit        # one MCP card's proxy
 
-It provisions this machine's own stack, or the AI Workspace and gateways
-the REMOTE_ settings name (see target.py): those are only used, never
-registered, renamed or restarted. Flags:
-    --check           read-only: list what would be created/overwritten and
-                      any context already owned by another resource; exits
-                      non-zero on either. Needs no provider keys.
-    --skip-existing   create only what is missing: an application, provider,
-                      lane or MCP proxy whose id already exists is left as
-                      is (not updated, not redeployed, its key not rotated).
-                      With --check, lists those as "keep", not OVERWRITE.
+It provisions this machine's stack, or a remote one set by the REMOTE_
+settings in demo.env (a remote gateway is never registered or restarted).
+Flags:
+    --check           changes nothing: lists what would be created or
+                      overwritten, and any context already taken.
+    --skip-existing   creates only what is missing and leaves the rest as is.
 
-A card whose policies need a gateway setting this gateway lacks (an identity
-provider, a content safety service) is left out, saying what to set: see
-gateway_settings.py.
+Cards whose gateway settings or provider key are missing are skipped, with
+what to set.
 
 model-failover's live fault-injection toggles (inject/break/heal/restore) are
 a separate concern from provisioning -- see scripts/python/failover_control.py and
@@ -66,8 +61,7 @@ secrets/api-keys.env.example). Stdlib only, no pip installs, matching
 ai-chatbot.
 
 File layout (each section only calls the ones above it):
-    1. Configuration: this machine's gateway as AI Workspace lists it;
-       where everything is reached is target.py's
+    1. Configuration (addresses are in target.py)
     2. LANES — the declarative showcase catalogue, instantiated per provider
     3. Gateway registration
     4. Application / project grouping
@@ -75,7 +69,7 @@ File layout (each section only calls the ones above it):
        (upsert_shared_provider) is platform_api.py's
     6. ai-chatbot integration (secrets/gateway-keys.env, process restart)
     7. Pre-flight check (--check)
-    8. The plan (everything a run writes, in order) and main()
+    8. The plan of what a run writes, and main()
 """
 import re
 import subprocess
@@ -93,11 +87,9 @@ from platform_api import (
 from target import DEMO_ENV, setting, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
 
 # =============================================================================
-# 1. Configuration. Where everything is reached (AI Workspace, gateways,
-#    ports) is target.py's; the providers and their models, providers.json's.
+# 1. Configuration. Addresses are in target.py, providers in providers.json.
 # =============================================================================
-# This machine's gateway as AI Workspace lists it: registered with these
-# values, and its display name put back if someone changed it.
+# How this machine's gateway appears in AI Workspace.
 LOCAL_GATEWAY = {"displayName": "ai-gateway", "description": "Local dev gateway (offset ports)",
                  "functionalityType": "ai", "version": "1.2"}
 
@@ -569,9 +561,7 @@ def build_lanes(provider: dict) -> dict:
     return lanes
 
 
-# A provider whose key is missing from secrets/api-keys.env is not deployed,
-# nor any lane that runs on it. The chatbot still lists it, its cards shown
-# as not provisioned.
+# A provider without a key in secrets/api-keys.env is skipped, with its lanes.
 KEYED_PROVIDERS = [p for p in PROVIDERS if provider_key(p)]
 PROVIDER_BY_ID = {p["id"]: p for p in KEYED_PROVIDERS}
 
@@ -695,12 +685,12 @@ def _header_lane(card_id: str, display_name: str, default: dict, routed: dict,
            for value, (prov, size) in mapping.items()])
 
 
-# Left out: cards whose policies need a gateway setting still blank (the
-# chatbot shows them unwired), and providers without a key. Id -> what to set.
+# What is skipped, and what to set: cards missing a gateway setting, providers
+# without a key.
 LEFT_OUT = {card["id"]: need for card in showcases() if (need := missing_gateway_settings(card))}
 LEFT_OUT.update({p["id"]: f"{p['secretVar']} set in secrets/api-keys.env" for p in PROVIDERS
                  if p not in KEYED_PROVIDERS})
-# An MCP card's agent runs on its mcp.provider: without that provider, the card is left out too.
+# An MCP card is skipped too when the provider that drives it is.
 LEFT_OUT.update({card["id"]: LEFT_OUT[card["mcp"]["provider"]] for card in showcases()
                  if card.get("mcp") and card["mcp"].get("provider") in LEFT_OUT})
 
@@ -799,7 +789,7 @@ def restore_local_gateway_name():
 
 
 def confirm_gateway_exists(gateway: Gateway):
-    """Confirms a gateway is registered in AI Workspace, without touching it."""
+    """Checks a gateway exists in AI Workspace, without changing it."""
     status, resp = api("GET", f"/gateways/{gateway.id}")
     if status != 200:
         _, listing = api("GET", "/gateways")
@@ -810,8 +800,7 @@ def confirm_gateway_exists(gateway: Gateway):
 
 
 def register_local_gateway():
-    """This machine's gateway: registered, restarted when it gets a new
-    token, and named as LOCAL_GATEWAY says."""
+    """Registers this machine's gateway, restarting it after a new token."""
     if issue_local_gateway_token():
         print("  new token issued — recreating gateway-controller")
         restart_gateway_controller()
@@ -822,8 +811,7 @@ def register_local_gateway():
 
 
 def prepare_gateways():
-    """This machine's gateway is registered; any other is someone else's,
-    only confirmed to exist."""
+    """Registers this machine's gateway; only checks that any other exists."""
     for gateway in dict.fromkeys([LLM_GATEWAY, MCP_GATEWAY]):
         if gateway.local:
             register_local_gateway()
@@ -919,9 +907,8 @@ def _upsert(resource: str, payload: dict, label: str):
 
 
 def upsert_proxy(lane: dict):
-    """lane["providerRef"] is the proxy's own LlmProvider id; a cross-provider
-    lane also carries additionalProviders (selectable upstreams, each
-    optionally with a transformer) that its routing policy switches between."""
+    """Creates or updates a lane's proxy. A lane that spans two providers also
+    lists the other one, which its routing policy switches to."""
     payload = {
         "id": lane["id"],
         "displayName": f"{lane['displayPrefix']} - {lane['displayName']}",
@@ -1048,7 +1035,7 @@ def write_lane(lane: dict, state: dict):
     state["keys_changed"] flips the moment a key is minted, since that
     revokes the previous one (see main()'s finally)."""
     lane_id, gateway = lane["id"], LLM_GATEWAY
-    # A cross-provider lane routes through providers it never writes.
+    # A lane that spans two providers needs both to exist already.
     for ref in lane["existingProviders"]:
         status, _ = api("GET", f"/llm-providers/{ref}")
         if status != 200:
@@ -1290,16 +1277,14 @@ def report_existing_provider(pid: str) -> int:
 # =============================================================================
 Write = namedtuple("Write", "resource id context item")
 
-# How each kind of resource in the plan is written.
+# The function that writes each kind of resource.
 WRITERS = {"applications": write_app, "llm-providers": write_provider,
            "llm-proxies": write_lane, "mcp-proxies": write_mcp_proxy}
 
 
 def plan(requested: list) -> list:
-    """Everything a run writes, in order: the applications and providers the
-    requested lanes run on, the lanes, then the MCP proxies. Providers come
-    before lanes, since a lane runs on its provider. Running one lane needs
-    only its own provider's key."""
+    """What a run writes, in order: applications, providers, lanes, then MCP
+    proxies. Only the providers the requested lanes need."""
     lanes = [ALL_LANES[r] for r in requested if r in ALL_LANES]
     cards = [MCP_PROXIES[r] for r in requested if r in MCP_PROXIES]
     providers = [p for p in PROVIDERS if p["id"] in {lane["providerId"] for lane in lanes}]
@@ -1310,7 +1295,7 @@ def plan(requested: list) -> list:
 
 
 def without_existing(work: list) -> list:
-    """--skip-existing: the plan less what already exists, kept as is."""
+    """For --skip-existing: drops from the plan what already exists."""
     kept = [w for w in work if exists_in_workspace(w.resource, w.id)]
     for w in kept:
         print(f"### {w.resource} {w.id} exists, kept as is")
@@ -1341,7 +1326,7 @@ def main():
 
     if skip_existing:
         work = without_existing(work)
-    # Every key read up front: a missing one stops the run before anything is written.
+    # Read every key first, so a missing one stops the run before any change.
     secrets = {w.id: read_secret(w.item) for w in work if w.resource == "llm-providers"}
 
     print(f"### gateways ({WORKSPACE_URL})")
