@@ -971,6 +971,49 @@
     }
   },
   {
+    "id": "stop-button",
+    "group": "Compliance (EU AI Act)",
+    "contextSuffix": "stopped",
+    "title": "Stop button",
+    "tagline": "The operator pauses the assistant at the gateway: every app gets a safe message, and no model is called.",
+    "capability": "respond v1.0.1",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "respond v1.0.1"
+    ],
+    "emphasis": [],
+    "gateway": {
+      "blockStatus": 503
+    },
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Any question, while the assistant is paused",
+        "sends": [
+          {
+            "ask": "How much is the Plus plan?",
+            "expect": {
+              "text": "The gateway answers itself: “The assistant is paused. Please contact an advisor.”, HTTP 503 and zero tokens. No model was called."
+            }
+          }
+        ],
+        "notes": "To pause a live assistant, add the respond policy to its proxy in AI Workspace and deploy; remove it to resume. The gateway and every other API keep running."
+      }
+    ],
+    "notes": "respond v1.0.1 answers 503 with a fixed message and Retry-After, without forwarding the request: the model is never called. This lane stays paused to show the state; on a live lane, the operator adds and removes the policy.",
+    "refs": {
+      "Compliance (EU AI Act)": {
+        "code": "Art. 14",
+        "scope": "high-risk",
+        "text": "Human oversight: the operator can halt the assistant in a safe state, for every app at once, without touching any of them."
+      }
+    }
+  },
+  {
     "id": "audit-log",
     "group": [
       "Compliance (EU AI Act)"

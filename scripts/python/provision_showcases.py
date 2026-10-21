@@ -321,6 +321,15 @@ def lane_templates(provider: dict) -> dict:
             "globalPolicies": [{"name": "set-headers", "version": "v1", "params": {
                 "response": {"headers": [{"name": "x-ai-generated", "value": "true"}]}}}],
         },
+        # The assistant is paused: the gateway answers itself, the model is not called.
+        "stop-button": {
+            "context_suffix": "stopped", "displayName": "Stop Button", "wired": True,
+            "globalPolicies": [{"name": "respond", "version": "v1", "params": {
+                "statusCode": 503,
+                "headers": [{"name": "content-type", "value": "application/json"},
+                            {"name": "retry-after", "value": "3600"}],
+                "body": '{"error": "paused", "message": "The assistant is paused. Please contact an advisor."}'}}],
+        },
         "prompt-decoration": {
             "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,
             "globalPolicies": [{"name": "prompt-decorator", "version": "v1", "params": {
