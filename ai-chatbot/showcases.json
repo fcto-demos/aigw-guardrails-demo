@@ -1073,8 +1073,8 @@
     },
     "refs": {
       "Compliance (EU AI Act)": {
-        "code": "Art. 12",
-        "text": "Record-keeping: each exchange can be traced later, from a record kept apart from the traffic.",
+        "code": "Art. 12, 26",
+        "text": "Record-keeping: each exchange can be traced later, from a record kept apart from the traffic, which the deployer keeps at least six months.",
         "scope": "high-risk"
       }
     }
