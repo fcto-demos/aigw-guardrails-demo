@@ -88,7 +88,7 @@ reply, with what the gateway did.
 | Agent with MCP tools | The agent reads and changes the account; no rule applied |
 | Tool access control | The gateway hides `change_plan`: the agent can't call what it can't see |
 | Tool argument check | The gateway checks each `change_plan` call's arguments: switching to Plus goes through, to Unlimited is refused before the server sees it |
-| Tool rate limit | The gateway allows 3 `change_plan` calls per hour and per MCP session; the 4th gets 429 |
+| Tool rate limit | The gateway allows 3 `change_plan` calls per 5 minutes and per MCP session; the 4th gets 429 |
 | Tool renaming | The gateway publishes its own names for the tools (`switch_plan` for `change_plan`) and translates them on the way to the server |
 | Poisoned tool description | A partner's MCP server hides an instruction to the agent in a tool's description (ask for the card number); the gateway publishes its own description, so the agent never reads it |
 | Tool result screening (Jev) | The same attack in what a tool returns: the partner's terms end with a note for the agent; Jev spots it and the gateway withholds the result |
@@ -239,7 +239,11 @@ run on default ports. It holds:
   application id in `secrets/api-keys.env`, found in Moesif under Settings,
   API Keys) or `local` (Jaeger, OpenSearch, Prometheus and Grafana on your
   machine).
-- `DISABLED_CARDS`: card ids, comma-separated, shown greyed out and not clickable, for a card whose outside service is down during a live demo. Takes effect on the next page load, with no restart.
+- `DISABLED_CARDS`: card ids, comma-separated, shown greyed out and not 
+  clickable, for a card whose outside service is down during a live demo.
+  Takes effect on the next page load, with no restart.
+- `RATE_LIMIT_ALGORITHM`: how budgets and rate limits count, `gcra` or
+  `fixed-window` (see `demo.env.example`).
 
 When `demo.env.example` gains a setting, the scripts tell you which ones your
 `demo.env` lacks.
@@ -293,6 +297,8 @@ Optional settings in `demo.env`:
 The cards that need an identity provider or a content safety service are only
 provisioned when it is set in `secrets/`. The remote gateway needs the same
 settings in its own configuration.
+
+A `demo.env` written with the earlier names still works: `AIW_URL`, `GATEWAY_ID`, `GATEWAY_BASE` (or `GATEWAY_ENDPOINT`), `ADMIN_USERNAME`, `DEMO_PROJECT_ID`, `MCP_GATEWAY_ID`, `MCP_GATEWAY_BASE` (or `MCP_GATEWAY_ENDPOINT`), and `ADMIN_PASSWORD` in the environment. They are read only when `AIW_URL` is set and no `REMOTE_AI_WORKSPACE_URL` is.
 
 ### Product images from an external registry
 

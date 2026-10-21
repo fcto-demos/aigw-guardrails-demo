@@ -33,8 +33,8 @@
  * Two honesty rules follow, and the UI keeps both:
  *
  *  1. Every figure is prefixed with "~" and labelled estimated. The budget is
- *     shared across all callers and runs on a fixed window, so a rehearsal ten
- *     minutes ago already spent some of it. This session's tokens are a FLOOR
+ *     shared across all callers and only comes back over time, so a rehearsal a
+ *     moment ago already spent some of it. This session's tokens are a FLOOR
  *     on the real spend, never the balance.
  *  2. The step-down is measured, not estimated. When the gateway serves the
  *     fallback model the deep budget is gone whatever this meter says, so the
@@ -131,9 +131,9 @@ export function recordSpend(turn) {
    * fallback has a budget of its own, deliberately large enough that it is not
    * what the card is about.
    *
-   * A deep reply AFTER a step-down means the fixed window rolled over and the
-   * capacity came back, so the running total starts again rather than staying
-   * pinned at a limit the gateway has plainly stopped enforcing. */
+   * A deep reply AFTER a step-down means the budget has come back, so the
+   * running total starts again rather than staying pinned at a limit the
+   * gateway has plainly stopped enforcing. */
   if (onDeep) {
     if (exhausted) { spent = 0; unpriced = 0; }
     if (cost === null) unpriced += 1; else spent += cost;

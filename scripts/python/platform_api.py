@@ -95,19 +95,18 @@ SECRETS_FILE = ROOT / "secrets" / "api-keys.env"   # one file, every provider's 
 
 
 def budget_for(provider: dict) -> float:
-    """spend-limit/cost-based-routing's $-per-1h budget for this provider --
-    providers.json's own costBudget, hand-tuned to $0.02 for Anthropic
-    against claude-opus-4-6's $0.000025/output-token price in
-    ai-gateway/configs/llm-pricing/model_prices.json (about 800 output
-    tokens, roughly one detailed catalogue answer). Mistral and Gemini's
-    large models are priced far differently there -- confirmed:
-    ministral-14b-latest is ~125x cheaper per output token than
-    claude-opus-4-6, so a flat $0.02 bought ~12 full-length replies instead
-    of about one, never tripping the wall -- so their values use the same
-    800-token baseline against each provider's own price. ai-chatbot/server.py
-    exposes this field via /api/providers for the frontend's budget meter
-    (costBudgetFor() in screens.js, used by spend.js) -- one number, not a
-    second copy to keep in sync."""
+    """spend-limit/cost-based-routing's budget for this provider, per window
+    (each card's budget.duration in showcases.json): providers.json's own
+    costBudget. Each one is about one detailed answer of the provider's large
+    model, input included: 1,200 tokens in (the catalogue) and 600 out, at the
+    prices in ai-gateway/configs/llm-pricing/model_prices.json. That is $0.02
+    for claude-opus-4-6, $0.00036 for ministral-14b-latest and $0.0096 for
+    gemini-3.1-pro-preview. With gcra (RATE_LIMIT_ALGORITHM), a smaller
+    budget would leave a debt that the gateway carries over to the next
+    windows, keeping the large model away for many minutes. ai-chatbot/server.py exposes this field via
+    /api/providers for the frontend's budget meter (costBudgetFor() in
+    screens.js, used by spend.js): one number, not a second copy to keep in
+    sync."""
     return provider["costBudget"]
 
 

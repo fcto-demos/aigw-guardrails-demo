@@ -48,6 +48,8 @@ export function buildRail(showcase) {
 
   railPrereq.innerHTML = prereqHtml(showcase);
   stepsList.innerHTML = steps.map(stepHtml).join('');
+  /* Each card's script starts at its first step, wherever the last one was left. */
+  rail.scrollTop = 0;
 
   for (const step of steps) {
     stepState.set(step.n, {

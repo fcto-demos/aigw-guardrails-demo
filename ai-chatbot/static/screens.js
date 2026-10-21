@@ -73,7 +73,8 @@ export function modelForRole(role) {
   return (models && models[role]) || null;
 }
 
-/* provider id -> its own $/1h spend-limit/cost-based-routing budget, from
+/* provider id -> its own spend-limit/cost-based-routing budget (per window: each
+ * card's budget.duration in showcases.json), from
  * /api/providers -- see providers.json's costBudget and
  * scripts/python/provision_showcases.py's budget_for() for why this isn't
  * one flat number shared across providers. spend.js reads this instead of
