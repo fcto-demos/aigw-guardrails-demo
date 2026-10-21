@@ -293,6 +293,8 @@ The cards that need an identity provider or a content safety service are only
 provisioned when it is set in `secrets/`. The remote gateway needs the same
 settings in its own configuration.
 
+A `demo.env` written with the earlier names still works: `AIW_URL`, `GATEWAY_ID`, `GATEWAY_BASE` (or `GATEWAY_ENDPOINT`), `ADMIN_USERNAME`, `DEMO_PROJECT_ID`, `MCP_GATEWAY_ID`, `MCP_GATEWAY_BASE` (or `MCP_GATEWAY_ENDPOINT`), and `ADMIN_PASSWORD` in the environment. They are read only when `AIW_URL` is set and no `REMOTE_AI_WORKSPACE_URL` is.
+
 ### Product images from an external registry
 
 By default, the demo runs the public images. To run the newest updates from an
