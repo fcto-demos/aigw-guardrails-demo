@@ -120,8 +120,8 @@ Intelligent routing spans two providers: it needs both an **Anthropic** and
 a **Mistral** key, and is skipped when either is disabled in
 `providers.json`.
 
-Optional, for the cards that rely on an outside service (left out until it is
-set up):
+Optional, for the cards that rely on an outside service. Until it is set up,
+the card is skipped and the chatbot says what to set:
 
 - **Content safety · Azure (Tested)**: an [Azure AI Content Safety resource](https://aka.ms/acs-create),
   its endpoint and key, in `secrets/content-safety.env`
@@ -234,7 +234,9 @@ and the other cards use one of the two. They must differ, and the spend limit
 and cost-based routing need a model priced in
 `ai-gateway/configs/llm-pricing/model_prices.json`. After a change, run
 `./scripts/run-local.sh` then `./scripts/python/provision_showcases.py`.
-`"enabled": false` leaves out a provider you have no key for.
+A provider with no key in `secrets/api-keys.env` is skipped. To remove one for
+everyone, set `"enabled": false`. In AI Workspace, the providers are named
+`demo-anthropic`, `demo-mistral` and `demo-gemini` (their `providerId`).
 
 **Updating a copy cloned before `demo.env` left git**: `git pull` would delete
 your `demo.env`, or refuse to run if you changed it. Keep it aside around the
@@ -248,18 +250,33 @@ cp ~/demo.env.keep demo.env
 
 ### Provisioning onto an existing AI Workspace and gateway
 
-To load the showcases onto an AI Workspace and gateway that are already
-running, instead of this repo's own stack:
+To put the showcases on an AI Workspace and a gateway that already run
+somewhere else:
 
-1. Export `AIW_URL`, `GATEWAY_ID`, `GATEWAY_ENDPOINT`, `ADMIN_USERNAME` and
-   `ADMIN_PASSWORD`, and optionally `DEMO_PROJECT_ID` to keep the demo in its
-   own project (created if missing).
-2. In `providers.json`, disable any provider whose id already exists there.
-3. Run `./scripts/python/provision_showcases.py --check`. It changes nothing
-   and lists what would be created or overwritten.
-4. Run `./scripts/python/provision_showcases.py --existing-gateway`.
-5. Point the chatbot at that gateway: `GATEWAY_BASE=https://host:port` in
-   `demo.env`.
+1. In `demo.env`, set `REMOTE_AI_WORKSPACE_URL`, `REMOTE_GATEWAY_ID` and
+   `REMOTE_GATEWAY_URL` (examples in `demo.env.example`).
+2. Export the admin password: `export REMOTE_ADMIN_PASSWORD=...`. Never write
+   it in a file.
+3. Check first: `./scripts/python/provision_showcases.py --check`. It changes
+   nothing and lists what it would create or overwrite.
+4. Provision: `./scripts/python/provision_showcases.py`. Add `--skip-existing`
+   to create only what is missing.
+
+The chatbot then uses that gateway too. The scripts never register, rename or
+restart it.
+
+Optional settings in `demo.env`:
+
+- `REMOTE_ADMIN_USERNAME`: if the admin user is not `admin`.
+- `REMOTE_PROJECT_ID`: a project of its own for the demo.
+- `REMOTE_GATEWAY_CONTROLLER_URL`: the gateway's management API. Deployments
+  are then checked there, without test requests that would show in analytics.
+- `REMOTE_MCP_GATEWAY_ID` and `REMOTE_MCP_GATEWAY_URL`: another gateway for
+  the MCP cards. This also works with this machine's stack.
+
+The cards that need an identity provider or a content safety service are only
+provisioned when it is set in `secrets/`. The remote gateway needs the same
+settings in its own configuration.
 
 ## Troubleshooting
 

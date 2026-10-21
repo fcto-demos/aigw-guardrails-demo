@@ -43,6 +43,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
 
+# Shared with the provisioning: where the gateways are, and which cards they can run.
+sys.path.insert(0, os.path.join(HERE, "..", "scripts", "python"))
+from gateway_settings import missing_gateway_settings  # noqa: E402
+from target import LLM_GATEWAY, MCP_GATEWAY, ROOT, read_env_file, setting  # noqa: E402
+
 # The showcase registry. Deliberately NOT under static/ -- _serve_static would
 # hand the whole file, gateway wiring included, to any GET.
 SHOWCASES_FILE = os.path.join(HERE, "showcases.json")
@@ -171,10 +176,6 @@ MAX_TOKENS_CEILING = 8192
 MODEL_OVERRIDE = None
 
 DEFAULTS = {
-    # scheme://host:port that every showcase's computed context path
-    # (/<providerId>-<contextSuffix>, see resolve_gateway()) hangs off.
-    # Blank: worked out from demo.env in load_config().
-    "GATEWAY_BASE": "",
     # The operator this assistant belongs to. Deliberately a placeholder: set
     # BRAND_NAME once and it flows into the wordmark, the page title and the
     # system prompt. Nothing else hard-codes a brand.
@@ -287,13 +288,6 @@ def load_config(path, secrets_path=None):
     for key, value in os.environ.items():
         if value and SHOWCASE_ENV_RE.match(key):
             conf[key] = value
-    # Unless set, the gateway is on this machine's hostname (localhost by
-    # default), on its HTTPS port plus the port offset from demo.env.
-    if not conf.get("GATEWAY_BASE"):
-        ports = {}
-        _merge_env_file(ports, os.path.join(HERE, "..", "ai-gateway", ".env"))
-        port = int(ports.get("GATEWAY_HTTPS_PORT") or 8443) + int(conf.get("GATEWAY_PORT_OFFSET") or 0)
-        conf["GATEWAY_BASE"] = "https://%s:%d" % (conf.get("DEMO_HOSTNAME") or "localhost", port)
     return conf
 
 
@@ -419,7 +413,7 @@ def load_showcases():
     """
     try:
         with open(SHOWCASES_FILE) as handle:
-            raw = json.load(handle)
+            raw = json.loads(re.sub(r"\{([A-Z][A-Z0-9_]*)\}", _demo_setting, handle.read()))
     except OSError:
         if not _REGISTRY["list"]:
             _install_registry([dict(_FALLBACK_ENTRY)], "showcases.json not found")
@@ -453,6 +447,18 @@ def load_showcases():
     return _REGISTRY
 
 
+# The settings a card's text can show as {NAME}: those of demo.env.example,
+# none of them secret.
+SHOWABLE_SETTINGS = set(read_env_file(ROOT / "demo.env.example"))
+
+
+def _demo_setting(match):
+    """Replaces a {NAME} of showcases.json with its demo.env value, escaped so
+    it stays text. Any other name is left as is."""
+    value = setting(match[1]) if match[1] in SHOWABLE_SETTINGS else ""
+    return json.dumps(value)[1:-1] if value else match[0]
+
+
 def _install_registry(entries, error):
     ids = [e["id"] for e in entries]
     _REGISTRY["list"] = entries
@@ -470,9 +476,9 @@ def _valid_url(url):
     return parts.scheme in ("http", "https") and bool(parts.netloc)
 
 
-def gateway_base():
-    """scheme://host:port that context paths hang off."""
-    return CONF["GATEWAY_BASE"].strip().rstrip("/")
+def gateway_url(entry=None):
+    """The gateway a card calls: the MCP one for an MCP card."""
+    return (MCP_GATEWAY if (entry or {}).get("mcp") else LLM_GATEWAY).url
 
 
 def _env_key(showcase_id, field, provider_id=DEFAULT_PROVIDER_ID):
@@ -524,6 +530,11 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "%s is not an http(s) URL" % _env_key(sid, "URL", provider_id)
         return pinned, _env_key(sid, "URL", provider_id)
 
+    # Skipped by the provisioning: a gateway setting is missing.
+    needs = missing_gateway_settings(entry)
+    if needs:
+        return None, "needs " + needs
+
     # A card with its own "route" talks to one LlmProxy spanning two
     # providers (route.defaultProvider + route.routedProvider), whatever the
     # provider dropdown says, in defaultProvider's wire format. Unwired when
@@ -536,7 +547,7 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
         disabled = [p for p in (route.get("defaultProvider"), route.get("routedProvider")) if p not in PROVIDERS]
         if disabled:
             return None, "route needs %s, disabled in providers.json" % " and ".join(map(str, disabled))
-        return (gateway_base() + ctx.rstrip("/") + PROVIDERS[route["defaultProvider"]]["messagesSuffix"],
+        return (gateway_url() + ctx.rstrip("/") + PROVIDERS[route["defaultProvider"]]["messagesSuffix"],
                 "showcases.json route")
 
     # An MCP card's url is its MCP proxy's endpoint. Its model is
@@ -552,7 +563,7 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
             return None, "mcp needs %s, disabled in providers.json" % provider
         if PROVIDERS[provider]["wire"] != "openai":
             return None, "mcp.provider %s must speak the OpenAI format" % provider
-        return gateway_base() + ctx.rstrip("/") + "/mcp", "showcases.json mcp"
+        return gateway_url(entry) + ctx.rstrip("/") + "/mcp", "showcases.json mcp"
 
     # The context for any (showcase, provider) pair is always exactly
     # /<providerId>-<contextSuffix>, or bare /<providerId> when contextSuffix
@@ -568,7 +579,7 @@ def resolve_gateway(entry, provider_id=DEFAULT_PROVIDER_ID):
     ctx = f"/{provider_id}-{context_suffix}" if context_suffix else f"/{provider_id}"
     if not CONTEXT_RE.match(ctx):
         return None, "computed context %r is not a plain path" % ctx
-    return gateway_base() + ctx.rstrip("/") + suffix, "showcases.json contextSuffix"
+    return gateway_url() + ctx.rstrip("/") + suffix, "showcases.json contextSuffix"
 
 
 def showcase_context(url, provider_id=DEFAULT_PROVIDER_ID, entry=None):
@@ -675,11 +686,11 @@ def resolve_showcase(showcase_id, provider_id=DEFAULT_PROVIDER_ID):
         "url": url,
         "source": source,
         "context": context,
-        # gateway_base() + the raw context path, no messagesSuffix -- what a
+        # gateway_url() + the raw context path, no messagesSuffix -- what a
         # wire whose URL isn't just showcase["url"] (Gemini: the model and
         # the operation are both part of the path) builds the real request
         # URL from. None when there's no context at all (unwired).
-        "baseUrl": (gateway_base() + context) if context else None,
+        "baseUrl": (gateway_url(entry) + context) if context else None,
         # A routed card with a selector names no model: the gateway picks the
         # provider and the model from the selector's header.
         "model": None if (entry.get("route") and selector) else str(model),
@@ -974,7 +985,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {
                 "status": "ok",
                 "provider": provider_id,
-                "gatewayBase": gateway_base(),
+                "gatewayBase": gateway_url(),
                 "defaultModel": default_model(provider_id),
                 "maxTokens": int(CONF["MAX_TOKENS"]),
                 "tlsVerify": _truthy(CONF["TLS_VERIFY"]),
@@ -1072,7 +1083,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # As any MCP client: call the proxy, follow its 401.
             session = {}
-            self._mcp_rpc(gateway_base() + entry["mcp"]["context"].rstrip("/") + "/mcp", "tools/list", {}, session)
+            self._mcp_rpc(gateway_url(entry) + entry["mcp"]["context"].rstrip("/") + "/mcp", "tools/list", {}, session)
             prm = protected_resource_metadata((session.get("headers") or {}).get("www-authenticate"))
             meta = mcp_authorization_server(prm)
         except (urllib.error.URLError, ValueError, KeyError) as exc:
@@ -1754,14 +1765,11 @@ def main():
     parser.add_argument("--config", default=os.path.join(HERE, "config.env"))
     parser.add_argument("--secrets", default=os.path.join(HERE, "..", "secrets", "gateway-keys.env"))
     parser.add_argument("--port", type=int)
-    parser.add_argument("--gateway-base")
     parser.add_argument("--model")
     args = parser.parse_args()
 
     global CONF, SSL_CONTEXT, MODEL_OVERRIDE
     CONF = load_config(args.config, args.secrets)
-    if args.gateway_base:
-        CONF["GATEWAY_BASE"] = args.gateway_base
     if args.model:
         # See MODEL_OVERRIDE above: stomps the default on every card.
         MODEL_OVERRIDE = args.model
@@ -1773,7 +1781,9 @@ def main():
     registry = load_showcases()
 
     print("%s%s AI assistant%s" % (BOLD, CONF["BRAND_NAME"], RESET))
-    print("  base     %s" % gateway_base())
+    print("  base     %s" % LLM_GATEWAY.url)
+    if MCP_GATEWAY.url != LLM_GATEWAY.url:
+        print("  mcp base %s" % MCP_GATEWAY.url)
     print("  registry %s (%d showcases, default %s)"
           % (os.path.basename(SHOWCASES_FILE), len(registry["list"]),
              registry["default_id"]))
@@ -1797,10 +1807,10 @@ def main():
               % (YELLOW, ", ".join(borrowed), RESET))
 
     print("\n  %sshowcases%s" % (BOLD, RESET))
-    base_host = urllib.parse.urlsplit(gateway_base()).netloc
     hosts, wired = set(), 0
     for entry in registry["list"]:
         url, source = resolve_gateway(entry)
+        base_host = urllib.parse.urlsplit(gateway_url(entry)).netloc
         ready = (entry.get("status") or "ready") == "ready"
         if url:
             wired += 1

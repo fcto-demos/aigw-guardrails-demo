@@ -42,15 +42,15 @@ Usage:
     ./scripts/python/provision_showcases.py mistral-model-failover  # ... or Mistral's
     ./scripts/python/provision_showcases.py mcp-rate-limit        # one MCP card's proxy
 
-Against an already-running deployment (not this repo's own compose stacks),
-set AIW_URL / GATEWAY_ID / GATEWAY_ENDPOINT / ADMIN_USERNAME / ADMIN_PASSWORD,
-optionally DEMO_PROJECT_ID (default "default"; created if missing),
-(see platform_api.py) and add:
-    --check             read-only: list what would be created/overwritten and
-                        any context already owned by another resource; exits
-                        non-zero on either. Needs no provider keys.
-    --existing-gateway  use GATEWAY_ID as-is -- no registration, no token,
-                        no rename, no container restart.
+It provisions this machine's stack, or a remote one set by the REMOTE_
+settings in demo.env (a remote gateway is never registered or restarted).
+Flags:
+    --check           changes nothing: lists what would be created or
+                      overwritten, and any context already taken.
+    --skip-existing   creates only what is missing and leaves the rest as is.
+
+Cards whose gateway settings or provider key are missing are skipped, with
+what to set.
 
 model-failover's live fault-injection toggles (inject/break/heal/restore) are
 a separate concern from provisioning -- see scripts/python/failover_control.py and
@@ -61,8 +61,7 @@ secrets/api-keys.env.example). Stdlib only, no pip installs, matching
 ai-chatbot.
 
 File layout (each section only calls the ones above it):
-    1. Configuration — GATEWAY_DISPLAY_NAME/PROJECT_ID; everything else
-       shared with scripts/python/failover_control.py lives in platform_api.py
+    1. Configuration (addresses are in target.py)
     2. LANES — the declarative showcase catalogue, instantiated per provider
     3. Gateway registration
     4. Application / project grouping
@@ -70,29 +69,29 @@ File layout (each section only calls the ones above it):
        (upsert_shared_provider) is platform_api.py's
     6. ai-chatbot integration (secrets/gateway-keys.env, process restart)
     7. Pre-flight check (--check)
-    8. main()
+    8. The plan of what a run writes, and main()
 """
-import os
 import re
 import subprocess
 import sys
 import time
+from collections import namedtuple
+from urllib.parse import urlsplit
 
+from gateway_settings import missing_gateway_settings
 from platform_api import (
-    ROOT, DEMO_ENV, GATEWAY_ID, GATEWAY_ENDPOINT, PROVIDERS, DEFAULT_PROVIDER_ID,
-    probe, gateway_mgmt, api, login, read_secret, deploy, upsert_shared_provider, budget_for,
-    budget_duration, showcase, showcases, azure_safety_missing, bedrock_safety_missing,
+    ROOT, PROVIDERS, DEFAULT_PROVIDER_ID,
+    probe_gateway, controller_api, api, login, deploy, read_secret, provider_key, upsert_shared_provider, budget_for,
+    budget_duration, showcase, showcases,
 )
+from target import DEMO_ENV, setting, WORKSPACE_URL, PROJECT_ID, LLM_GATEWAY, MCP_GATEWAY, Gateway
 
 # =============================================================================
-# 1. Configuration — the only section you should need to touch to retarget
-#    this script (different ports, a renamed app/gateway, a different model
-#    pair).
+# 1. Configuration. Addresses are in target.py, providers in providers.json.
 # =============================================================================
-GATEWAY_DISPLAY_NAME = "ai-gateway"
-# DEMO_PROJECT_ID puts every demo resource in its own project on a shared
-# control plane; created if missing. Unset, the local-dev "default".
-PROJECT_ID = os.environ.get("DEMO_PROJECT_ID") or "default"
+# How this machine's gateway appears in AI Workspace.
+LOCAL_GATEWAY = {"displayName": "ai-gateway", "description": "Local dev gateway (offset ports)",
+                 "functionalityType": "ai", "version": "1.2"}
 
 # Gateway-issued per-lane API keys (api-key-auth), as opposed to the upstream
 # provider credentials (platform_api.py's SECRETS_FILE) — a different secret,
@@ -167,6 +166,7 @@ def lane_templates(provider: dict) -> dict:
     path = provider["messagesSuffix"]
     request_model = provider["requestModel"]
     budget = budget_for(provider)
+    peak_start, peak_end = setting("PEAK_HOURS").split("-")
     return {
         "plain-chat": {
             "context_suffix": "plain", "displayName": "Plain Chat", "wired": True,
@@ -384,7 +384,6 @@ def lane_templates(provider: dict) -> dict:
         # stream; each provider's reply format has its own path to the text.
         "content-safety": {
             "context_suffix": "content-safety", "displayName": "Content Safety", "wired": True,
-            "requires": azure_safety_missing,
             "globalPolicies": [{"name": "azure-content-safety-content-moderation", "version": "v1", "params": {
                 "request": {"jsonPath": provider["contentPath"], "showAssessment": True},
                 "response": {"jsonPath": provider["responseContentPath"], "showAssessment": True},
@@ -394,7 +393,6 @@ def lane_templates(provider: dict) -> dict:
         # region and the credentials all come from the gateway configuration.
         "content-safety-bedrock": {
             "context_suffix": "content-safety-bedrock", "displayName": "Content Safety (AWS Bedrock)", "wired": True,
-            "requires": bedrock_safety_missing,
             "globalPolicies": [{"name": "aws-bedrock-guardrail", "version": "v1", "params": {
                 "request": {"jsonPath": provider["contentPath"], "showAssessment": True},
                 "response": {"enabled": True, "jsonPath": provider["responseContentPath"], "showAssessment": True},
@@ -439,8 +437,8 @@ def lane_templates(provider: dict) -> dict:
             "supportedRequestModelLocations": {"payload", "header", "queryParam", "pathParam"},
             "operationPolicies": [{"name": "time-based-model-routing", "version": "v0", "paths": [{
                 "path": path, "methods": ["POST"], "params": {
-                    "timezone": "Europe/London",
-                    "schedules": [{"from": "18:00", "to": "22:00", "model": {"modelName": small}}],
+                    "timezone": setting("PEAK_TIMEZONE"),
+                    "schedules": [{"from": peak_start, "to": peak_end, "model": {"modelName": small}}],
                     "fallback": {"modelName": large},
                     "requestModel": request_model,
                 }}]}],
@@ -532,11 +530,6 @@ def build_lanes(provider: dict) -> dict:
         if supported is not None and location not in supported:
             continue
         lane_id = provider["lanePrefix"] + base_id
-        # A lane whose outside service is not set up is left out, and says why.
-        missing = tpl["requires"]() if "requires" in tpl else ""
-        if missing:
-            SKIPPED_LANES[lane_id] = missing
-            continue
         config = None
         if tpl["wired"]:
             # Only the key -- ai-chatbot/server.py computes this same lane's
@@ -556,6 +549,11 @@ def build_lanes(provider: dict) -> dict:
             "providerId": provider["id"],
             "context": f"/{provider['id']}-{tpl['context_suffix']}" if tpl["context_suffix"] else f"/{provider['id']}",
             "displayName": tpl["displayName"],
+            "displayPrefix": provider["displayName"],
+            "providerRef": provider["providerId"],
+            "existingProviders": [],
+            "messagesSuffix": provider["messagesSuffix"],
+            "appId": provider["appId"],
             "globalPolicies": tpl.get("globalPolicies", []),
             "operationPolicies": tpl.get("operationPolicies", []),
             "config": config,  # None => gateway-only, not wired into ai-chatbot
@@ -563,7 +561,9 @@ def build_lanes(provider: dict) -> dict:
     return lanes
 
 
-PROVIDER_BY_ID = {p["id"]: p for p in PROVIDERS}
+# A provider without a key in secrets/api-keys.env is skipped, with its lanes.
+KEYED_PROVIDERS = [p for p in PROVIDERS if provider_key(p)]
+PROVIDER_BY_ID = {p["id"]: p for p in KEYED_PROVIDERS}
 
 
 # =============================================================================
@@ -685,17 +685,27 @@ def _header_lane(card_id: str, display_name: str, default: dict, routed: dict,
            for value, (prov, size) in mapping.items()])
 
 
+# What is skipped, and what to set: cards missing a gateway setting, providers
+# without a key.
+LEFT_OUT = {card["id"]: need for card in showcases() if (need := missing_gateway_settings(card))}
+LEFT_OUT.update({p["id"]: f"{p['secretVar']} set in secrets/api-keys.env" for p in PROVIDERS
+                 if p not in KEYED_PROVIDERS})
+# An MCP card is skipped too when the provider that drives it is.
+LEFT_OUT.update({card["id"]: LEFT_OUT[card["mcp"]["provider"]] for card in showcases()
+                 if card.get("mcp") and card["mcp"].get("provider") in LEFT_OUT})
+
 ALL_LANES = {}
-SKIPPED_LANES = {}  # lane id -> what it still needs
-for _p in PROVIDERS:
+for _p in KEYED_PROVIDERS:
     ALL_LANES.update(build_lanes(_p))
 ALL_LANES.update(cross_provider_lanes())
-DEFAULT_LANE_IDS = [lid for lid, l in ALL_LANES.items() if l["config"] is not None]
+ALL_LANES = {lid: lane for lid, lane in ALL_LANES.items() if lane["base_id"] not in LEFT_OUT}
 
 # MCP proxies: one per showcases.json card with an "mcp" block, which holds
 # its context, upstream MCP server and policies. No key is issued: the
 # platform's API keys cover LLM resources only, so these proxies are open.
-MCP_PROXIES = {s["id"]: s for s in showcases() if s.get("mcp")}
+MCP_PROXIES = {card["id"]: card for card in showcases() if card.get("mcp") and card["id"] not in LEFT_OUT}
+
+DEFAULT_IDS = [lid for lid, lane in ALL_LANES.items() if lane["config"]] + list(MCP_PROXIES)
 
 
 # =============================================================================
@@ -713,10 +723,10 @@ def write_gateway_env(values: dict):
     f.write_text(text)
 
 
-def ensure_gateway_registered(gateway_id: str, display_name: str) -> bool:
-    """Creates the gateway in the control plane and registers a fresh
-    controller token if the gateway isn't already known or doesn't already
-    hold one, writing it into ai-gateway/api-platform.env with TLS
+def issue_local_gateway_token() -> bool:
+    """Creates this machine's gateway in the control plane and registers a
+    fresh controller token if the gateway isn't already known or doesn't
+    already hold one, writing it into ai-gateway/api-platform.env with TLS
     skip-verify (our self-signed cert doesn't cover host.docker.internal).
     Returns True if a fresh token was written (the controller needs a
     restart to pick it up).
@@ -728,20 +738,17 @@ def ensure_gateway_registered(gateway_id: str, display_name: str) -> bool:
     still reporting `isActive: false`. Gating a re-mint on it burns through
     GATEWAY_TOKEN_LIMIT_REACHED on every idempotent re-run.
     """
-    status, resp = api("GET", f"/gateways/{gateway_id}")
+    status, resp = api("GET", f"/gateways/{LLM_GATEWAY.id}")
     gw_env = ROOT / "ai-gateway" / "api-platform.env"
     has_token = bool(re.search(r"^APIP_GW_CONTROLLER_CONTROLPLANE_TOKEN=.+$", gw_env.read_text(), re.MULTILINE))
     if status == 200 and has_token:
         return False
 
     if status != 200:
-        api("POST", "/gateways", {
-            "displayName": display_name, "id": gateway_id,
-            "endpoints": [GATEWAY_ENDPOINT], "functionalityType": "ai",
-            "description": "Local dev gateway (offset ports)", "version": "1.2",
-        })
+        api("POST", "/gateways", {"id": LLM_GATEWAY.id, "endpoints": [urlsplit(LLM_GATEWAY.url).netloc],
+                                  **LOCAL_GATEWAY})
 
-    status, resp = api("POST", f"/gateways/{gateway_id}/tokens", {})
+    status, resp = api("POST", f"/gateways/{LLM_GATEWAY.id}/tokens", {})
     if status != 201:
         sys.exit(f"  failed to generate gateway registration token: {status} {resp}")
     token = resp["token"]
@@ -761,41 +768,55 @@ def restart_gateway_controller():
                     "up", "-d", "--force-recreate", "gateway-controller"], check=True)
 
 
-def wait_for_gateway_active(gateway_id: str, timeout_s: int = 300):
+def wait_for_gateway_active(gateway: Gateway, timeout_s: int = 300):
     for _ in range(timeout_s // 2):
         time.sleep(2)
-        status, resp = api("GET", f"/gateways/{gateway_id}")
+        status, resp = api("GET", f"/gateways/{gateway.id}")
         if status == 200 and resp.get("isActive"):
             print("  gateway active")
             return
-    sys.exit(f"  gateway {gateway_id} did not become active within {timeout_s}s — "
+    sys.exit(f"  gateway {gateway.id} did not become active within {timeout_s}s — "
               f"check: docker compose -f ai-gateway/docker-compose.yaml logs gateway-controller")
 
 
-def require_existing_gateway(gateway_id: str):
-    """--existing-gateway's replacement for the whole registration block
-    above: the gateway is someone else's, already registered and wired to
-    its controller, so this only confirms it's there -- no token minted, no
-    container touched, no rename."""
-    status, resp = api("GET", f"/gateways/{gateway_id}")
+def restore_local_gateway_name():
+    status, resp = api("GET", f"/gateways/{LLM_GATEWAY.id}")
+    if status != 200 or resp.get("displayName") == LOCAL_GATEWAY["displayName"]:
+        return
+    api("PUT", f"/gateways/{LLM_GATEWAY.id}",
+        {**{k: resp.get(k) for k in ("endpoints", "functionalityType", "description", "version")},
+         "displayName": LOCAL_GATEWAY["displayName"]})
+
+
+def confirm_gateway_exists(gateway: Gateway):
+    """Checks a gateway exists in AI Workspace, without changing it."""
+    status, resp = api("GET", f"/gateways/{gateway.id}")
     if status != 200:
         _, listing = api("GET", "/gateways")
         known = [f"{g.get('id')} ({g.get('displayName')})" for g in _items(listing)]
-        sys.exit(f"  gateway {gateway_id!r} not found ({status}) -- set GATEWAY_ID to one of: {known}")
+        sys.exit(f"  gateway {gateway.id!r} not found ({status}). Gateways there: {known}")
     state = "active" if resp.get("isActive") else "NOT reporting active (heartbeat flag -- may be stale)"
-    print(f"  using existing gateway {gateway_id!r} ({resp.get('displayName')}), {state}")
+    print(f"  using gateway {gateway.id!r} ({resp.get('displayName')}) at {gateway.url}, {state}")
 
 
-def ensure_gateway_name(gateway_id: str, display_name: str):
-    status, resp = api("GET", f"/gateways/{gateway_id}")
-    if status != 200:
-        return
-    if resp.get("displayName") == display_name:
-        return
-    api("PUT", f"/gateways/{gateway_id}", {
-        "displayName": display_name, "endpoints": resp.get("endpoints"),
-        "functionalityType": resp.get("functionalityType"),
-        "description": resp.get("description"), "version": "1.2"})
+def register_local_gateway():
+    """Registers this machine's gateway, restarting it after a new token."""
+    if issue_local_gateway_token():
+        print("  new token issued — recreating gateway-controller")
+        restart_gateway_controller()
+        wait_for_gateway_active(LLM_GATEWAY)
+    else:
+        print("  already registered and active")
+    restore_local_gateway_name()
+
+
+def prepare_gateways():
+    """Registers this machine's gateway; only checks that any other exists."""
+    for gateway in dict.fromkeys([LLM_GATEWAY, MCP_GATEWAY]):
+        if gateway.local:
+            register_local_gateway()
+        else:
+            confirm_gateway_exists(gateway)
 
 
 # =============================================================================
@@ -867,6 +888,10 @@ def ensure_app_api_key(app_id: str, entity_id: str, kind: str, key_id: str):
 #    Schemas confirmed against
 #    docs/rest-apis/platform-api/{llm-providers,llm-proxies}.md.
 # =============================================================================
+def exists_in_workspace(resource: str, rid: str) -> bool:
+    return api("GET", f"/{resource}/{rid}")[0] == 200
+
+
 def _upsert(resource: str, payload: dict, label: str):
     """PUT over an existing id, POST a new one."""
     status, _ = api("GET", f"/{resource}/{payload['id']}")
@@ -881,18 +906,17 @@ def _upsert(resource: str, payload: dict, label: str):
     print(f"  {label} {verb}")
 
 
-def upsert_proxy(lane: dict, provider_ref: str, display_prefix: str):
-    """provider_ref is the proxy's own LlmProvider id; a cross-provider lane
-    also carries additionalProviders (selectable upstreams, each optionally
-    with a transformer) that its routing policy switches between."""
+def upsert_proxy(lane: dict):
+    """Creates or updates a lane's proxy. A lane that spans two providers also
+    lists the other one, which its routing policy switches to."""
     payload = {
         "id": lane["id"],
-        "displayName": f"{display_prefix} - {lane['displayName']}",
+        "displayName": f"{lane['displayPrefix']} - {lane['displayName']}",
         "description": f"{lane['displayName']} lane",
         "version": "v1",
         "projectId": PROJECT_ID,
         "context": lane["context"],
-        "provider": {"id": provider_ref},
+        "provider": {"id": lane["providerRef"]},
         "globalPolicies": lane.get("globalPolicies", []),
         "operationPolicies": lane.get("operationPolicies", []),
         "policies": [],
@@ -949,10 +973,10 @@ def issue_key(lane_id: str) -> tuple[str, str]:
     return key_id, key_value
 
 
-def wait_for_key_live(lane_id: str, key_id: str, context: str, messages_suffix: str, key: str,
-                      timeout_s: int = 180) -> str:
+def wait_for_key_live(gateway: Gateway, lane_id: str, key_id: str, context: str, messages_suffix: str,
+                      key: str, timeout_s: int = 180) -> str:
     """A freshly issued key travels to the runtime over its own APIKeyState
-    xDS channel, separate from the PolicyChainConfig one route_is_live()
+    xDS channel, separate from the PolicyChainConfig one gateway_has_route()
     checks — the two can and do desync (observed: policy chain resynced
     fine after a controller reconnect while API key state lagged behind,
     leaving a just-issued key rejected for a while). Confirms this specific
@@ -968,7 +992,7 @@ def wait_for_key_live(lane_id: str, key_id: str, context: str, messages_suffix: 
     otherwise why it never got there."""
     verdict = "transient"
     for _ in range(timeout_s // 2):
-        status, resp = gateway_mgmt("GET", f"/llm-proxies/{lane_id}/api-keys")
+        status, resp = controller_api(gateway, "GET", f"/llm-proxies/{lane_id}/api-keys")
         if status == 200:
             held = any(k.get("name") == key_id and k.get("status") == "active"
                        for k in resp.get("apiKeys") or [])
@@ -976,7 +1000,7 @@ def wait_for_key_live(lane_id: str, key_id: str, context: str, messages_suffix: 
         elif status == 404:
             verdict = "no-route"
         else:
-            verdict = probe(context, messages_suffix, key)
+            verdict = probe_gateway(gateway, context, messages_suffix, key)
         if verdict == "live":
             return verdict
         time.sleep(2)
@@ -993,20 +1017,36 @@ KEY_NOT_LIVE = {
 }
 
 
-def provision_lane(lane: dict, provider_ref: str, display_prefix: str,
-                   messages_suffix: str, app_id: str, state: dict):
+def write_app(provider: dict, state: dict):
+    ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"])
+
+
+def write_provider(provider: dict, state: dict):
+    upsert_shared_provider(provider, state["secrets"][provider["providerId"]])
+    deploy(LLM_GATEWAY, "llm-providers", provider["providerId"], provider["providerContext"],
+           provider["messagesSuffix"])
+    ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
+
+
+def write_lane(lane: dict, state: dict):
     """Everything one LlmProxy needs, the same for a per-provider lane and a
     cross-provider one: upsert, deploy, group under the app, mint its key,
     write the key for ai-chatbot, and confirm the gateway accepts it.
     state["keys_changed"] flips the moment a key is minted, since that
     revokes the previous one (see main()'s finally)."""
-    lane_id = lane["id"]
-    upsert_proxy(lane, provider_ref, display_prefix)
-    deploy(lane_id, lane["context"], messages_suffix)
-    ensure_association(app_id, lane_id, "LlmProxy")
+    lane_id, gateway = lane["id"], LLM_GATEWAY
+    # A lane that spans two providers needs both to exist already.
+    for ref in lane["existingProviders"]:
+        status, _ = api("GET", f"/llm-providers/{ref}")
+        if status != 200:
+            sys.exit(f"  LlmProvider {ref!r} not found ({status}) -- this lane routes through it "
+                     f"and never creates it; run --check {lane_id} for details")
+    upsert_proxy(lane)
+    deploy(gateway, "llm-proxies", lane_id, lane["context"], lane["messagesSuffix"])
+    ensure_association(lane["appId"], lane_id, "LlmProxy")
     key_id, key = issue_key(lane_id)
     state["keys_changed"] = True
-    ensure_app_api_key(app_id, lane_id, "LlmProxy", key_id)
+    ensure_app_api_key(lane["appId"], lane_id, "LlmProxy", key_id)
 
     # Written before the liveness wait, not after: the old key is already
     # revoked, so the new one is the only one that can ever work -- a
@@ -1020,10 +1060,15 @@ def provision_lane(lane: dict, provider_ref: str, display_prefix: str,
     else:
         print(f"  api key: {key}  (no showcases.json entry — not wired into ai-chatbot)")
 
-    verdict = wait_for_key_live(lane_id, key_id, lane["context"], messages_suffix, key)
+    verdict = wait_for_key_live(gateway, lane_id, key_id, lane["context"], lane["messagesSuffix"], key)
     if verdict != "live":
-        sys.exit("  " + KEY_NOT_LIVE[verdict].format(context=lane["context"], endpoint=GATEWAY_ENDPOINT))
+        sys.exit("  " + KEY_NOT_LIVE[verdict].format(context=lane["context"], endpoint=gateway.url))
     print("  key confirmed live on the gateway")
+
+
+def write_mcp_proxy(card: dict, state: dict):
+    upsert_mcp_proxy(card)
+    deploy(MCP_GATEWAY, "mcp-proxies", card["id"], card["mcp"]["context"], "/mcp")
 
 
 # =============================================================================
@@ -1139,14 +1184,12 @@ def _existing(resource: str, project_ids: list) -> dict:
     return found
 
 
-def check(providers: list, requested: list, mcp_requested: list) -> bool:
-    print("### pre-flight check (read-only)")
-    require_existing_gateway(GATEWAY_ID)
-
-    planned = [("llm-providers", p["providerId"], p["providerContext"]) for p in providers]
-    planned += [("llm-proxies", lid, ALL_LANES[lid]["context"]) for lid in requested]
-    planned += [("applications", p["appId"], None) for p in providers]
-    planned += [("mcp-proxies", sid, MCP_PROXIES[sid]["mcp"]["context"]) for sid in mcp_requested]
+def check(work: list, skip_existing: bool) -> bool:
+    print(f"### pre-flight check (read-only) of {WORKSPACE_URL}")
+    for gateway in dict.fromkeys([LLM_GATEWAY, MCP_GATEWAY]):
+        confirm_gateway_exists(gateway)
+    for card_id, need in LEFT_OUT.items():
+        print(f"  left out   {card_id:<47} needs {need}")
 
     status, resp = api("GET", "/projects")
     if status != 200:
@@ -1156,8 +1199,7 @@ def check(providers: list, requested: list, mcp_requested: list) -> bool:
     print(f"  demo resources go into project {PROJECT_ID!r} "
           f"({'exists, reused' if PROJECT_ID in projects else 'will be created'})")
 
-    existing = {r: _existing(r, list(projects))
-                for r in ("llm-providers", "llm-proxies", "mcp-proxies", "applications")}
+    existing = {r: _existing(r, list(projects)) for r in WRITERS}
     context_owner = {}
     for r in ("llm-providers", "llm-proxies", "mcp-proxies"):
         for rid, item in existing[r].items():
@@ -1165,11 +1207,15 @@ def check(providers: list, requested: list, mcp_requested: list) -> bool:
                 context_owner[item["context"]] = (r, rid)
 
     problems = 0
-    for resource, rid, context in planned:
+    for resource, rid, context, _ in work:
         current = existing[resource].get(rid)
         if current:
-            print(f"  OVERWRITE  {resource:<14} {rid:<32} (exists: {current.get('displayName')!r}"
-                  f"{', project ' + repr(current['_project']) if current.get('_project') else ''})")
+            where = (f"(exists: {current.get('displayName')!r}"
+                     f"{', project ' + repr(current['_project']) if current.get('_project') else ''})")
+            if skip_existing:
+                print(f"  keep       {resource:<14} {rid:<32} {where}")
+                continue
+            print(f"  OVERWRITE  {resource:<14} {rid:<32} {where}")
             problems += 1
         else:
             print(f"  create     {resource:<14} {rid:<32} {context or ''}")
@@ -1183,15 +1229,13 @@ def check(providers: list, requested: list, mcp_requested: list) -> bool:
     # Cross-provider lanes route through LlmProviders this script must NOT
     # write (their existingProviders). Report what traffic will meet
     # there: any policy on such a provider runs on this lane's requests too.
-    referenced = []
-    for lid in requested:
-        for pid in ALL_LANES[lid].get("existingProviders", []):
-            if pid not in referenced and pid not in {p["providerId"] for p in providers}:
-                referenced.append(pid)
+    written = {w.id for w in work if w.resource == "llm-providers"}
+    referenced = dict.fromkeys(pid for w in work if w.resource == "llm-proxies"
+                               for pid in w.item["existingProviders"] if pid not in written)
     for pid in referenced:
         problems += report_existing_provider(pid)
 
-    print(f"\n{len(planned)} resources planned, {problems} overwrite/collision(s)/blocker(s)")
+    print(f"\n{len(work)} resources planned, {problems} overwrite/collision(s)/blocker(s)")
     return problems == 0
 
 
@@ -1218,109 +1262,88 @@ def report_existing_provider(pid: str) -> int:
     if policies:
         print("    REVIEW     these policies will also run on every request routed through this provider")
     status, deps = api("GET", f"/llm-providers/{pid}/deployments")
-    on_gw = [d for d in _items(deps) if d.get("gatewayId") == GATEWAY_ID] if status == 200 else []
+    on_gw = [d for d in _items(deps) if d.get("gatewayId") == LLM_GATEWAY.id] if status == 200 else []
     if status == 200 and not on_gw:
-        print(f"    BLOCKER    not deployed on gateway {GATEWAY_ID!r}")
+        print(f"    BLOCKER    not deployed on gateway {LLM_GATEWAY.id!r}")
         blockers += 1
     else:
-        print(f"    deployments on {GATEWAY_ID!r}: "
+        print(f"    deployments on {LLM_GATEWAY.id!r}: "
               f"{[d.get('status') for d in on_gw] if status == 200 else f'(could not list: {status})'}")
     return blockers
 
 
 # =============================================================================
-# 8. main
+# 8. The plan and main
 # =============================================================================
+Write = namedtuple("Write", "resource id context item")
+
+# The function that writes each kind of resource.
+WRITERS = {"applications": write_app, "llm-providers": write_provider,
+           "llm-proxies": write_lane, "mcp-proxies": write_mcp_proxy}
+
+
+def plan(requested: list) -> list:
+    """What a run writes, in order: applications, providers, lanes, then MCP
+    proxies. Only the providers the requested lanes need."""
+    lanes = [ALL_LANES[r] for r in requested if r in ALL_LANES]
+    cards = [MCP_PROXIES[r] for r in requested if r in MCP_PROXIES]
+    providers = [p for p in PROVIDERS if p["id"] in {lane["providerId"] for lane in lanes}]
+    return ([Write("applications", p["appId"], None, p) for p in providers]
+            + [Write("llm-providers", p["providerId"], p["providerContext"], p) for p in providers]
+            + [Write("llm-proxies", lane["id"], lane["context"], lane) for lane in lanes]
+            + [Write("mcp-proxies", card["id"], card["mcp"]["context"], card) for card in cards])
+
+
+def without_existing(work: list) -> list:
+    """For --skip-existing: drops from the plan what already exists."""
+    kept = [w for w in work if exists_in_workspace(w.resource, w.id)]
+    for w in kept:
+        print(f"### {w.resource} {w.id} exists, kept as is")
+    return [w for w in work if w not in kept]
+
+
 def main():
     args = sys.argv[1:]
     flags = {a for a in args if a.startswith("--")}
-    unknown_flags = flags - {"--existing-gateway", "--check"}
+    known_flags = {"--check", "--skip-existing"}
+    unknown_flags = flags - known_flags
     if unknown_flags:
-        sys.exit(f"unknown flag(s): {sorted(unknown_flags)}. Known: --existing-gateway, --check")
-    existing_gateway = "--existing-gateway" in flags or "--check" in flags
+        sys.exit(f"unknown flag(s): {sorted(unknown_flags)}. Known: {', '.join(sorted(known_flags))}")
+    skip_existing = "--skip-existing" in flags
 
-    requested = [a for a in args if not a.startswith("--")] or DEFAULT_LANE_IDS + list(MCP_PROXIES)
+    requested = [a for a in args if not a.startswith("--")] or DEFAULT_IDS
     unknown = [r for r in requested if r not in ALL_LANES and r not in MCP_PROXIES]
     if unknown:
-        sys.exit("\n".join(f"{r} needs {SKIPPED_LANES[r]}" if r in SKIPPED_LANES else f"unknown lane: {r}"
-                           for r in unknown) + f"\nKnown: {list(ALL_LANES) + list(MCP_PROXIES)}")
-    mcp_requested = [r for r in requested if r in MCP_PROXIES]
-    requested = [r for r in requested if r in ALL_LANES]
-
-    # Only the providers actually needed by what was requested — running
-    # `./provision_showcases.py spend-limit` shouldn't require every other
-    # provider's key to be set in secrets/api-keys.env. Cross-provider lanes
-    # (providerId None) only reference providers, so they need no key.
-    needed_provider_ids = {ALL_LANES[lid]["providerId"] for lid in requested} - {None}
-    providers = [p for p in PROVIDERS if p["id"] in needed_provider_ids]
-
-    if "--check" in flags:
-        login()
-        sys.exit(0 if check(providers, requested, mcp_requested) else 1)
-
-    # Every key read up front: a missing one must stop the run before any
-    # lane's key is rotated.
-    secrets = {p["providerId"]: read_secret(p) for p in providers}
+        sys.exit(f"unknown or left out: {unknown}\nKnown: {list(ALL_LANES) + list(MCP_PROXIES)}"
+                 + "".join(f"\nLeft out: {card_id} needs {need}" for card_id, need in LEFT_OUT.items()))
+    work = plan(requested)
 
     login()
+    if "--check" in flags:
+        sys.exit(0 if check(work, skip_existing) else 1)
+    if not KEYED_PROVIDERS:
+        sys.exit("no provider key in secrets/api-keys.env: paste at least one (see the README)")
 
-    print("### gateway registration")
-    if existing_gateway:
-        require_existing_gateway(GATEWAY_ID)
-    else:
-        if ensure_gateway_registered(GATEWAY_ID, GATEWAY_DISPLAY_NAME):
-            print("  new token issued — recreating gateway-controller")
-            restart_gateway_controller()
-            wait_for_gateway_active(GATEWAY_ID)
-        else:
-            print("  already registered and active")
-        ensure_gateway_name(GATEWAY_ID, GATEWAY_DISPLAY_NAME)
+    if skip_existing:
+        work = without_existing(work)
+    # Read every key first, so a missing one stops the run before any change.
+    secrets = {w.id: read_secret(w.item) for w in work if w.resource == "llm-providers"}
+
+    print(f"### gateways ({WORKSPACE_URL})")
+    prepare_gateways()
+    for card_id, need in LEFT_OUT.items():
+        print(f"  left out: {card_id} needs {need}")
 
     # issue_key() revokes a lane's previous key the moment it mints the new
     # one, so from then on the key ai-chatbot loaded at startup is dead. The
     # restart therefore has to happen however this run ends -- a run that
     # aborts on lane N used to skip it and leave lanes 1..N-1 answering 401
     # with keys that had just been revoked.
-    state = {"keys_changed": False}
+    state = {"keys_changed": False, "secrets": secrets}
     try:
-        for provider in providers:
-            pid = provider["id"]
-            print(f"### {provider['displayName']} application + provider")
-            ensure_app(provider["appId"], provider["appDisplayName"], provider["appDescription"])
-
-            upsert_shared_provider(provider, secrets[provider["providerId"]])
-            deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"],
-                   resource="llm-providers")
-            ensure_association(provider["appId"], provider["providerId"], "LlmProvider")
-
-            for lane_id in requested:
-                lane = ALL_LANES[lane_id]
-                if lane["providerId"] != pid:
-                    continue
-                print(f"### {lane_id} ({lane['context']})")
-                provision_lane(lane, provider["providerId"], provider["displayName"],
-                               provider["messagesSuffix"], provider["appId"], state)
-
-        # Cross-provider lanes: the providers they route through are only
-        # referenced, and must already exist.
-        for lane_id in requested:
-            lane = ALL_LANES[lane_id]
-            if lane["providerId"] is not None:
-                continue
-            print(f"### {lane_id} ({lane['context']}, cross-provider)")
-            for ref in lane["existingProviders"]:
-                status, _ = api("GET", f"/llm-providers/{ref}")
-                if status != 200:
-                    sys.exit(f"  LlmProvider {ref!r} not found ({status}) -- this lane routes through it "
-                             f"and never creates it; run --check {lane_id} for details")
-            provision_lane(lane, lane["providerRef"], lane["displayPrefix"],
-                           lane["messagesSuffix"], lane["appId"], state)
-
-        for sid in mcp_requested:
-            card = MCP_PROXIES[sid]
-            print(f"### {sid} ({card['mcp']['context']}, MCP proxy)")
-            upsert_mcp_proxy(card)
-            deploy(sid, card["mcp"]["context"], "/mcp", resource="mcp-proxies")
+        for w in work:
+            print(f"### {w.resource} {w.id} {w.context or ''}")
+            WRITERS[w.resource](w.item, state)
     finally:
         if state["keys_changed"]:
             if sys.exc_info()[0] is not None:
@@ -1328,12 +1351,7 @@ def main():
                       "the keys issued so far")
             restart_ai_chatbot()
 
-    app_ids = sorted({p["appId"] for p in providers} |
-                     {ALL_LANES[lid]["appId"] for lid in requested if ALL_LANES[lid]["providerId"] is None})
-    apps = ", ".join(f"'{a}'" for a in app_ids)
-    print("\ndone."
-          + (f" Lanes grouped under GenAI Application(s) {apps}." if apps else "")
-          + (" ai-chatbot restarted with the new keys." if state["keys_changed"] else ""))
+    print("\ndone." + (" ai-chatbot restarted with the new keys." if state["keys_changed"] else ""))
 
 
 if __name__ == "__main__":

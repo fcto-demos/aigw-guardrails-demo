@@ -16,6 +16,7 @@ Usage (see scripts/failover_demo.sh for the usual entrypoint):
 import sys
 
 from platform_api import PROVIDERS, read_secret, login, upsert_shared_provider, deploy, request
+from target import LLM_GATEWAY
 
 # Ports must agree with scripts/python/mocks/llm_fault_proxy.py's own DEFAULT_PORTS.
 FAULT_PROXY_PORTS = {"anthropic": 8602, "mistral": 8603, "gemini": 8604}
@@ -61,7 +62,7 @@ def inject(provider_id: str):
     mock = dict(provider, upstreamUrl=f"http://host.docker.internal:{port}")
     login()
     upsert_shared_provider(mock, secret)
-    deploy(mock["providerId"], mock["providerContext"], mock["messagesSuffix"], resource="llm-providers")
+    deploy(LLM_GATEWAY, "llm-providers", mock["providerId"], mock["providerContext"], mock["messagesSuffix"])
     print(f"  {provider['displayName']} upstream now {mock['upstreamUrl']}")
 
 
@@ -83,7 +84,8 @@ def restore(provider_id: str):
     secret = read_secret(provider)
     login()
     upsert_shared_provider(provider, secret)
-    deploy(provider["providerId"], provider["providerContext"], provider["messagesSuffix"], resource="llm-providers")
+    deploy(LLM_GATEWAY, "llm-providers", provider["providerId"], provider["providerContext"],
+           provider["messagesSuffix"])
     print(f"  {provider['displayName']} upstream restored to {provider['upstreamUrl']}")
 
 
