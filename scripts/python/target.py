@@ -38,9 +38,36 @@ def _read_demo_env() -> dict:
 DEMO_ENV = _read_demo_env()
 
 
+def _raw(name: str) -> str:
+    return os.environ.get(name) or DEMO_ENV.get(name) or ""
+
+
+# The names the REMOTE_ settings had before, still read so a demo.env written
+# with them keeps working. Only when it uses AIW_URL, their switch to an
+# existing deployment, so this machine's stack never picks them up.
+_LEGACY_NAMES = {
+    "REMOTE_AI_WORKSPACE_URL": ("AIW_URL",),
+    "REMOTE_PROJECT_ID": ("DEMO_PROJECT_ID",),
+    "REMOTE_ADMIN_USERNAME": ("ADMIN_USERNAME",),
+    "REMOTE_ADMIN_PASSWORD": ("ADMIN_PASSWORD",),
+    "REMOTE_GATEWAY_ID": ("GATEWAY_ID",),
+    "REMOTE_GATEWAY_URL": ("GATEWAY_BASE", "GATEWAY_ENDPOINT"),
+    "REMOTE_MCP_GATEWAY_ID": ("MCP_GATEWAY_ID",),
+    "REMOTE_MCP_GATEWAY_URL": ("MCP_GATEWAY_BASE", "MCP_GATEWAY_ENDPOINT"),
+}
+_LEGACY = not _raw("REMOTE_AI_WORKSPACE_URL") and bool(_raw("AIW_URL"))
+
+
 def setting(name: str, default: str = "") -> str:
     """A setting from the environment, else demo.env, else the default."""
-    return os.environ.get(name) or DEMO_ENV.get(name) or default
+    value = _raw(name)
+    for old in (_LEGACY_NAMES.get(name, ()) if _LEGACY and not value else ()):
+        value = _raw(old)
+        if value:
+            # *_ENDPOINT held a bare host:port, *_BASE a URL.
+            value = "https://" + value if old.endswith("_ENDPOINT") else value
+            break
+    return value or default
 
 
 def gateway_ports() -> dict:
@@ -76,7 +103,9 @@ if REMOTE:
     WORKSPACE_URL = setting("REMOTE_AI_WORKSPACE_URL").rstrip("/")
     PROJECT_ID = setting("REMOTE_PROJECT_ID", "default")
     ADMIN_USERNAME = setting("REMOTE_ADMIN_USERNAME", "admin")
-    ADMIN_PASSWORD = os.environ.get("REMOTE_ADMIN_PASSWORD", "")  # never in demo.env
+    # Never in demo.env: the environment only (ADMIN_PASSWORD with the old names).
+    ADMIN_PASSWORD = os.environ.get("REMOTE_ADMIN_PASSWORD") or \
+        (os.environ.get("ADMIN_PASSWORD", "") if _LEGACY else "")
     LLM_GATEWAY = _remote_llm
 else:
     _ports = gateway_ports()
