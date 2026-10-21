@@ -14,6 +14,7 @@
 import { escapeHtml } from './markdown.js';
 import {
   wordmark, brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
+  cardWarning, cardWarningTitle, cardWarningBody, cardAbout, cardAboutHow, cardAboutSetup,
   intro, introHead, introBody, introRefs, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
   showSpendMeter, signinBox, signinWho, signinLink, selectorBox, selectorLabel, selectorSelect,
@@ -204,7 +205,11 @@ function cardHtml(showcase, group) {
   const ref = (showcase.refs || {})[group];
 
   return '<a class="card" href="#/' + encodeURIComponent(showcase.id) + '">'
-    + badge(showcase)
+    + '<div class="card-tags">' + badge(showcase)
+    /* A policy that calls an outside service names that service. */
+    + (showcase.vendor ? '<span class="vendor" title="Third-party policy: calls ' + escapeHtml(showcase.vendor)
+        + '">' + escapeHtml(showcase.vendor) + '</span>' : '')
+    + '</div>'
     + '<h3>' + (ref ? '<span class="ref-code">' + escapeHtml(ref.code) + '</span> ' : '')
     + escapeHtml(showcase.title || showcase.id) + '</h3>'
     + '<p>' + escapeHtml(showcase.tagline || '') + '</p>'
@@ -230,9 +235,11 @@ const GROUPS = {
   'Safety': ['shield', 'What reaches the model, and what comes back, is checked at the gateway.'],
   'Identity': ['user', 'Who is calling, and what they may do: tokens from your identity provider, checked at the gateway.'],
   'Tool governance': ['wrench', 'Which tools the agent sees, what it may pass them, and how often it may call them.'],
+  'Third-party policies': ['plug', 'Policies that call an outside service, attached at the gateway like any other: TypeSafe AI\'s Jev, Azure Content Safety and AWS Bedrock Guardrails. Each one needs its key in secrets/content-safety.env.'],
   'OWASP Top 10 for LLMs (2026)': ['alert', 'The risks of the OWASP Top 10 for LLM applications, 2026 edition, as they would hit {brand}, each one stopped at the gateway.'],
   'OWASP Top 10 for Agentic Applications': ['alert', 'The risks of the OWASP Top 10 for agentic applications (2026), as they would hit {brand}\'s agent, each one stopped at the gateway.'],
   'Compliance (EU AI Act)': ['scale', 'What the EU AI Act asks of {brand}\'s assistant: say it is an AI (Art. 50); personal data falls under the GDPR. Record-keeping (Art. 12) and robustness (Art. 15) bind high-risk systems only, which a customer assistant is not: they show here as good practice.'],
+  /* Always last. */
   'Baseline': ['chat', 'The starting point, with no policy under test, to compare against.'],
 };
 const ICONS = {
@@ -244,6 +251,7 @@ const ICONS = {
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
   scale: '<path d="M12 3v18M7 21h10M4 7h16M4 7l-2.5 6a2.5 2.5 0 0 0 5 0zM20 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/>',
+  plug: '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>',
 };
 
 function groupHeadHtml(name, count) {
@@ -347,8 +355,11 @@ function mountShowcase(showcase) {
   setPage(pageOf(showcase));
   closeRail();
 
-  brandProduct.textContent = showcase.title || 'AI Assistant';
-  document.title = (showcase.title || 'AI Assistant') + ' · AI Gateway showcase';
+  /* The tile shows the outside service as a label; here it follows the name,
+   * so the two Content safety cards stay apart. */
+  const name = (showcase.title || 'AI Assistant') + (showcase.vendor ? ' (' + showcase.vendor + ')' : '');
+  brandProduct.textContent = name;
+  document.title = name + ' - AI Gateway showcase';
 
   /* The status line names the provider, so the reminder that these cards are
    * different providers, not different prompts, is always on screen. */
@@ -378,6 +389,18 @@ function mountShowcase(showcase) {
     ? 'Not wired on this environment'
     : 'Not available on this gateway yet';
   noticeBody.innerHTML = notice;
+
+  /* What the presenter must know before running the card, such as the
+   * provider to pick, and why. */
+  const warning = showcase.warning;
+  cardWarning.hidden = !warning;
+  cardWarningTitle.textContent = warning ? warning.title : '';
+  cardWarningBody.textContent = warning ? warning.text : '';
+  /* How the card's policy works, and how it is set up on this card. */
+  const about = showcase.about;
+  cardAbout.hidden = !about;
+  cardAboutHow.textContent = about ? about.how : '';
+  cardAboutSetup.textContent = about ? about.setup : '';
 
   const introData = showcase.intro || {};
   introHead.textContent = INTRO_HEADING;
@@ -418,7 +441,7 @@ async function refreshSignin(showcase) {
   catch (e) { /* shown as signed out */ }
   signinBox.classList.toggle('is-signed-in', Boolean(session.signedIn));
   signinWho.textContent = session.signedIn
-    ? 'Signed in as ' + session.user + (session.scopes.length ? ' · ' + session.scopes.join(', ') : '')
+    ? 'Signed in as ' + session.user + (session.scopes.length ? ' (' + session.scopes.join(', ') + ')' : '')
     : 'Signed out';
   signinLink.textContent = session.signedIn ? 'Sign out' : 'Sign in';
   signinLink.href = (session.signedIn ? '/oauth/logout?card=' : '/oauth/login?card=') + card;

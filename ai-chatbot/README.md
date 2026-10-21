@@ -281,7 +281,7 @@ measure:
   served. The latency is reported in the metrics strip instead
 
 Anything else — "the answer should mention Spain as Zone A" — is presenter prose
-in a collapsed disclosure, and the step reads a neutral *ran · served by …*. A
+in a collapsed disclosure, and the step reads a neutral *ran, served by …*. A
 step may also declare **no expectation at all**, and reads the same way: the
 cost-routing card is built like that on purpose, because which of its four sends
 crosses the budget depends on what that lane already spent this hour, and a step
@@ -361,7 +361,7 @@ the spend limit on the budget moving.
 
 Two chips are specific to cost-based routing, where the gateway reports no cost
 at all: *~$0.0090 this call*, computed from the tokens and the gateway's own
-price file, and *stepped down · the claude-opus-4-6 budget is spent* on the turn
+price file, and *stepped down: the claude-opus-4-6 budget is spent* on the turn
 the fallback first answers. The `~` is not decoration — see
 [Cost-based routing keeps its own meter](#cost-based-routing-keeps-its-own-meter-and-it-is-an-estimate).
 
@@ -373,7 +373,7 @@ both paths.
 
 A blocked turn has no bubble to hang metrics on — both are removed — so the
 strip appears in the error panel instead. On the guardrail card that panel is
-the entire payload: *blocked before the model · 0 tokens*. It never shows a
+the entire payload: *blocked before the model, 0 tokens*. It never shows a
 cost, even if the gateway sends an `x-llm-cost` header on the 400: putting a
 price on a call that never happened would undercut the one beat whose whole
 claim is that no call happened.
@@ -456,8 +456,8 @@ Two rules keep the meter honest, and the UI holds both:
 2. **The step-down is measured, not estimated.** The router serves the deep
    model whenever that budget has capacity, so a reply from the fallback means
    the capacity is gone whatever the arithmetic says. The observation wins: the
-   bar pins to empty and reads *budget spent · serving haiku-4-5*, and that turn
-   — only that turn — gets a *stepped down · the claude-opus-4-6 budget is
+   bar pins to empty and reads *budget spent, serving haiku-4-5*, and that turn
+   — only that turn — gets a *stepped down: the claude-opus-4-6 budget is
    spent* chip. That is also the
    honest answer on the first call of a session, when an earlier run already
    spent the window and a purely arithmetic meter would be at its most
@@ -700,15 +700,15 @@ is not.
 | Backward compatibility | A body of `{messages}` with no `showcase` still relays 8 SSE events on the default provider — today's client shape works unchanged |
 | Credential stripping | The mock's `x-api-key` and `x-session-token` were dropped; `x-llm-cost`, `x-request-id` and `x-envoy-upstream-service-time` came through |
 | Header XSS | A header value of `<script>alert(1)</script>` renders as text — no live `<script>` element in the DOM |
-| Guardrail block | Re-verified 2026-09-07 against the **live** `/anthropic-guardrail` provider: HTTP 422 classified as `policy_block`, **no reply bubble at all**, navy refusal strip, *blocked before the model · 686 ms · 0 in / 0 out tokens*, no cost chip, the real `GUARDRAIL_INTERVENED` body shown verbatim, question handed back |
+| Guardrail block | Re-verified 2026-09-07 against the **live** `/anthropic-guardrail` provider: HTTP 422 classified as `policy_block`, **no reply bubble at all**, navy refusal strip, *blocked before the model, 686 ms, 0 in / 0 out tokens*, no cost chip, the real `GUARDRAIL_INTERVENED` body shown verbatim, question handed back |
 | Copy prompt | Every step button copies its exact prompt; a real click reports *Copied*. The clipboard **round trip could not be verified through the test automation** (synthetic ⌘V does not paste), so confirm it by hand once |
-| Step attribution | A prompt pasted into the composer is matched back to its step and graded — verified on the guardrail card (*passed*) and the spend-limit card (*ran · served by …*) |
+| Step attribution | A prompt pasted into the composer is matched back to its step and graded — verified on the guardrail card (*passed*) and the spend-limit card (*ran, served by …*) |
 | Uniform greeting | Every showcase shows *Hi, how can I help?* and the same body copy |
 | Budget refusal | HTTP 422 / `budget_exhausted`; *Cost budget exhausted*, bar red, question handed back |
 | Per-turn metrics | Real values off the mock: 134 ms to first token, 386 ms total, 1204 in / 318 out tokens |
 | `differsFrom` | Two identical answers correctly failed the step: *"the similarity threshold is too loose; raise it and redeploy"* |
 | `fasterThan` | A non-faster reply correctly failed: *"only 1.2× faster than step 1 — that is not a cache hit"*. The predicate still works; the caching card no longer declares it |
-| Uncheckable steps | Read a neutral *ran · served by …*; an unexpected refusal on such a step still reports the refusal and fails |
+| Uncheckable steps | Read a neutral *ran, served by …*; an unexpected refusal on such a step still reports the refusal and fails |
 | Budget lifecycle | *Clear chat* keeps the bar; switching showcase resets it, the route readout and the transcript |
 | Thinking blocks | Still never reach the bubble after the module split |
 | Deep links | `#/<id>` mounts the showcase directly; the back button returns; home cards are anchors |

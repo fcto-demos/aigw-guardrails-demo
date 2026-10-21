@@ -271,7 +271,7 @@ export function evaluateExpect(expect, turn) {
     }
     return { ok: true, text: turn.afterModel
       ? 'the answer was blocked at the gateway before the customer saw it'
-      : 'blocked at the gateway · 0 tokens · the model was never called' };
+      : 'blocked at the gateway: 0 tokens, the model was never called' };
   }
 
   if (expect.gatewayStatus) {
@@ -333,7 +333,7 @@ export function evaluateExpect(expect, turn) {
     const hit = state === 'hit';
     if (hit === Boolean(expect.cache)) {
       return { ok: true, text: hit
-        ? 'served from cache · the model was never called'
+        ? 'served from cache: the model was never called'
         : 'cache miss, as expected: the model answered and filled the cache' };
     }
     return hit
@@ -350,7 +350,7 @@ export function evaluateExpect(expect, turn) {
 }
 
 function ran(turn) {
-  return { ok: null, text: turn.model ? 'ran · served by ' + turn.model : 'ran' };
+  return { ok: null, text: turn.model ? 'ran, served by ' + turn.model : 'ran' };
 }
 
 function turnOf(stepN, sendIndex) {

@@ -15,10 +15,14 @@ import tomllib
 
 from target import ROOT, read_env_file
 
-# What the content safety policies need.
+# What the policies calling an outside service need.
 SETTINGS_READ_BY_POLICY = {
     "azure-content-safety-content-moderation": ["AZURE_CONTENT_SAFETY_ENDPOINT", "AZURE_CONTENT_SAFETY_KEY"],
     "aws-bedrock-guardrail": ["AWS_BEDROCK_REGION", "AWS_BEDROCK_GUARDRAIL_ID", "AWS_BEDROCK_GUARDRAIL_VERSION"],
+    "typesafe-jev-content-safety": ["TYPESAFE_API_KEY"],
+    "typesafe-jev-mcp-tool-intent-verification": ["TYPESAFE_API_KEY"],
+    "typesafe-jev-mcp-tool-result-screening": ["TYPESAFE_API_KEY"],
+    "typesafe-jev-model-routing": ["TYPESAFE_API_KEY"],
 }
 
 # The files the gateway reads its settings from (ai-gateway/docker-compose.yaml).
