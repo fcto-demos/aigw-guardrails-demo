@@ -239,6 +239,7 @@ run on default ports. It holds:
   application id in `secrets/api-keys.env`, found in Moesif under Settings,
   API Keys) or `local` (Jaeger, OpenSearch, Prometheus and Grafana on your
   machine).
+- `DISABLED_CARDS`: card ids, comma-separated, shown greyed out and not clickable, for a card whose outside service is down during a live demo. Takes effect on the next page load, with no restart.
 
 When `demo.env.example` gains a setting, the scripts tell you which ones your
 `demo.env` lacks.

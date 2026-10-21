@@ -430,12 +430,15 @@ def load_showcases():
         return _REGISTRY
 
     good, seen, problems = [], set(), []
+    disabled = _disabled_cards()
     for entry in raw:
         reason = _validate_entry(entry, seen)
         if reason:
             problems.append(reason)
             continue
         seen.add(entry["id"])
+        if entry["id"] in disabled:
+            entry = dict(entry, status="disabled", blockedBy=[DISABLED_REASON])
         good.append(entry)
 
     if not good:
@@ -446,6 +449,22 @@ def load_showcases():
 
     _install_registry(good, "; ".join(problems) or None)
     return _REGISTRY
+
+
+# Cards listed in DISABLED_CARDS (demo.env) stay on the home screen, greyed
+# out and not clickable, with this reason -- for a card whose outside service
+# is down during a live demo.
+DISABLED_REASON = "Not available in this demo"
+
+
+def _disabled_cards():
+    """Card ids in DISABLED_CARDS, from the environment, else demo.env. Read
+    per request, like showcases.json, so a card goes off or on again with no
+    restart."""
+    path = ROOT / "demo.env"
+    value = os.environ.get("DISABLED_CARDS") or \
+        (read_env_file(path).get("DISABLED_CARDS", "") if path.exists() else "")
+    return {card.strip() for card in value.split(",") if card.strip()}
 
 
 # The settings a card's text can show as {NAME}: those of demo.env.example,

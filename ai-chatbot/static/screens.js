@@ -170,6 +170,9 @@ export async function loadRegistry() {
 /* ---------- home ---------- */
 
 function badge(showcase) {
+  if (showcase.status === 'disabled') {
+    return '<span class="badge is-blocked">Disabled</span>';
+  }
   if (showcase.status !== 'ready') {
     return '<span class="badge is-blocked">Not available yet</span>';
   }
@@ -204,7 +207,11 @@ function cardHtml(showcase, group) {
   /* In a group like OWASP or the EU AI Act: the risk or article it answers. */
   const ref = (showcase.refs || {})[group];
 
-  return '<a class="card" href="#/' + encodeURIComponent(showcase.id) + '">'
+  /* A disabled card (DISABLED_CARDS in demo.env) stays on the home screen,
+   * greyed out and not clickable, with its blockedBy reason. */
+  const disabled = showcase.status === 'disabled';
+  return '<a class="card' + (disabled ? ' is-disabled" aria-disabled="true" tabindex="-1"' : '"')
+    + ' href="#/' + encodeURIComponent(showcase.id) + '">'
     + '<div class="card-tags">' + badge(showcase)
     /* A policy that calls an outside service names that service. */
     + (showcase.vendor ? '<span class="vendor" title="Third-party policy: calls ' + escapeHtml(showcase.vendor)
@@ -324,7 +331,7 @@ function noticeFor(showcase) {
   const lines = [];
   if (showcase.status !== 'ready') {
     lines.push('<p>' + escapeHtml(showcase.title)
-      + ' cannot run on this gateway yet.</p>');
+      + (showcase.status === 'disabled' ? ' is disabled.</p>' : ' cannot run on this gateway yet.</p>'));
     if ((showcase.blockedBy || []).length) {
       lines.push('<ul>' + showcase.blockedBy
         .map((b) => '<li>' + escapeHtml(b) + '</li>').join('') + '</ul>');
@@ -334,7 +341,7 @@ function noticeFor(showcase) {
     lines.push('<p>No provider is wired for this showcase, so the steps below '
       + 'will not send: <code>' + escapeHtml(showcase.unwiredReason || 'no provider configured')
       + '</code>.</p>');
-  } else if (showcase.status !== 'ready') {
+  } else if (showcase.status !== 'ready' && showcase.status !== 'disabled') {
     /* Wired but the policy is not released: the card will answer normally and
      * prove nothing. That is the failure most likely to mislead an audience,
      * so it gets said out loud rather than left to be inferred. */
@@ -385,9 +392,11 @@ function mountShowcase(showcase) {
 
   const notice = noticeFor(showcase);
   noticeBox.hidden = !notice;
-  noticeTitle.textContent = showcase.status === 'ready' && !showcase.configured
-    ? 'Not wired on this environment'
-    : 'Not available on this gateway yet';
+  noticeTitle.textContent = showcase.status === 'disabled'
+    ? 'Disabled'
+    : showcase.status === 'ready' && !showcase.configured
+      ? 'Not wired on this environment'
+      : 'Not available on this gateway yet';
   noticeBody.innerHTML = notice;
 
   /* What the presenter must know before running the card, such as the
