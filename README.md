@@ -280,6 +280,23 @@ The cards that need an identity provider or a content safety service are only
 provisioned when it is set in `secrets/`. The remote gateway needs the same
 settings in its own configuration.
 
+### Product images from an external registry
+
+By default, the demo runs the public images. To run the newest updates from an
+external registry instead, any registry, for example WSO2's
+(`registry.wso2.com`):
+
+```bash
+cp secrets/registry.env.example secrets/registry.env
+# in secrets/registry.env: USE_EXTERNAL_REGISTRY=true, your username and token
+./scripts/reset-and-setup.sh
+```
+
+For each product, the scripts then look up the newest update of the version in
+`demo.env` (for `0.16.0`, the newest `0.16.0.N`) and run it. The gateway is
+rebuilt on those images. Docker downloads them by itself. To go back to the
+public images, set `USE_EXTERNAL_REGISTRY=false`.
+
 ## Troubleshooting
 
 - **"docker is not running"**: start Docker Desktop (or Colima) first.

@@ -107,6 +107,20 @@ resolve_embedding_key() {
     "$root/secrets/api-keys.env" 2>/dev/null | tail -1)"
 }
 
+# When secrets/registry.env has USE_EXTERNAL_REGISTRY=true, exports the newest
+# product images of that registry, for docker compose and the gateway build.
+# Otherwise nothing is exported and the public images are used.
+use_external_registry() {
+  local root="$1" images line
+  images="$("$PYTHON" "$root/scripts/python/registry_images.py")" || exit 1
+  while IFS= read -r line; do
+    if [[ -n "$line" ]]; then
+      export "$line"
+      echo "  ${line#*=}"
+    fi
+  done <<< "$images"
+}
+
 require_env() {
   local file="$1"
   if [[ ! -f "$file" ]]; then

@@ -102,10 +102,21 @@ else
 fi
 
 echo "### custom gateway image (routing + failover policies)"
-# The policies are compiled into the image, so it is rebuilt when build.yaml or
-# a local policy changes: their fingerprint at the last build is kept in .bin/.
+use_external_registry "$ROOT"   # registry images, if secrets/registry.env turns them on
+# With the registry on, the gateway is built on the registry's base images,
+# from a copy of build.yaml that names them.
+build_dir="$ROOT/ai-gateway"
+if [[ -n "${GATEWAY_BUILDER_IMAGE:-}" ]]; then
+  build_dir="$ROOT/.bin/gateway-build"
+  rm -rf "$build_dir" && mkdir -p "$build_dir" && cp -R ai-gateway/policies "$build_dir/"
+  awk -v images="  images:\n    builder: $GATEWAY_BUILDER_IMAGE\n    controller: $GATEWAY_CONTROLLER_IMAGE\n    runtime: $GATEWAY_RUNTIME_IMAGE" \
+    '{ print } /^gateway:/ { gateway = 1 } gateway && /^  version:/ { print images; gateway = 0 }' \
+    ai-gateway/build.yaml > "$build_dir/build.yaml"
+fi
+# The image is rebuilt when build.yaml, a local policy or the base images
+# change: a fingerprint of the last build is kept in .bin/.
 policies_fingerprint() {
-  { cat ai-gateway/build.yaml
+  { cat "$build_dir/build.yaml"
     find ai-gateway/policies -type f -print0 | sort -z | xargs -0 cat; } | shasum | cut -d' ' -f1
 }
 stamp="$ROOT/.bin/gateway-image-${DEMO_NAME}-${AI_GATEWAY_VERSION}"
@@ -115,7 +126,7 @@ if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1 \
 else
   echo "  building — this compiles semantic/time/cost/intelligent-model-routing and"
   echo "  model-round-robin into the image, takes a few minutes"
-  (cd ai-gateway && "$AP_BIN" gateway image build --name "$DEMO_NAME")
+  (cd "$build_dir" && "$AP_BIN" gateway image build --name "$DEMO_NAME")
 fi
 mkdir -p "$ROOT/.bin" && policies_fingerprint > "$stamp"
 

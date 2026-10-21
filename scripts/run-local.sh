@@ -15,6 +15,7 @@ source "$ROOT/scripts/tools.sh"
 load_demo_env "$ROOT"   # this machine's settings, created on the first run (see tools.sh)
 resolve_python   # sets $PYTHON -- python3, or a confirmed-Python-3 `python` (see tools.sh)
 resolve_analytics "$ROOT"   # says here, not in the log, when analytics stay off (see tools.sh)
+use_external_registry "$ROOT"   # registry images, if secrets/registry.env turns them on
 
 LOGS="$ROOT/.logs"
 

@@ -15,7 +15,7 @@
 services:
 
   platform-api:
-    image: ghcr.io/wso2/api-platform/platform-api:${PLATFORM_API_VERSION:-0.16.0}
+    image: ${PLATFORM_API_IMAGE:-ghcr.io/wso2/api-platform/platform-api:${PLATFORM_API_VERSION:-0.16.0}}
     restart: unless-stopped
     profiles: ["platform-api"]
     command: ["-config", "/etc/platform-api/config.toml"]
@@ -42,7 +42,7 @@ services:
       retries: 3
 
   ai-workspace:
-    image: ghcr.io/wso2/api-platform/ai-workspace:${AI_WORKSPACE_VERSION:-1.0.0}
+    image: ${AI_WORKSPACE_IMAGE:-ghcr.io/wso2/api-platform/ai-workspace:${AI_WORKSPACE_VERSION:-1.0.0}}
     restart: unless-stopped
     profiles: ["ai-workspace"]
     depends_on:
@@ -74,7 +74,7 @@ services:
       retries: 3
 
   api-portal:
-    image: ghcr.io/wso2/api-platform/api-portal:${API_PORTAL_VERSION:-1.0.0}
+    image: ${API_PORTAL_IMAGE:-ghcr.io/wso2/api-platform/api-portal:${API_PORTAL_VERSION:-1.0.0}}
     restart: unless-stopped
     profiles: ["api-portal"]
     depends_on:
