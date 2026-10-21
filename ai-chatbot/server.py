@@ -32,6 +32,7 @@ import os
 import re
 import secrets
 import ssl
+import subprocess
 import sys
 import threading
 import time
@@ -1168,6 +1169,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"status": "stopping"})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
+        if path == "/api/cache/clear":
+            return self._clear_cache()
         if path != "/api/chat":
             return self._json(404, {"error": "not found"})
 
@@ -1593,6 +1596,31 @@ class Handler(BaseHTTPRequestHandler):
             self._sse("tool_call", event)
         self._sse("gateway_meta", gateway_meta(response_headers, streamed=False))
         self._emit_openai(body)
+
+    def _clear_cache(self):
+        """Empties the gateway's semantic cache, for the Clear cache button.
+        Only this machine's gateway: a remote one's cache is out of reach."""
+        # The body is read even though nothing in it is used: left unread, it
+        # would be taken for the start of the next request on the connection.
+        try:
+            self.rfile.read(min(max(int(self.headers.get("content-length") or 0), 0), 1024))
+        except ValueError:
+            return self._json(400, {"error": "invalid content-length header"})
+        # Sent by the page as JSON: a plain form on another site cannot.
+        if not (self.headers.get("content-type") or "").startswith("application/json"):
+            return self._json(415, {"error": "send the request as application/json"})
+        if not LLM_GATEWAY.local:
+            return self._json(409, {"error": "the gateway runs elsewhere: its cache cannot be cleared from here"})
+        try:
+            done = subprocess.run([str(ROOT / "scripts" / "clear-cache.sh")], capture_output=True, text=True,
+                                  timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return self._json(502, {"error": "could not clear the cache", "detail": str(exc)})
+        if done.returncode != 0:
+            return self._json(502, {"error": "could not clear the cache", "detail": done.stderr[-400:]})
+        # The script prints how many cached answers it deleted.
+        out = done.stdout.split()
+        return self._json(200, {"cleared": int(out[-1]) if out and out[-1].isdigit() else None})
 
     def _mcp_tool_call(self, url, name, args, session):
         """One tools/call through the MCP proxy, as a tool_call event: what the

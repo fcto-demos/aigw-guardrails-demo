@@ -9,7 +9,7 @@
 
 import { renderMarkdown, escapeHtml } from './markdown.js';
 import {
-  transcript, intro, form, input, sendBtn, clearBtn,
+  transcript, intro, form, input, sendBtn, clearBtn, clearCacheBtn,
   alertBox, alertMetrics, addBubble, typingHtml, bubbleHtml, toolListHtml, toolCallHtml, setBusy,
   showError, showRefusal, clearError, showRoute, showBudget, selectorBox, selectorSelect,
   markBudgetExhausted, showSpendMeter, scrollDown, resetRoute, signinBox,
@@ -388,6 +388,31 @@ clearBtn.addEventListener('click', () => {
   /* Deliberately NOT resetBudget(): the provider has not changed, so its
    * counter is still the truth. A showcase switch is what resets it. */
   setBusy(false);
+});
+
+/* Empties the gateway's semantic cache, so the next question goes to the
+ * model again. The button says how it went for a moment. */
+clearCacheBtn.addEventListener('click', async () => {
+  clearCacheBtn.disabled = true;
+  let label = 'Cache not cleared';
+  try {
+    const response = await fetch('/api/cache/clear', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const data = await response.json();
+    if (response.ok) {
+      label = data.cleared === null ? 'Cache cleared'
+        : 'Cache cleared: ' + data.cleared + (data.cleared === 1 ? ' answer' : ' answers');
+    } else if (data.error) {
+      label += ': ' + data.error;
+    }
+  } catch (error) {
+    label += ': ' + error;
+  }
+  clearCacheBtn.textContent = label;
+  setTimeout(() => {
+    clearCacheBtn.textContent = 'Clear cache';
+    clearCacheBtn.disabled = false;
+  }, 3000);
 });
 
 /* screens.js clears the transcript on a showcase switch; the message history

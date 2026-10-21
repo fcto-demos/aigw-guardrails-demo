@@ -104,9 +104,10 @@ The LLM Gateway page also gathers its cards under the **OWASP Top 10 for LLMs
 Applications**, and the LLM Gateway page under **Compliance (EU AI Act)**, with
 one line per card on the risk or the article it answers.
 
-Both pages end with a **Third-party policies** row: the cards whose policy calls
-an outside service (TypeSafe AI's Jev, Azure Content Safety, AWS Bedrock
-Guardrails), each with a label naming that service.
+Both pages also have a **Third-party policies** row, before the OWASP and EU AI
+Act ones: the cards whose policy calls an outside service (TypeSafe AI's Jev,
+Azure Content Safety, AWS Bedrock Guardrails), each with a label naming that
+service.
 
 ## Prerequisites
 
@@ -186,6 +187,7 @@ First run takes a few minutes and ends with the chatbot's address.
 ./scripts/run-local.sh      # start again, keeps existing data
 ./scripts/stop-local.sh     # stop everything
 ./scripts/logs-local.sh     # tail every component's logs together
+./scripts/clear-cache.sh    # empty the semantic cache (also a button on the Semantic caching card)
 ```
 
 Only reach for `reset-and-setup.sh` again if you actually want a clean
