@@ -774,7 +774,6 @@
       },
       "Compliance (EU AI Act)": {
         "code": "Art. 15",
-        "scope": "high-risk",
         "text": "Cybersecurity: inputs written to make the model misbehave, which the Act names, are stopped before it.",
         "order": 1
       }
