@@ -511,7 +511,8 @@
       "Compliance (EU AI Act)": {
         "code": "Art. 15",
         "text": "Robustness: when a model fails, another one answers, the kind of backup plan the Act names.",
-        "scope": "high-risk"
+        "scope": "high-risk",
+        "order": 3
       }
     }
   },
@@ -774,7 +775,8 @@
       "Compliance (EU AI Act)": {
         "code": "Art. 15",
         "scope": "high-risk",
-        "text": "Cybersecurity: inputs written to make the model misbehave, which the Act names, are stopped before it."
+        "text": "Cybersecurity: inputs written to make the model misbehave, which the Act names, are stopped before it.",
+        "order": 1
       }
     }
   },
@@ -932,7 +934,8 @@
     "refs": {
       "Compliance (EU AI Act)": {
         "code": "Art. 50(1)",
-        "text": "Transparency: every answer tells the customer it comes from an AI, whatever app shows it."
+        "text": "Transparency: every answer tells the customer it comes from an AI, whatever app shows it.",
+        "order": 2
       }
     }
   },
@@ -972,7 +975,8 @@
     "refs": {
       "Compliance (EU AI Act)": {
         "code": "Art. 50(2)",
-        "text": "Marking: every answer is labelled as AI-generated in a form software can read, whatever app shows it."
+        "text": "Marking: every answer is labelled as AI-generated in a form software can read, whatever app shows it.",
+        "order": 6
       }
     }
   },
@@ -1016,7 +1020,8 @@
       "Compliance (EU AI Act)": {
         "code": "Art. 14",
         "scope": "high-risk",
-        "text": "Human oversight: the operator can halt the assistant in a safe state, for every app at once, without touching any of them."
+        "text": "Human oversight: the operator can halt the assistant in a safe state, for every app at once, without touching any of them.",
+        "order": 5
       }
     }
   },
@@ -1076,7 +1081,8 @@
       "Compliance (EU AI Act)": {
         "code": "Art. 12, 26",
         "text": "Record-keeping: each exchange can be traced later, from a record kept apart from the traffic, which the deployer keeps at least six months.",
-        "scope": "high-risk"
+        "scope": "high-risk",
+        "order": 7
       }
     }
   },
@@ -1149,7 +1155,8 @@
       },
       "Compliance (EU AI Act)": {
         "code": "GDPR",
-        "text": "Applies alongside the AI Act: customers' personal data stays with {brand}, not the model provider."
+        "text": "Applies alongside the AI Act: customers' personal data stays with {brand}, not the model provider.",
+        "order": 4
       }
     }
   },

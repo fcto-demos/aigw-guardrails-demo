@@ -292,7 +292,9 @@ function renderCards() {
   for (const [name, cards] of sorted) {
     if (cards.every((card) => code(card, name))) {
       const scope = (card) => (((card.refs || {})[name] || {}).scope === 'high-risk' ? 1 : 0);
-      cards.sort((a, b) => scope(a) - scope(b)
+      /* A group can set its own order with "order" in each card's ref. */
+      const place = (card) => ((card.refs || {})[name] || {}).order || 999;
+      cards.sort((a, b) => place(a) - place(b) || scope(a) - scope(b)
         || code(a, name).localeCompare(code(b, name), 'en', { numeric: true }));
     }
   }
