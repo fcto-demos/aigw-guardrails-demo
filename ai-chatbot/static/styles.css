@@ -778,13 +778,11 @@ body {
 body[data-screen="home"] #screen-chat,
 body[data-screen="chat"] #screen-home { display: none; }
 
-/* Two pages, one per gateway. MCP cards fix their own model, and so does an
-   LLM card that names its provider, so the provider picker has nothing to do
-   there. */
+/* Two pages, one per gateway. MCP cards fix their own model, so the provider
+   picker has nothing to do there. */
 body[data-page="llm"] [data-page-only="mcp"],
 body[data-page="mcp"] [data-page-only="llm"],
-body[data-page="mcp"] .provider,
-body[data-fixed-provider] .provider { display: none; }
+body[data-page="mcp"] .provider { display: none; }
 
 .gw-nav { display: flex; gap: 6px; }
 .gw-nav a { text-decoration: none; }
@@ -1078,6 +1076,33 @@ body[data-rail="none"] .workspace > .shell { grid-template-columns: minmax(0, va
   font-size: 14px;
 }
 .notice[hidden] { display: none; }
+
+/* A card's warning to the presenter, and how its policy works: above the chat. */
+.card-warning, .card-about {
+  margin: 18px 20px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.card-warning[hidden], .card-about[hidden] { display: none; }
+.card-warning {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  border-left: 4px solid var(--warn);
+}
+.card-warning strong { display: block; color: var(--warn-ink); margin-bottom: 4px; }
+.card-warning p { margin: 0; color: var(--text); }
+.card-about {
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-left: 4px solid var(--accent);
+}
+.card-about h2 {
+  margin: 0 0 4px;
+  font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.card-about p { margin: 0 0 10px; color: var(--text); }
+.card-about p:last-child { margin-bottom: 0; }
 .notice strong { display: block; color: var(--text-strong); margin-bottom: 4px; }
 .notice p { margin: 0 0 6px; color: var(--text); }
 .notice code {

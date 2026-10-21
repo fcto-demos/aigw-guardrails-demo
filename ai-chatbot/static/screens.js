@@ -14,6 +14,7 @@
 import { escapeHtml } from './markdown.js';
 import {
   wordmark, brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
+  cardWarning, cardWarningTitle, cardWarningBody, cardAbout, cardAboutHow, cardAboutSetup,
   intro, introHead, introBody, introRefs, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
   showSpendMeter, signinBox, signinWho, signinLink, selectorBox, selectorLabel, selectorSelect,
@@ -352,8 +353,6 @@ function mountShowcase(showcase) {
   activeShowcase = showcase;
   document.body.dataset.screen = 'chat';
   setPage(pageOf(showcase));
-  /* A card that runs on one provider has no use for the picker. */
-  document.body.toggleAttribute('data-fixed-provider', Boolean(showcase.provider));
   closeRail();
 
   /* The tile shows the outside service as a label; here it follows the name,
@@ -390,6 +389,18 @@ function mountShowcase(showcase) {
     ? 'Not wired on this environment'
     : 'Not available on this gateway yet';
   noticeBody.innerHTML = notice;
+
+  /* What the presenter must know before running the card, such as the
+   * provider to pick, and why. */
+  const warning = showcase.warning;
+  cardWarning.hidden = !warning;
+  cardWarningTitle.textContent = warning ? warning.title : '';
+  cardWarningBody.textContent = warning ? warning.text : '';
+  /* How the card's policy works, and how it is set up on this card. */
+  const about = showcase.about;
+  cardAbout.hidden = !about;
+  cardAboutHow.textContent = about ? about.how : '';
+  cardAboutSetup.textContent = about ? about.setup : '';
 
   const introData = showcase.intro || {};
   introHead.textContent = INTRO_HEADING;
@@ -456,7 +467,6 @@ function mountHome(page) {
   /* Each page starts at its top, not where the other one was left. */
   if (page !== activePage) screenHome.scrollTop = 0;
   setPage(page);
-  document.body.removeAttribute('data-fixed-provider');
   renderCards();
   setIdleStatus();
   statusEl.title = '';

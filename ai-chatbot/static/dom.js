@@ -41,6 +41,12 @@ export const scrollHint  = document.getElementById('scroll-hint');
 export const noticeBox   = document.getElementById('notice');
 export const noticeTitle = document.getElementById('notice-title');
 export const noticeBody  = document.getElementById('notice-body');
+export const cardWarning      = document.getElementById('card-warning');
+export const cardWarningTitle = document.getElementById('card-warning-title');
+export const cardWarningBody  = document.getElementById('card-warning-body');
+export const cardAbout      = document.getElementById('card-about');
+export const cardAboutHow   = document.getElementById('card-about-how');
+export const cardAboutSetup = document.getElementById('card-about-setup');
 
 /* -- conversation -------------------------------------------------------- */
 export const transcript  = document.getElementById('transcript');

@@ -1287,6 +1287,10 @@
     "contextSuffix": "jev-jailbreak",
     "title": "Jailbreak guard",
     "tagline": "TypeSafe AI's Jev judges what a message is trying to do: the role-plays and other languages a pattern or a similarity check let through are refused.",
+    "about": {
+      "how": "typesafe-jev-content-safety sends the text to Jev, TypeSafe AI's hosted model, with a list of questions written in plain words. Jev answers each one with a calibrated probability (or a position on a scale), and the gateway blocks with a 422 when an answer reaches its threshold. It can check the customer's message, the model's answer, or both; a monitor mode only records the hits, to tune the thresholds on real traffic.",
+      "setup": "Here it checks the customer's message, before the model is called, with Jev's default questions: a jailbreak attempt, a request for harm, a risk of self-harm, how severe it would be to comply. Each blocks at 0.7 (severity at \"Serious\"). The 422 names the question and its value: 0.98 for the FreeBot role-play, 0.99 for the French request."
+    },
     "capability": "typesafe-jev-content-safety v0.8.0",
     "status": "ready",
     "blockedBy": [],
@@ -1368,10 +1372,17 @@
       "Safety"
     ],
     "vendor": "TypeSafe Jev",
-    "provider": "mistral",
     "contextSuffix": "jev-promise",
     "title": "Promise guard",
-    "tagline": "Jev reads the model's answer: one that promises the customer a refund or a free month is blocked before they read it. On Mistral, a model that writes such promises.",
+    "tagline": "Jev reads the model's answer: one that promises the customer a refund or a free month is blocked before they read it.",
+    "warning": {
+      "title": "Pick Mistral in the provider list before you start",
+      "text": "Claude and Gemini refuse to write the promise of step 2 on their own, so their answers have nothing to block and the steps fail. Mistral's small model writes it: that is the case the gateway is there for, a model that says more than it should."
+    },
+    "about": {
+      "how": "typesafe-jev-content-safety sends the text to Jev, TypeSafe AI's hosted model, with a list of questions written in plain words. Jev answers each one with a calibrated probability (or a position on a scale), and the gateway blocks with a 422 when an answer reaches its threshold. It can check the customer's message, the model's answer, or both; a monitor mode only records the hits, to tune the thresholds on real traffic.",
+      "setup": "Here it checks the model's answer, after the model and before the customer reads it, with one question of our own instead of Jev's defaults: does the reply promise or confirm a refund, a credit, a discount, a free month or any other compensation? It blocks at 0.7 (measured: 0.96 to 0.98 on the promises of steps 2 and 3). The answer is checked whole, so this card does not stream."
+    },
     "capability": "typesafe-jev-content-safety v0.8.0",
     "status": "ready",
     "blockedBy": [],
@@ -1402,7 +1413,7 @@
             }
           }
         ],
-        "notes": "This card always runs on Mistral. Claude and Gemini refuse to write the promise of step 2 on their own; the smaller Mistral model writes it, and that is the case the gateway is there for."
+        "notes": "Pick Mistral first: Claude and Gemini refuse to write the promise of step 2 on their own, so there is nothing to block; the smaller Mistral model writes it, and that is the case the gateway is there for."
       },
       {
         "n": 2,
@@ -1432,7 +1443,7 @@
         "notes": "The model wrote what it was asked; what matters is what the customer would have kept as proof."
       }
     ],
-    "notes": "typesafe-jev-content-safety v0.8.0 on the response only, with one question of our own instead of Jev's default ones: does this reply promise or confirm a refund, a credit, a discount, a free month or any other compensation (an advisor looking into it does not count), blocking at 0.7. The check needs the whole reply, so this card does not stream. Why it matters: in 2024 a Canadian tribunal held Air Canada to a refund its website chatbot had promised (Moffatt v. Air Canada). Measured 2026-10-21 on Mistral (ministral-8b): the free-month message 0.97, a refund sentence 0.97, the French translation 0.96, all blocked; an ordinary complaint answered with advice passes. Claude Haiku and Gemini 2.5 Flash refuse to write such a promise themselves, so the card names its provider (\"provider\": \"mistral\"): it runs on Mistral whatever the provider picker says, and the picker is hidden on it. The reply's text is sent to Jev, TypeSafe AI's hosted model."
+    "notes": "typesafe-jev-content-safety v0.8.0 on the response only, with one question of our own instead of Jev's default ones: does this reply promise or confirm a refund, a credit, a discount, a free month or any other compensation (an advisor looking into it does not count), blocking at 0.7. The check needs the whole reply, so this card does not stream. Why it matters: in 2024 a Canadian tribunal held Air Canada to a refund its website chatbot had promised (Moffatt v. Air Canada). Measured 2026-10-21 on Mistral (ministral-8b): the free-month message 0.97, a refund sentence 0.97, the French translation 0.96, all blocked; an ordinary complaint answered with advice passes. Claude Haiku and Gemini 2.5 Flash refuse to write such a promise themselves: the warning at the top of the card says to pick Mistral. The reply's text is sent to Jev, TypeSafe AI's hosted model."
   },
   {
     "id": "jev-routing",
@@ -1447,6 +1458,14 @@
     ],
     "title": "Retention routing",
     "tagline": "Jev reads why the customer is writing: one about to leave is answered by the best model, everyday questions by the fast one.",
+    "warning": {
+      "title": "Not on Gemini: pick Anthropic or Mistral",
+      "text": "The policy picks the model by rewriting it in the request body. Gemini's gateway route names the model in the address instead, so the policy cannot route its requests."
+    },
+    "about": {
+      "how": "typesafe-jev-model-routing sends the customer's question to Jev, TypeSafe AI's hosted model, with a list of routing rules, each one a name and a description in plain words. Jev picks the rule that fits best, and the gateway sends the request to that rule's model. When Jev is not confident enough (below 0.5) or does not answer, a default model is used.",
+      "setup": "Here, two rules. A customer about to leave (wants to cancel or leave, asks for their own PAC code, or is angry about the service or a bill) goes to the large model. Everyday questions, what a term like PAC code means included, go to the small one, which is also the default."
+    },
     "capability": "typesafe-jev-model-routing v0.8.0",
     "status": "ready",
     "blockedBy": [],
@@ -2766,6 +2785,10 @@
     },
     "title": "Tool result screening",
     "tagline": "A partner's tool returns text with an instruction hidden for the agent; Jev spots it and the gateway withholds the result.",
+    "about": {
+      "how": "typesafe-jev-mcp-tool-result-screening sends what an MCP tool returns, with the tool's name and arguments, to Jev, TypeSafe AI's hosted model, with a list of questions, before the agent reads it. When an answer reaches its threshold, the gateway withholds the result: the agent gets an error saying so instead.",
+      "setup": "Here every result of the partner's server is checked, with Jev's default questions: instructions aimed at the agent, a hijacked task, data sent out, an action nobody asked for. Each withholds at 0.7. The tool descriptions are vetted first by mcp-rewrite, as on the Poisoned tool description card."
+    },
     "capability": "typesafe-jev-mcp-tool-result-screening v0.8.0",
     "policies": [
       "mcp-rewrite v1.1.0",
@@ -2857,6 +2880,10 @@
     },
     "title": "SIM swap fraud",
     "tagline": "The agent can send a replacement SIM. Jev checks each order against the agent's job, and the gateway refuses one going anywhere but the customer's address.",
+    "about": {
+      "how": "typesafe-jev-mcp-tool-intent-verification sends each tool call, its name and its arguments, to Jev, TypeSafe AI's hosted model, with the agent's job described in plain words and a list of questions. When an answer reaches its threshold, the gateway refuses the call before the MCP server sees it. The proxy does not see the conversation: the job description is all Jev judges against.",
+      "setup": "Here only order_replacement_sim is checked, against a job that names the customer's address on file (4 Station Road, Leeds LS1 4DY), with one question of our own: does the call send the SIM anywhere else? The same address written differently still counts as the address on file. Jev's default questions (destructive, irreversible, out of scope...) let a SIM to another address through."
+    },
     "capability": "typesafe-jev-mcp-tool-intent-verification v0.8.0",
     "policies": [
       "typesafe-jev-mcp-tool-intent-verification v0.8.0"

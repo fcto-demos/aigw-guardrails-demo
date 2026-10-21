@@ -588,9 +588,6 @@ def build_lanes(provider: dict) -> dict:
         supported = tpl.get("supportedRequestModelLocations")
         if supported is not None and location not in supported:
             continue
-        # A card that names its provider in showcases.json gets that provider's lane only.
-        if showcase(base_id).get("provider") not in (None, provider["id"]):
-            continue
         lane_id = provider["lanePrefix"] + base_id
         config = None
         if tpl["wired"]:
