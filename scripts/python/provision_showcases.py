@@ -315,6 +315,12 @@ def lane_templates(provider: dict) -> dict:
                 "request": {"enabled": True, "invert": True,
                             "jsonPath": provider["contentPath"], "regex": SECRET}}}],
         },
+        # Every answer carries a machine-readable mark that it comes from an AI.
+        "ai-content-mark": {
+            "context_suffix": "ai-mark", "displayName": "AI-Generated Mark", "wired": True,
+            "globalPolicies": [{"name": "set-headers", "version": "v1", "params": {
+                "response": {"headers": [{"name": "x-ai-generated", "value": "true"}]}}}],
+        },
         "prompt-decoration": {
             "context_suffix": "decorator", "displayName": "Prompt Decoration", "wired": True,
             "globalPolicies": [{"name": "prompt-decorator", "version": "v1", "params": {

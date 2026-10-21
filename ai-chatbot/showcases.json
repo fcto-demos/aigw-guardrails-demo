@@ -925,8 +925,48 @@
     "notes": "prompt-decorator v1.0.2 in text mode, appended to the visitor's last message (each provider's own path to it): “End your answer with this exact sentence, on its own line: This answer was written by an AI assistant.” Text mode rather than an added system message, because Anthropic only accepts user and assistant roles in its messages. Tested 2026-10-20: 8 answers out of 8 ended with the sentence on Anthropic, Mistral and Gemini; Just chat, without the policy, never adds it.",
     "refs": {
       "Compliance (EU AI Act)": {
-        "code": "Art. 50",
+        "code": "Art. 50(1)",
         "text": "Transparency: every answer tells the customer it comes from an AI, whatever app shows it."
+      }
+    }
+  },
+  {
+    "id": "ai-content-mark",
+    "group": "Compliance (EU AI Act)",
+    "contextSuffix": "ai-mark",
+    "title": "AI-generated mark",
+    "tagline": "Every answer carries a mark software can read, x-ai-generated: true, added by the gateway for every app.",
+    "capability": "set-headers v1.2.0",
+    "status": "ready",
+    "blockedBy": [],
+    "policies": [
+      "set-headers v1.2.0",
+      "llm-cost v1.2.0"
+    ],
+    "emphasis": [],
+    "intro": {
+      "chips": []
+    },
+    "steps": [
+      {
+        "n": 1,
+        "title": "Any question",
+        "sends": [
+          {
+            "ask": "Do you support eSIM?",
+            "expect": {
+              "text": "A normal answer. Open Gateway headers under it: x-ai-generated: true. The app set nothing: the gateway marks every answer on this lane."
+            }
+          }
+        ],
+        "notes": "For contrast, ask the same question on Just chat: no such header."
+      }
+    ],
+    "notes": "set-headers v1.2.0 on the response adds x-ai-generated: true to every answer of this lane. Art. 50(2) asks that generated content be marked in a machine-readable way; the techniques expected are still being set out by the Commission, so this shows one way, not the official one.",
+    "refs": {
+      "Compliance (EU AI Act)": {
+        "code": "Art. 50(2)",
+        "text": "Marking: every answer is labelled as AI-generated in a form software can read, whatever app shows it."
       }
     }
   },
