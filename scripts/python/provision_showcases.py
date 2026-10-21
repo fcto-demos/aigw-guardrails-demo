@@ -691,24 +691,21 @@ def _header_lane(card_id: str, display_name: str, default: dict, routed: dict,
            for value, (prov, size) in mapping.items()])
 
 
-_LANES = {}
+# Cards left out because their policies need a gateway setting still blank:
+# card id -> what to set. The chatbot shows the same cards unwired.
+LEFT_OUT = {card["id"]: need for card in showcases() if (need := missing_gateway_settings(card))}
+
+ALL_LANES = {}
 for _p in PROVIDERS:
-    _LANES.update(build_lanes(_p))
-_LANES.update(cross_provider_lanes())
+    ALL_LANES.update(build_lanes(_p))
+ALL_LANES.update(cross_provider_lanes())
+ALL_LANES = {lid: lane for lid, lane in ALL_LANES.items() if lane["base_id"] not in LEFT_OUT}
 
 # MCP proxies: one per showcases.json card with an "mcp" block, which holds
 # its context, upstream MCP server and policies. No key is issued: the
 # platform's API keys cover LLM resources only, so these proxies are open.
-_MCP = {s["id"]: s for s in showcases() if s.get("mcp")}
+MCP_PROXIES = {card["id"]: card for card in showcases() if card.get("mcp") and card["id"] not in LEFT_OUT}
 
-# A lane or MCP proxy whose card needs a gateway setting this gateway lacks
-# is left out: id -> what to set. The chatbot shows the same cards unwired,
-# from the same check.
-_NEEDS = {s["id"]: missing_gateway_settings(s) for s in showcases()}
-LEFT_OUT = {**{lid: _NEEDS[lane["base_id"]] for lid, lane in _LANES.items() if _NEEDS.get(lane["base_id"])},
-            **{sid: _NEEDS[sid] for sid in _MCP if _NEEDS[sid]}}
-ALL_LANES = {lid: lane for lid, lane in _LANES.items() if lid not in LEFT_OUT}
-MCP_PROXIES = {sid: card for sid, card in _MCP.items() if sid not in LEFT_OUT}
 DEFAULT_IDS = [lid for lid, lane in ALL_LANES.items() if lane["config"]] + list(MCP_PROXIES)
 
 
@@ -1190,8 +1187,8 @@ def check(work: list, skip_existing: bool) -> bool:
     print(f"### pre-flight check (read-only) of {WORKSPACE_URL}")
     for gateway in dict.fromkeys([LLM_GATEWAY, MCP_GATEWAY]):
         confirm_gateway_exists(gateway)
-    for rid, need in LEFT_OUT.items():
-        print(f"  left out   {rid:<47} needs {need}")
+    for card_id, need in LEFT_OUT.items():
+        print(f"  left out   {card_id:<47} needs {need}")
 
     status, resp = api("GET", "/projects")
     if status != 200:
@@ -1318,8 +1315,8 @@ def main():
     requested = [a for a in args if not a.startswith("--")] or DEFAULT_IDS
     unknown = [r for r in requested if r not in ALL_LANES and r not in MCP_PROXIES]
     if unknown:
-        sys.exit("\n".join(f"{r} needs {LEFT_OUT[r]}" if r in LEFT_OUT else f"unknown lane: {r}"
-                           for r in unknown) + f"\nKnown: {list(ALL_LANES) + list(MCP_PROXIES)}")
+        sys.exit(f"unknown or left out: {unknown}\nKnown: {list(ALL_LANES) + list(MCP_PROXIES)}"
+                 + "".join(f"\nLeft out: {card_id} needs {need}" for card_id, need in LEFT_OUT.items()))
     work = plan(requested)
 
     login()
@@ -1333,8 +1330,8 @@ def main():
 
     print(f"### gateways ({WORKSPACE_URL})")
     prepare_gateways()
-    for rid, need in LEFT_OUT.items():
-        print(f"  left out: {rid} needs {need}")
+    for card_id, need in LEFT_OUT.items():
+        print(f"  left out: {card_id} needs {need}")
 
     # issue_key() revokes a lane's previous key the moment it mints the new
     # one, so from then on the key ai-chatbot loaded at startup is dead. The
