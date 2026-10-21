@@ -92,6 +92,7 @@ reply, with what the gateway did.
 | Tool renaming | The gateway publishes its own names for the tools (`switch_plan` for `change_plan`) and translates them on the way to the server |
 | Poisoned tool description | A partner's MCP server hides an instruction to the agent in a tool's description (ask for the card number); the gateway publishes its own description, so the agent never reads it |
 | Tool result screening (Jev) | The same attack in what a tool returns: the partner's terms end with a note for the agent; Jev spots it and the gateway withholds the result |
+| SIM swap fraud (Jev) | The agent can send a replacement SIM; Jev checks each order against the agent's job, and the gateway refuses one going anywhere but the customer's address (whoever gets the SIM gets the number) |
 | Authentication | Without a signed-in user the gateway answers 401; the page signs you in, as any MCP client would |
 | Authorization | Same token, per-tool rule: only a user whose role grants `acme:plan:write` may change the plan |
 
@@ -137,7 +138,7 @@ the card is skipped and the chatbot says what to set:
   its endpoint and key, in `secrets/content-safety.env`
 - **Content safety (AWS Bedrock), not tested yet**: a [Bedrock guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-components.html)
   and a [Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html), in `secrets/content-safety.env`
-- **The four Jev cards**: a [TypeSafe AI](https://typesafe.ai) API key, created
+- **The five Jev cards**: a [TypeSafe AI](https://typesafe.ai) API key, created
   on its [console](https://console.typesafe.ai/keys), in `secrets/content-safety.env`
 - **MCP Authentication and Authorization**: an OpenID Connect identity provider,
   for example [Asgardeo](https://asgardeo.io/signup), in `secrets/idp.env`

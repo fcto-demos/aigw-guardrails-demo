@@ -183,6 +183,9 @@ policies:
     - name: typesafe-jev-content-safety
       version: v0.8.0
       gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-content-safety@v0
+    - name: typesafe-jev-mcp-tool-intent-verification
+      version: v0.8.0
+      gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-mcp-tool-intent-verification@v0
     - name: typesafe-jev-mcp-tool-result-screening
       version: v0.8.0
       gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-mcp-tool-result-screening@v0

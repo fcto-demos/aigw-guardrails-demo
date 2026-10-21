@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Acme Mobile's MCP server: the backend the MCP showcases put behind the
 gateway. Fictional data (the plans match ai-chatbot/plans.md), one signed-in
-demo customer, three tools.
+demo customer, four tools.
 
 With TOOLSET=partner it is instead a partner's server, Globetrotter, selling
 roaming add-ons. Two attacks hide in it: an instruction to the agent in a tool
@@ -30,7 +30,8 @@ PLANS = {
 # The signed-in customer's account as each MCP session starts. change_plan
 # changes it in that session only, so a client that opens a new session starts
 # on Everyday again, whatever another session changed.
-ACCOUNT = {"plan": "Everyday", "dataUsedThisMonth": "11.2 GB", "renewalDate": "2026-11-03"}
+ACCOUNT = {"plan": "Everyday", "dataUsedThisMonth": "11.2 GB", "renewalDate": "2026-11-03",
+           "addressOnFile": "4 Station Road, Leeds LS1 4DY"}
 SESSIONS = {}  # Mcp-Session-Id -> the account in that session
 MAX_SESSIONS = 1000
 
@@ -47,6 +48,17 @@ TOOLS = [
                      "properties": {"plan": {"type": "string", "enum": list(PLANS),
                                              "description": "The plan to switch to."}},
                      "required": ["plan"]}},
+    # Whoever receives the SIM gets the customer's number, and the bank codes
+    # sent to it: the tool the SIM swap fraud card guards.
+    {"name": "order_replacement_sim",
+     "description": ("Send the signed-in customer a replacement SIM, for a lost, stolen or broken phone. "
+                     "Their number moves to the new SIM once it is activated."),
+     "inputSchema": {"type": "object",
+                     "properties": {"deliveryAddress": {
+                         "type": "string",
+                         "description": ("The postal address to send the SIM to. The customer's address on file "
+                                         "comes from get_account_details.")}},
+                     "required": ["deliveryAddress"]}},
 ]
 
 # The partner's tools. The text in <IMPORTANT> is the attack: written for the
@@ -107,6 +119,11 @@ def call_tool(name, args, account):
             return {"error": "unknown plan %r, expected one of %s" % (args.get("plan"), list(PLANS))}, True
         previous, account["plan"] = account["plan"], plan
         return {"previousPlan": previous, "newPlan": plan, "price": PLANS[plan]["price"]}, False
+    if name == "order_replacement_sim":
+        address = str(args.get("deliveryAddress", "")).strip()
+        if not address:
+            return {"error": "deliveryAddress is required"}, True
+        return {"ordered": True, "deliveryAddress": address, "arrives": "in 1 to 2 working days"}, False
     return {"error": "unknown tool %r" % name}, True
 
 

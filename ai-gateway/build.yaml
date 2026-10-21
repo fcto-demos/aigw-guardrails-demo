@@ -124,6 +124,8 @@ policies:
     gomodule: github.com/wso2/gateway-controllers/policies/time-based-model-routing@v0
   - name: typesafe-jev-content-safety
     gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-content-safety@v0
+  - name: typesafe-jev-mcp-tool-intent-verification
+    gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-mcp-tool-intent-verification@v0
   - name: typesafe-jev-mcp-tool-result-screening
     gomodule: github.com/wso2/gateway-controllers/policies/typesafe-jev-mcp-tool-result-screening@v0
   - name: typesafe-jev-model-routing
