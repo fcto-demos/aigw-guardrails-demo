@@ -670,7 +670,8 @@
     "id": "prompt-injection",
     "group": [
       "Safety",
-      "OWASP Top 10 for LLMs (2026)"
+      "OWASP Top 10 for LLMs (2026)",
+      "Compliance (EU AI Act)"
     ],
     "contextSuffix": "guardrail",
     "title": "Prompt injection guardrails",
@@ -769,6 +770,11 @@
       "OWASP Top 10 for LLMs (2026)": {
         "code": "LLM01",
         "text": "Prompt injection, and hidden context exposure (LLM08): no one talks {brand}'s assistant out of its rules, or into revealing them."
+      },
+      "Compliance (EU AI Act)": {
+        "code": "Art. 15",
+        "scope": "high-risk",
+        "text": "Cybersecurity: inputs written to make the model misbehave, which the Act names, are stopped before it."
       }
     }
   },
