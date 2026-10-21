@@ -14,7 +14,7 @@
 import { escapeHtml } from './markdown.js';
 import {
   wordmark, brandProduct, cardsBox, statusEl, noticeBox, noticeTitle, noticeBody,
-  cardWarning, cardWarningTitle, cardWarningBody, cardAbout, cardAboutHow, cardAboutSetup,
+  cardWarning, cardWarningTitle, cardWarningBody, cardAbout, cardAboutHow, cardAboutSetup, clearCacheBtn,
   intro, introHead, introBody, introRefs, introChips, transcript, llmSelect,
   resetRoute, resetBudget, clearError, setBusy, setIdleStatus, input,
   showSpendMeter, signinBox, signinWho, signinLink, selectorBox, selectorLabel, selectorSelect,
@@ -396,6 +396,9 @@ function mountShowcase(showcase) {
   cardWarning.hidden = !warning;
   cardWarningTitle.textContent = warning ? warning.title : '';
   cardWarningBody.textContent = warning ? warning.text : '';
+  /* A card that caches answers says so in showcases.json ("clearCache"): it
+   * gets a button to empty the cache. */
+  clearCacheBtn.hidden = !showcase.clearCache;
   /* How the card's policy works, and how it is set up on this card. */
   const about = showcase.about;
   cardAbout.hidden = !about;

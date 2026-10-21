@@ -338,8 +338,8 @@ export function evaluateExpect(expect, turn) {
     }
     return hit
       ? { ok: false, text: 'already cached, this should have been a miss. The '
-                         + 'cache is still warm from an earlier run; flush Redis '
-                         + 'or wait out the hour, or the next step proves nothing' }
+                         + 'cache is still warm from an earlier run; click Clear cache '
+                         + 'and start again, or the next step proves nothing' }
       : { ok: false, text: 'cache miss: the gateway called the model. Prime it '
                          + 'with the identical wording first' };
   }

@@ -599,6 +599,7 @@
     "gateway": {
       "stream": false
     },
+    "clearCache": true,
     "emphasis": [
       "latency",
       "tokens",
@@ -665,7 +666,7 @@
         "notes": "The negative control. Similarity to step 1 is 0.799, far below the cut-off: the cache matches meaning, not spelling."
       }
     ],
-    "notes": "semantic-cache v1.2.1, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set: provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses, a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config. Flush Redis or wait between rehearsals, or step 1 reports a hit."
+    "notes": "semantic-cache v1.2.1, mistral-embed (1024 dims), Redis vector store; settings live in the gateway host config.toml (top-level embedding_* and vector_db_* keys, including vector_db_provider_username). Re-measured 2026-10-11. (1) jsonPath MUST be set: provision_showcases.py passes $.messages[-1].content. Without it the policy embeds the WHOLE request body (system prompt + plan catalogue + question), the shared catalogue dominates, and close-worded questions with different answers collide: “How much does the Everyday plan cost?” / “…the Max plan…” and “…10 GB…” / “…100 GB…” were both served the first answer. (2) The configured threshold is transformed in the source: effective = 0.6 + 0.4 × similarityThreshold. Configured 0.915 → effective 0.966. (3) Cosine scores for bare questions, mistral-embed: What's a PAC code? 0.979 (hit), What does PAC code mean? 0.969 (hit), 10 GB vs 100 GB plan 0.964 (must miss), Can you explain what a PAC code is? 0.959, 10 GB vs 200 GB price 0.959 (must miss), Everyday vs Max price 0.908 (must miss), What is a PUK code? 0.799 (must miss), cancel my plan vs leave the network 0.731. A wrong-answer pair (0.964) outscores a genuine paraphrase (0.959), so no threshold is safe in general: 0.966 is tuned to keep every measured wrong-answer pair out while catching the two rewordings this card uses, a margin of 0.005, re-measure before changing the prompts. (4) Streaming never caches, hence gateway.stream false. Entries are scoped per route and per application, TTL per the gateway config. Click Clear cache between rehearsals (or run ./scripts/clear-cache.sh), or step 1 reports a hit."
   },
   {
     "id": "prompt-injection",
@@ -1288,8 +1289,8 @@
     "title": "Jailbreak guard",
     "tagline": "TypeSafe AI's Jev judges what a message is trying to do: the role-plays and other languages a pattern or a similarity check let through are refused.",
     "about": {
-      "how": "typesafe-jev-content-safety sends the text to Jev, TypeSafe AI's hosted model, with a list of questions written in plain words. Jev answers each one with a calibrated probability (or a position on a scale), and the gateway blocks with a 422 when an answer reaches its threshold. It can check the customer's message, the model's answer, or both; a monitor mode only records the hits, to tune the thresholds on real traffic.",
-      "setup": "Here it checks the customer's message, before the model is called, with Jev's default questions: a jailbreak attempt, a request for harm, a risk of self-harm, how severe it would be to comply. Each blocks at 0.7 (severity at \"Serious\"). The 422 names the question and its value: 0.98 for the FreeBot role-play, 0.99 for the French request."
+      "how": "The gateway asks Jev, TypeSafe AI's model for judging text, a few questions in everyday words about the customer's message, before the assistant sees it. Jev scores each answer, and the gateway refuses the message when a score is too high.",
+      "setup": "Jev checks whether the message tries to make the assistant break its rules, or asks for something harmful, even as a role-play or in another language. Ordinary questions go through."
     },
     "capability": "typesafe-jev-content-safety v0.8.0",
     "status": "ready",
@@ -1376,12 +1377,12 @@
     "title": "Promise guard",
     "tagline": "Jev reads the model's answer: one that promises the customer a refund or a free month is blocked before they read it.",
     "warning": {
-      "title": "Pick Mistral in the provider list before you start",
-      "text": "Claude and Gemini refuse to write the promise of step 2 on their own, so their answers have nothing to block and the steps fail. Mistral's small model writes it: that is the case the gateway is there for, a model that says more than it should."
+      "title": "Pick Mistral before you start",
+      "text": "Claude and Gemini refuse to write the promise, so there is nothing to block. Mistral writes it."
     },
     "about": {
-      "how": "typesafe-jev-content-safety sends the text to Jev, TypeSafe AI's hosted model, with a list of questions written in plain words. Jev answers each one with a calibrated probability (or a position on a scale), and the gateway blocks with a 422 when an answer reaches its threshold. It can check the customer's message, the model's answer, or both; a monitor mode only records the hits, to tune the thresholds on real traffic.",
-      "setup": "Here it checks the model's answer, after the model and before the customer reads it, with one question of our own instead of Jev's defaults: does the reply promise or confirm a refund, a credit, a discount, a free month or any other compensation? It blocks at 0.7 (measured: 0.96 to 0.98 on the promises of steps 2 and 3). The answer is checked whole, so this card does not stream."
+      "how": "The gateway asks Jev, TypeSafe AI's model for judging text, a question in everyday words about the assistant's answer, before the customer reads it. Jev scores the answer, and the gateway blocks it when the score is too high.",
+      "setup": "Jev checks whether the answer promises money or something free, such as a refund or a free month. Such an answer never reaches the customer."
     },
     "capability": "typesafe-jev-content-safety v0.8.0",
     "status": "ready",
@@ -1460,11 +1461,11 @@
     "tagline": "Jev reads why the customer is writing: one about to leave is answered by the best model, everyday questions by the fast one.",
     "warning": {
       "title": "Not on Gemini: pick Anthropic or Mistral",
-      "text": "The policy picks the model by rewriting it in the request body. Gemini's gateway route names the model in the address instead, so the policy cannot route its requests."
+      "text": "Gemini is set up differently on the gateway, so this card cannot choose its model."
     },
     "about": {
-      "how": "typesafe-jev-model-routing sends the customer's question to Jev, TypeSafe AI's hosted model, with a list of routing rules, each one a name and a description in plain words. Jev picks the rule that fits best, and the gateway sends the request to that rule's model. When Jev is not confident enough (below 0.5) or does not answer, a default model is used.",
-      "setup": "Here, two rules. A customer about to leave (wants to cancel or leave, asks for their own PAC code, or is angry about the service or a bill) goes to the large model. Everyday questions, what a term like PAC code means included, go to the small one, which is also the default."
+      "how": "The gateway asks Jev, TypeSafe AI's model for judging text, why the customer is writing, and picks the model that answers from a few rules in everyday words.",
+      "setup": "A customer who wants to leave, or who is angry, gets the most capable model. Everyday questions go to a faster, cheaper one."
     },
     "capability": "typesafe-jev-model-routing v0.8.0",
     "status": "ready",
@@ -2786,8 +2787,8 @@
     "title": "Tool result screening",
     "tagline": "A partner's tool returns text with an instruction hidden for the agent; Jev spots it and the gateway withholds the result.",
     "about": {
-      "how": "typesafe-jev-mcp-tool-result-screening sends what an MCP tool returns, with the tool's name and arguments, to Jev, TypeSafe AI's hosted model, with a list of questions, before the agent reads it. When an answer reaches its threshold, the gateway withholds the result: the agent gets an error saying so instead.",
-      "setup": "Here every result of the partner's server is checked, with Jev's default questions: instructions aimed at the agent, a hijacked task, data sent out, an action nobody asked for. Each withholds at 0.7. The tool descriptions are vetted first by mcp-rewrite, as on the Poisoned tool description card."
+      "how": "When the assistant uses a tool, the gateway asks Jev, TypeSafe AI's model for judging text, whether the result hides instructions for the assistant, before the assistant reads it.",
+      "setup": "A partner's tool returns the terms of its offers. One of them hides a note asking the assistant for the customer's card number. The gateway withholds that result, so the customer is never asked."
     },
     "capability": "typesafe-jev-mcp-tool-result-screening v0.8.0",
     "policies": [
@@ -2881,8 +2882,8 @@
     "title": "SIM swap fraud",
     "tagline": "The agent can send a replacement SIM. Jev checks each order against the agent's job, and the gateway refuses one going anywhere but the customer's address.",
     "about": {
-      "how": "typesafe-jev-mcp-tool-intent-verification sends each tool call, its name and its arguments, to Jev, TypeSafe AI's hosted model, with the agent's job described in plain words and a list of questions. When an answer reaches its threshold, the gateway refuses the call before the MCP server sees it. The proxy does not see the conversation: the job description is all Jev judges against.",
-      "setup": "Here only order_replacement_sim is checked, against a job that names the customer's address on file (4 Station Road, Leeds LS1 4DY), with one question of our own: does the call send the SIM anywhere else? The same address written differently still counts as the address on file. Jev's default questions (destructive, irreversible, out of scope...) let a SIM to another address through."
+      "how": "Before the assistant uses a tool, the gateway describes the assistant's job to Jev, TypeSafe AI's model for judging text, and asks whether the action fits it. If not, the action is refused.",
+      "setup": "The assistant can send a new SIM to a customer who lost their phone. The gateway lets it go to the home address, even written differently, and refuses any other address: whoever gets the SIM gets the phone number."
     },
     "capability": "typesafe-jev-mcp-tool-intent-verification v0.8.0",
     "policies": [
