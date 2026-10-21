@@ -149,7 +149,7 @@ export function toolCallHtml(call) {
     + '<summary><span class="tool-icon" aria-hidden="true">' + icon + '</span>'
     + '<code>' + escapeHtml(call.name || '?') + '(' + escapeHtml(JSON.stringify(call.arguments || {}))
     + ')</code><span class="tool-status">HTTP ' + escapeHtml(String(call.gatewayStatus))
-    + ' · ' + label + '</span></summary>'
+    + ': ' + label + '</span></summary>'
     + '<pre>' + escapeHtml(call.result || '') + '</pre></details>';
 }
 
@@ -210,7 +210,7 @@ function detailHtml(detail) {
     // Azure scores each category; the highest one is the reason.
     rows.push(['Severity (0-7)', assessments.categories.slice()
       .sort((a, b) => b.severity - a.severity)
-      .map((c) => c.category + ' ' + c.severity).join(' · ')]);
+      .map((c) => c.category + ' ' + c.severity).join(', ')]);
   } else if (assessments && (assessments.contentPolicy || assessments.topicPolicy || assessments.wordPolicy)) {
     // Bedrock lists what tripped: content filters, denied topics, blocked words.
     const hits = [
@@ -218,7 +218,7 @@ function detailHtml(detail) {
       ...((assessments.topicPolicy || {}).topics || []).map((t) => 'topic ' + t.name),
       ...((assessments.wordPolicy || {}).customWords || []).map((w) => 'word "' + w.match + '"'),
     ];
-    rows.push(['Tripped', hits.join(' · ') || JSON.stringify(assessments)]);
+    rows.push(['Tripped', hits.join(', ') || JSON.stringify(assessments)]);
   } else if (assessments) {
     rows.push(['Detail', JSON.stringify(assessments)]);
   }
@@ -287,7 +287,7 @@ export function showBudget(limit, remaining) {
   budgetBox.hidden = false;
   budgetBox.title = BUDGET_TITLE;
   if (!isFinite(rem)) {
-    budgetText.textContent = 'budget $' + lim.toFixed(4) + ' · spent';
+    budgetText.textContent = 'budget $' + lim.toFixed(4) + ': spent';
     budgetFill.style.width = '0%';
     budgetBox.className = 'budget is-empty';
     return;
@@ -327,8 +327,8 @@ export function showSpendMeter(state) {
   if (state.exhausted) {
     budgetBox.className = 'budget is-estimated is-stepped';
     budgetText.textContent = tight
-      ? 'spent \u00b7 on ' + shortModel(state.fallbackModel || 'fallback')
-      : 'budget spent \u00b7 serving '
+      ? 'spent, on ' + shortModel(state.fallbackModel || 'fallback')
+      : 'budget spent, serving '
         + shortModel(state.fallbackModel || 'the fallback');
     budgetFill.style.width = '0%';
     budgetBox.title = 'The ' + state.model + ' budget is spent, so the gateway is'
@@ -342,7 +342,7 @@ export function showSpendMeter(state) {
   budgetBox.className = 'budget is-estimated' + (share < 0.25 ? ' is-low' : '');
   budgetText.textContent = share === 0
     ? 'est. $' + limit.toFixed(2) + ' of $' + limit.toFixed(2)
-      + ' spent' + (tight ? '' : ' \u00b7 steps down next')
+      + ' spent' + (tight ? '' : ', steps down next')
     : 'est. $' + state.remaining.toFixed(4) + ' of $' + limit.toFixed(2)
       + ' left' + (tight ? '' : ' on ' + shortModel(state.model));
   budgetFill.style.width = (share * 100).toFixed(1) + '%';

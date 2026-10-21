@@ -996,9 +996,10 @@ def upsert_mcp_proxy(card: dict):
     _upsert("mcp-proxies", {
         "id": card["id"],
         # "<server> - <card>", like the LLM proxies' "<provider> - <lane>". The
-        # gateway only accepts letters, digits, spaces, - _ and . in this name.
-        "displayName": re.sub(r"[^\w .-]+", "-",
-                              " - ".join(filter(None, (mcp.get("server"), card.get("title") or card["id"])))),
+        # gateway only accepts letters, digits, spaces, - _ and . in this name,
+        # so anything else, such as brackets, is left out.
+        "displayName": " ".join(re.sub(r"[^\w .-]+", " ", " - ".join(
+            filter(None, (mcp.get("server"), card.get("title") or card["id"])))).split()),
         "description": card.get("tagline", ""),
         "version": "v1.0",
         "projectId": PROJECT_ID,

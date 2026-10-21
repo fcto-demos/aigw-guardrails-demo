@@ -355,7 +355,7 @@ function mountShowcase(showcase) {
   closeRail();
 
   brandProduct.textContent = showcase.title || 'AI Assistant';
-  document.title = (showcase.title || 'AI Assistant') + ' · AI Gateway showcase';
+  document.title = (showcase.title || 'AI Assistant') + ' - AI Gateway showcase';
 
   /* The status line names the provider, so the reminder that these cards are
    * different providers, not different prompts, is always on screen. */
@@ -425,7 +425,7 @@ async function refreshSignin(showcase) {
   catch (e) { /* shown as signed out */ }
   signinBox.classList.toggle('is-signed-in', Boolean(session.signedIn));
   signinWho.textContent = session.signedIn
-    ? 'Signed in as ' + session.user + (session.scopes.length ? ' · ' + session.scopes.join(', ') : '')
+    ? 'Signed in as ' + session.user + (session.scopes.length ? ' (' + session.scopes.join(', ') + ')' : '')
     : 'Signed out';
   signinLink.textContent = session.signedIn ? 'Sign out' : 'Sign in';
   signinLink.href = (session.signedIn ? '/oauth/logout?card=' : '/oauth/login?card=') + card;

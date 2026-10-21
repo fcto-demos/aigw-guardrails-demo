@@ -115,11 +115,11 @@ export function metricsHtml(turn) {
     parts.push(chip(turn.afterModel ? 'answer blocked before the customer saw it'
                                     : 'blocked before the model', 'is-good'));
   } else if (turn.outcome === 'refused') {
-    parts.push(chip('refused · budget exhausted', 'is-warn'));
+    parts.push(chip('refused: budget exhausted', 'is-warn'));
   }
 
   const cache = cacheState(turn);
-  if (cache === 'hit') parts.push(chip('cache hit · no model call', 'is-good'));
+  if (cache === 'hit') parts.push(chip('cache hit, no model call', 'is-good'));
   if (cache === 'miss') parts.push(chip('cache miss', emphasise('cache')));
   if (cache === 'guess') parts.push(chip('cache hit? inferred from latency', 'is-guess'));
 
@@ -147,14 +147,14 @@ export function metricsHtml(turn) {
                   + (outTok === null ? '?' : outTok) + ' out tokens',
                     emphasise('tokens')));
   } else if (turn.outcome === 'blocked' && !turn.afterModel) {
-    parts.push(chip('0 tokens · the model was never called', 'is-emphasis'));
+    parts.push(chip('0 tokens: the model was never called', 'is-emphasis'));
   }
 
   /* The step-down IS the cost-based-routing card, and it is measured: the
    * router only serves the fallback once the deep model's budget is gone. A
    * 200 with a cheaper answer in it, so it reads as good news, not a fault. */
   if (turn.spend && turn.spend.justStepped) {
-    parts.push(chip('stepped down \u00b7 the ' + turn.spend.model
+    parts.push(chip('stepped down: the ' + turn.spend.model
                     + ' budget is spent', 'is-good'));
   }
 
